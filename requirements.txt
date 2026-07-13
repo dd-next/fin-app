@@ -1,6 +1,7 @@
 fastapi>=0.111
 pydantic>=2
 sqlalchemy>=2
+greenlet
 aiosqlite
 alembic
 openpyxl

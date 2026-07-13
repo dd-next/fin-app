@@ -1,0 +1,148 @@
+"""FastAPI app + routes."""
+
+from contextlib import asynccontextmanager
+from decimal import Decimal
+
+from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app import budget
+from app.db import engine, get_session
+from app.models import Base, Expense, Period
+from app.schemas import (
+    BudgetOut,
+    ExpenseIn,
+    ExpenseOut,
+    ExpenseWithBudget,
+    PeriodIn,
+    PeriodOut,
+    PeriodWithBudget,
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Zero-setup local dev: ensure tables exist (Alembic is the canonical
+    # migration path; create_all is idempotent and a no-op after migrating).
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
+app = FastAPI(title="Tzlvt clone", lifespan=lifespan)
+
+
+async def _active_period(session: AsyncSession) -> Period | None:
+    result = await session.execute(select(Period).order_by(Period.id.desc()).limit(1))
+    return result.scalar_one_or_none()
+
+
+async def _require_period(session: AsyncSession) -> Period:
+    period = await _active_period(session)
+    if period is None:
+        raise HTTPException(status_code=404, detail="No active period")
+    return period
+
+
+async def _budget_for(
+    session: AsyncSession, period: Period, pending: Decimal | None = None
+) -> BudgetOut:
+    result = await session.execute(
+        select(Expense.amount).where(Expense.period_id == period.id)
+    )
+    amounts = list(result.scalars())
+    summary = budget.compute_budget(
+        period.total_amount, period.start_date, period.end_date, amounts
+    )
+    preview = None
+    if pending is not None:
+        preview = budget.preview_after(
+            summary.remaining_money, pending, summary.days_remaining
+        )
+    return BudgetOut(
+        days_total=summary.days_total,
+        days_remaining=summary.days_remaining,
+        spent_total=summary.spent_total,
+        remaining_money=summary.remaining_money,
+        per_day_today=summary.per_day_today,
+        preview_after=preview,
+    )
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.post("/period", response_model=PeriodWithBudget)
+async def set_period(body: PeriodIn, session: AsyncSession = Depends(get_session)):
+    # Single active period for the MVP: replacing it drops the old one
+    # (and, via cascade, its expenses).
+    await session.execute(delete(Period))
+    period = Period(
+        total_amount=body.total_amount,
+        start_date=body.start_date,
+        end_date=body.end_date,
+    )
+    session.add(period)
+    await session.commit()
+    await session.refresh(period)
+    return PeriodWithBudget(
+        period=PeriodOut.model_validate(period),
+        budget=await _budget_for(session, period),
+    )
+
+
+@app.get("/period", response_model=PeriodWithBudget)
+async def get_period(session: AsyncSession = Depends(get_session)):
+    period = await _require_period(session)
+    return PeriodWithBudget(
+        period=PeriodOut.model_validate(period),
+        budget=await _budget_for(session, period),
+    )
+
+
+@app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True)
+async def get_budget(
+    pending: Decimal | None = None, session: AsyncSession = Depends(get_session)
+):
+    period = await _require_period(session)
+    return await _budget_for(session, period, pending)
+
+
+@app.get("/expenses", response_model=list[ExpenseOut])
+async def list_expenses(session: AsyncSession = Depends(get_session)):
+    period = await _require_period(session)
+    result = await session.execute(
+        select(Expense)
+        .where(Expense.period_id == period.id)
+        .order_by(Expense.created_at.desc(), Expense.id.desc())
+    )
+    return [ExpenseOut.model_validate(e) for e in result.scalars()]
+
+
+@app.post("/expenses", response_model=ExpenseWithBudget)
+async def add_expense(body: ExpenseIn, session: AsyncSession = Depends(get_session)):
+    period = await _require_period(session)
+    expense = Expense(period_id=period.id, amount=body.amount, comment=body.comment)
+    session.add(expense)
+    await session.commit()
+    await session.refresh(expense)
+    return ExpenseWithBudget(
+        expense=ExpenseOut.model_validate(expense),
+        budget=await _budget_for(session, period),
+    )
+
+
+@app.delete("/expenses/{expense_id}", response_model=BudgetOut)
+async def delete_expense(expense_id: int, session: AsyncSession = Depends(get_session)):
+    expense = await session.get(Expense, expense_id)
+    if expense is None:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    period = await session.get(Period, expense.period_id)
+    await session.delete(expense)
+    await session.commit()
+    # Everything is re-derived from (period + expenses), so deletion can
+    # never corrupt the numbers.
+    return await _budget_for(session, period)
