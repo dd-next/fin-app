@@ -13,6 +13,9 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 3 — .xlsx export
 - [x] Phase 4 — Frontend (responsive SPA)
 - [x] Phase 5 — Polish & README
+- [x] Phase 6 — Shared export row-building (SPEC-2)
+- [ ] Phase 7 — Google Sheets full re-sync (SPEC-2)
+- [ ] Phase 8 — Telegram Mini App (SPEC-2)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -98,6 +101,18 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   7. full suite: **25 passed, 0 failed** ✓
   8. README: < 5 commands ✓
 - Done. Out-of-scope items (Telegram, Sheets sync, multi-user) not built.
+
+### Phase 6 — Shared export row-building (SPEC-2) (2026-07-14)
+- Refactored `app/export.py`: extracted `period_rows()`, `expense_rows()`
+  and `EXPENSE_HEADERS`; `build_workbook()` now consumes them. No behavior
+  change — Phase 7's Sheets sync will reuse the same functions so export
+  and sync always agree.
+- Fixed a latent timezone bug the refactor surfaced: `created_at` was
+  stamped in UTC while all budget math uses local `date.today()`, so after
+  local midnight (but before UTC midnight) expense dates disagreed with
+  "today". `models.utcnow()` → `models.localnow()` (naive local time) —
+  a single-user local app lives in local calendar days.
+- Tests: **25 passed, 0 failed**.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

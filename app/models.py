@@ -1,6 +1,6 @@
 """SQLAlchemy models: period and expense."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, TypeDecorator
@@ -30,8 +30,11 @@ class Money(TypeDecorator):
         return Decimal(str(value))
 
 
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+def localnow() -> datetime:
+    # Local (not UTC) on purpose: the budget math works in local calendar
+    # days (`date.today()`), so "the day the expense was entered" must be
+    # the local day too, or dates disagree around midnight.
+    return datetime.now()
 
 
 class Base(DeclarativeBase):
@@ -45,7 +48,7 @@ class Period(Base):
     total_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
     expenses: Mapped[list["Expense"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
@@ -61,6 +64,6 @@ class Expense(Base):
     )
     amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
     period: Mapped[Period] = relationship(back_populates="expenses")
