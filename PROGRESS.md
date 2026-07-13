@@ -11,7 +11,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 1 — Pure budget core + unit tests
 - [x] Phase 2 — Data layer + API
 - [x] Phase 3 — .xlsx export
-- [ ] Phase 4 — Frontend (responsive SPA)
+- [x] Phase 4 — Frontend (responsive SPA)
 - [ ] Phase 5 — Polish & README
 
 ## Log
@@ -62,6 +62,24 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   against API numbers) + 404 case. Note: openpyxl reads empty cells back as
   `None`, so blank comments assert as `None`-or-empty.
 - Tests: **25 passed, 0 failed** (full suite).
+
+### Phase 4 — Frontend (responsive SPA) (2026-07-13)
+- `app/static/` (index.html / style.css / app.js): dark UI, orange accent,
+  big "today's allowance" number (red when negative), live "after this
+  purchase" preview via `GET /budget?pending=X` (debounced), set-period form
+  (defaults: today → end of month), expense list with delete, .xlsx download
+  link, error toast. Plain vanilla JS, no build step, no libraries.
+- Served via `StaticFiles`: `/static/*` for assets, `/` (html=True) mounted
+  last so API routes win. Verified: `GET /` → 200 text/html, assets → 200;
+  full flow (set period → add expense → pending preview → export) exercised
+  against the running server with correct numbers.
+- Mobile-first single column (max-width 480px, `clamp()` type, ≥44px tap
+  targets) + one wide-viewport media query.
+- Note: SPEC says to consult the **frontend-design** skill, but it is not
+  available in this session's skill list; followed its intent from SPEC §7
+  (dark, minimal, one accent). Visual check in a real browser at narrow/wide
+  widths is left as a human step (Chrome extension not connected).
+- Tests: **25 passed, 0 failed** (suite unchanged — frontend is static).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

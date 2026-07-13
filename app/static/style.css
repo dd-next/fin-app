@@ -1,0 +1,203 @@
+/* Tzlvt clone — dark, minimal, one orange accent, large calm type. */
+
+:root {
+  --bg: #121212;
+  --surface: #1c1c1e;
+  --text: #f2f2f2;
+  --muted: #8e8e93;
+  --accent: #ff9500;
+  --danger: #ff5b52;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+
+/* --- Today's allowance -------------------------------------------------- */
+
+#today { text-align: center; padding-top: 8px; }
+
+.label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.allowance {
+  margin: 0;
+  font-size: clamp(3rem, 16vw, 4.5rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  transition: color 0.2s;
+}
+
+.allowance.negative { color: var(--danger); }
+
+.preview {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.preview span { color: var(--text); font-weight: 600; }
+.preview span.negative { color: var(--danger); }
+
+.meta {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Cards & forms ------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+form { display: flex; flex-direction: column; gap: 12px; }
+
+.row { display: flex; gap: 12px; }
+.row > * { flex: 1; min-width: 0; }
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+input {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #2c2c2e;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+input::placeholder { color: #5a5a5e; }
+input[type="date"] { color-scheme: dark; }
+
+button {
+  padding: 14px 18px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 48px; /* big tap target */
+}
+button.accent { background: var(--accent); color: #1a1a1a; }
+button.accent:active { filter: brightness(0.9); }
+
+.hint { margin: 0; color: var(--muted); font-size: 0.8rem; }
+
+details summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.95rem;
+  user-select: none;
+}
+details[open] summary { margin-bottom: 14px; color: var(--text); }
+
+/* --- Expense list -------------------------------------------------------- */
+
+#history h2 { margin: 0 0 8px; font-weight: 400; }
+
+#expense-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#expense-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.expense-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.expense-info { flex: 1; min-width: 0; }
+.expense-comment {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.expense-date { color: var(--muted); font-size: 0.8rem; }
+
+.delete {
+  background: none;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+.delete:hover, .delete:active { color: var(--danger); }
+
+/* --- Footer / toast ------------------------------------------------------ */
+
+.footer { text-align: center; margin: 8px 0 0; }
+.footer a { color: var(--muted); text-decoration: underline; }
+.footer a:hover { color: var(--accent); }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  max-width: 90vw;
+}
+
+/* --- Wide screens --------------------------------------------------------- */
+
+@media (min-width: 720px) {
+  .app { max-width: 560px; padding-top: 48px; }
+}

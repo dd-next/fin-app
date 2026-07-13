@@ -3,9 +3,11 @@
 from contextlib import asynccontextmanager
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,3 +170,9 @@ async def export_xlsx(session: AsyncSession = Depends(get_session)):
         media_type=export.CONTENT_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{export.FILENAME}"'},
     )
+
+
+# Frontend: static SPA served at /. Mounted last so API routes take precedence.
+_static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+app.mount("/", StaticFiles(directory=_static_dir, html=True), name="root")
