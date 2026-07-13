@@ -2,12 +2,14 @@
 
 from contextlib import asynccontextmanager
 from decimal import Decimal
+from io import BytesIO
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import budget
+from app import budget, export
 from app.db import engine, get_session
 from app.models import Base, Expense, Period
 from app.schemas import (
@@ -146,3 +148,23 @@ async def delete_expense(expense_id: int, session: AsyncSession = Depends(get_se
     # Everything is re-derived from (period + expenses), so deletion can
     # never corrupt the numbers.
     return await _budget_for(session, period)
+
+
+@app.get("/export.xlsx")
+async def export_xlsx(session: AsyncSession = Depends(get_session)):
+    period = await _require_period(session)
+    result = await session.execute(
+        select(Expense).where(Expense.period_id == period.id)
+    )
+    rows = [
+        export.ExpenseRow(created_at=e.created_at, amount=e.amount, comment=e.comment)
+        for e in result.scalars()
+    ]
+    data = export.build_workbook(
+        period.total_amount, period.start_date, period.end_date, rows
+    )
+    return StreamingResponse(
+        BytesIO(data),
+        media_type=export.CONTENT_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{export.FILENAME}"'},
+    )

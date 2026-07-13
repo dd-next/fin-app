@@ -10,7 +10,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 - [x] Phase 1 — Pure budget core + unit tests
 - [x] Phase 2 — Data layer + API
-- [ ] Phase 3 — .xlsx export
+- [x] Phase 3 — .xlsx export
 - [ ] Phase 4 — Frontend (responsive SPA)
 - [ ] Phase 5 — Polish & README
 
@@ -50,6 +50,18 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   `POST /expenses` → `{expense, budget}`, `DELETE /expenses/{id}` → budget;
   (e) `greenlet` added to requirements (SQLAlchemy async needs it; not
   auto-installed on macOS arm64).
+
+### Phase 3 — .xlsx export (2026-07-13)
+- `app/export.py`: pure `build_workbook()` (plain values in, bytes out).
+  Sheet "Period" = key/value table; sheet "Expenses" = chronological replay
+  with running balance and per-day allowance at each point. Bold header,
+  auto-sized columns, `YYYY-MM-DD` dates, numeric amounts.
+- Wired `GET /export.xlsx` in `app/main.py` as a `StreamingResponse` with the
+  exact Content-Type / Content-Disposition from SPEC §5. 404 if no period.
+- `tests/test_export.py`: full round-trip (API → xlsx → openpyxl → compare
+  against API numbers) + 404 case. Note: openpyxl reads empty cells back as
+  `None`, so blank comments assert as `None`-or-empty.
+- Tests: **25 passed, 0 failed** (full suite).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->
