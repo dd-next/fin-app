@@ -14,7 +14,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 4 — Frontend (responsive SPA)
 - [x] Phase 5 — Polish & README
 - [x] Phase 6 — Shared export row-building (SPEC-2)
-- [ ] Phase 7 — Google Sheets full re-sync (SPEC-2)
+- [x] Phase 7 — Google Sheets full re-sync (SPEC-2)
 - [ ] Phase 8 — Telegram Mini App (SPEC-2)
 
 ## Log
@@ -113,6 +113,27 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   "today". `models.utcnow()` → `models.localnow()` (naive local time) —
   a single-user local app lives in local calendar days.
 - Tests: **25 passed, 0 failed**.
+
+### Phase 7 — Google Sheets full re-sync (SPEC-2) (2026-07-14)
+- `app/sheets.py`: service-account auth via gspread (lazy import),
+  `enabled()` reads env at call time, `sync_now()` rewrites both sheets
+  from the shared `export.period_rows/expense_rows` builders (clear +
+  update, worksheet auto-created), `sync_safe()` logs and never raises.
+- Mutations (`POST /period`, `POST /expenses`, `DELETE /expenses/{id}`)
+  queue a BackgroundTask with a plain-values snapshot captured in-request
+  (the DB session is closed by the time the task runs). Zero Sheets code
+  runs when disabled. `POST /sheets/sync` → `{"status": "ok"|"failed"}`,
+  runs in a threadpool (gspread is sync).
+- Tests (`tests/test_sheets.py`, all offline, gspread faked): export/sync
+  row parity, mutation writes expected rows, delete re-syncs, gspread
+  errors swallowed (API still 200), disabled ⇒ zero Google calls
+  (fails loudly if touched), manual sync ok/failed/disabled.
+- Decisions: (a) Decimal → float when writing cells so Sheets gets numeric
+  cells (mirror only; DB keeps exact Decimals); (b) `/sheets/sync` returns
+  `{"status":"disabled"}` when the feature is off (SPEC-2 only specifies
+  ok/failed); (c) `enabled()` requires the flag AND both config values —
+  a half-configured app behaves as disabled rather than crashing.
+- Tests: **33 passed, 0 failed** (25 existing + 8 new).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

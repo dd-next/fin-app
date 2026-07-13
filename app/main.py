@@ -5,13 +5,14 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import budget, export
+from app import budget, export, sheets
 from app.db import engine, get_session
 from app.models import Base, Expense, Period
 from app.schemas import (
@@ -74,13 +75,50 @@ async def _budget_for(
     )
 
 
+async def _expense_snapshot(
+    session: AsyncSession, period: Period
+) -> list[export.ExpenseRow]:
+    result = await session.execute(
+        select(Expense).where(Expense.period_id == period.id)
+    )
+    return [
+        export.ExpenseRow(
+            created_at=e.created_at, amount=e.amount, comment=e.comment
+        )
+        for e in result.scalars()
+    ]
+
+
+async def _queue_sheets_sync(
+    background_tasks: BackgroundTasks, session: AsyncSession, period: Period
+) -> None:
+    """After a successful mutation: schedule a best-effort full re-sync.
+
+    The snapshot is captured now (plain values) because the DB session is
+    gone by the time the task runs, after the response is sent."""
+    if not sheets.enabled():
+        return
+    rows = await _expense_snapshot(session, period)
+    background_tasks.add_task(
+        sheets.sync_safe,
+        period.total_amount,
+        period.start_date,
+        period.end_date,
+        rows,
+    )
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
 @app.post("/period", response_model=PeriodWithBudget)
-async def set_period(body: PeriodIn, session: AsyncSession = Depends(get_session)):
+async def set_period(
+    body: PeriodIn,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
     # Single active period for the MVP: replacing it drops the old one
     # (and, via cascade, its expenses).
     await session.execute(delete(Period))
@@ -92,6 +130,7 @@ async def set_period(body: PeriodIn, session: AsyncSession = Depends(get_session
     session.add(period)
     await session.commit()
     await session.refresh(period)
+    await _queue_sheets_sync(background_tasks, session, period)
     return PeriodWithBudget(
         period=PeriodOut.model_validate(period),
         budget=await _budget_for(session, period),
@@ -127,12 +166,17 @@ async def list_expenses(session: AsyncSession = Depends(get_session)):
 
 
 @app.post("/expenses", response_model=ExpenseWithBudget)
-async def add_expense(body: ExpenseIn, session: AsyncSession = Depends(get_session)):
+async def add_expense(
+    body: ExpenseIn,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
     period = await _require_period(session)
     expense = Expense(period_id=period.id, amount=body.amount, comment=body.comment)
     session.add(expense)
     await session.commit()
     await session.refresh(expense)
+    await _queue_sheets_sync(background_tasks, session, period)
     return ExpenseWithBudget(
         expense=ExpenseOut.model_validate(expense),
         budget=await _budget_for(session, period),
@@ -140,16 +184,42 @@ async def add_expense(body: ExpenseIn, session: AsyncSession = Depends(get_sessi
 
 
 @app.delete("/expenses/{expense_id}", response_model=BudgetOut)
-async def delete_expense(expense_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_expense(
+    expense_id: int,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
     expense = await session.get(Expense, expense_id)
     if expense is None:
         raise HTTPException(status_code=404, detail="Expense not found")
     period = await session.get(Period, expense.period_id)
     await session.delete(expense)
     await session.commit()
+    await _queue_sheets_sync(background_tasks, session, period)
     # Everything is re-derived from (period + expenses), so deletion can
     # never corrupt the numbers.
     return await _budget_for(session, period)
+
+
+@app.post("/sheets/sync")
+async def sheets_sync(session: AsyncSession = Depends(get_session)):
+    """Manual "sync now": same full re-sync, run in a threadpool
+    (gspread is synchronous). Returns ok/failed instead of raising."""
+    if not sheets.enabled():
+        return {"status": "disabled"}
+    period = await _require_period(session)
+    rows = await _expense_snapshot(session, period)
+    try:
+        await run_in_threadpool(
+            sheets.sync_now,
+            period.total_amount,
+            period.start_date,
+            period.end_date,
+            rows,
+        )
+    except Exception:
+        return {"status": "failed"}
+    return {"status": "ok"}
 
 
 @app.get("/export.xlsx")

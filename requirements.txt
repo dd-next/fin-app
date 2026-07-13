@@ -5,6 +5,8 @@ greenlet
 aiosqlite
 alembic
 openpyxl
+gspread
+google-auth
 uvicorn
 pytest
 pytest-asyncio
