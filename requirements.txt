@@ -1,0 +1,10 @@
+fastapi>=0.111
+pydantic>=2
+sqlalchemy>=2
+aiosqlite
+alembic
+openpyxl
+uvicorn
+pytest
+pytest-asyncio
+httpx
