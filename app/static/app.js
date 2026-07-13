@@ -5,6 +5,26 @@
 
 const $ = (id) => document.getElementById(id);
 
+// ---- Telegram Mini App layer (no-op in a normal browser) --------------------
+
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg && tg.initData) {
+  tg.ready();
+  if (tg.expand) tg.expand();
+  // Nudge our palette toward the client theme; the dark design already fits.
+  const theme = tg.themeParams || {};
+  if (theme.bg_color) {
+    document.documentElement.style.setProperty("--bg", theme.bg_color);
+  }
+  if (theme.secondary_bg_color) {
+    document.documentElement.style.setProperty("--surface", theme.secondary_bg_color);
+  }
+}
+
+function authHeaders() {
+  return tg && tg.initData ? { Authorization: `tma ${tg.initData}` } : {};
+}
+
 const el = {
   emptyState: $("empty-state"),
   today: $("today"),
@@ -50,6 +70,8 @@ function toast(message) {
 }
 
 async function api(path, options) {
+  options = options || {};
+  options.headers = { ...authHeaders(), ...(options.headers || {}) };
   const resp = await fetch(path, options);
   if (!resp.ok) {
     if (resp.status === 404) return null;
@@ -199,6 +221,24 @@ el.periodForm.addEventListener("submit", async (event) => {
     });
     el.settings.open = false;
     await refresh();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+// Inside Telegram the .xlsx link needs the auth header, so fetch it as a blob.
+$("download").addEventListener("click", async (event) => {
+  if (!(tg && tg.initData)) return; // plain browser: let the link work as-is
+  event.preventDefault();
+  try {
+    const resp = await fetch("/export.xlsx", { headers: authHeaders() });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const url = URL.createObjectURL(await resp.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "tzlvt-export.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
   } catch (err) {
     toast(err.message);
   }

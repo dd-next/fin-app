@@ -15,7 +15,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 5 — Polish & README
 - [x] Phase 6 — Shared export row-building (SPEC-2)
 - [x] Phase 7 — Google Sheets full re-sync (SPEC-2)
-- [ ] Phase 8 — Telegram Mini App (SPEC-2)
+- [x] Phase 8 — Telegram Mini App (SPEC-2)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -134,6 +134,29 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   ok/failed); (c) `enabled()` requires the flag AND both config values —
   a half-configured app behaves as disabled rather than crashing.
 - Tests: **33 passed, 0 failed** (25 existing + 8 new).
+
+### Phase 8 — Telegram Mini App (SPEC-2) (2026-07-14)
+- `app/telegram_auth.py`: `validate_init_data()` implements Telegram's
+  documented scheme (secret = HMAC-SHA256("WebAppData", bot_token); hash =
+  HMAC over the sorted data-check-string; constant-time compare), rejects
+  stale initData (> 5 min) and any user other than `OWNER_TELEGRAM_ID`.
+  `require_telegram_auth` FastAPI dependency → 401; no-op when
+  `TELEGRAM_AUTH_ENABLED` is off (default).
+- All data endpoints gated (`dependencies=[AUTH]`); `/health` and the
+  static frontend stay open. Smoke-tested live: 401 without header,
+  /health 200, / 200.
+- Frontend: loads `telegram-web-app.js` (no-op in a normal browser), calls
+  `ready()`/`expand()`, adopts `themeParams` bg colors, sends
+  `Authorization: tma <initData>` on every API call, and downloads the
+  .xlsx via fetch+blob inside Telegram (plain link in a browser).
+- `tests/test_telegram.py` (12 tests): signature generated locally with the
+  same algorithm — valid passes; tampered / wrong-token / expired /
+  wrong-owner / missing-hash rejected; API 401 without or with bad header,
+  200 with valid; /health open; disabled ⇒ no auth wall.
+- README: @BotFather + tunnel setup documented. `.env.example` updated.
+- No bot process, no aiogram — the Mini App needs none (SPEC-2 B.1).
+- Tests: **44 passed, 0 failed** (full suite; Sheets + Telegram both
+  default-off, so the MVP behavior is unchanged).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

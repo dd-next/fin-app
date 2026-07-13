@@ -13,6 +13,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import budget, export, sheets
+from app.telegram_auth import require_telegram_auth
 from app.db import engine, get_session
 from app.models import Base, Expense, Period
 from app.schemas import (
@@ -36,6 +37,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Tzlvt clone", lifespan=lifespan)
+
+# Telegram Mini App gate on all data endpoints (no-op unless
+# TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
+AUTH = Depends(require_telegram_auth)
 
 
 async def _active_period(session: AsyncSession) -> Period | None:
@@ -113,7 +118,7 @@ async def health():
     return {"status": "ok"}
 
 
-@app.post("/period", response_model=PeriodWithBudget)
+@app.post("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
 async def set_period(
     body: PeriodIn,
     background_tasks: BackgroundTasks,
@@ -137,7 +142,7 @@ async def set_period(
     )
 
 
-@app.get("/period", response_model=PeriodWithBudget)
+@app.get("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
 async def get_period(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
     return PeriodWithBudget(
@@ -146,7 +151,8 @@ async def get_period(session: AsyncSession = Depends(get_session)):
     )
 
 
-@app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True)
+@app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True,
+         dependencies=[AUTH])
 async def get_budget(
     pending: Decimal | None = None, session: AsyncSession = Depends(get_session)
 ):
@@ -154,7 +160,7 @@ async def get_budget(
     return await _budget_for(session, period, pending)
 
 
-@app.get("/expenses", response_model=list[ExpenseOut])
+@app.get("/expenses", response_model=list[ExpenseOut], dependencies=[AUTH])
 async def list_expenses(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
     result = await session.execute(
@@ -165,7 +171,7 @@ async def list_expenses(session: AsyncSession = Depends(get_session)):
     return [ExpenseOut.model_validate(e) for e in result.scalars()]
 
 
-@app.post("/expenses", response_model=ExpenseWithBudget)
+@app.post("/expenses", response_model=ExpenseWithBudget, dependencies=[AUTH])
 async def add_expense(
     body: ExpenseIn,
     background_tasks: BackgroundTasks,
@@ -183,7 +189,7 @@ async def add_expense(
     )
 
 
-@app.delete("/expenses/{expense_id}", response_model=BudgetOut)
+@app.delete("/expenses/{expense_id}", response_model=BudgetOut, dependencies=[AUTH])
 async def delete_expense(
     expense_id: int,
     background_tasks: BackgroundTasks,
@@ -201,7 +207,7 @@ async def delete_expense(
     return await _budget_for(session, period)
 
 
-@app.post("/sheets/sync")
+@app.post("/sheets/sync", dependencies=[AUTH])
 async def sheets_sync(session: AsyncSession = Depends(get_session)):
     """Manual "sync now": same full re-sync, run in a threadpool
     (gspread is synchronous). Returns ok/failed instead of raising."""
@@ -222,7 +228,7 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
     return {"status": "ok"}
 
 
-@app.get("/export.xlsx")
+@app.get("/export.xlsx", dependencies=[AUTH])
 async def export_xlsx(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
     result = await session.execute(
