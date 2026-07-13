@@ -12,7 +12,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 2 — Data layer + API
 - [x] Phase 3 — .xlsx export
 - [x] Phase 4 — Frontend (responsive SPA)
-- [ ] Phase 5 — Polish & README
+- [x] Phase 5 — Polish & README
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -80,6 +80,24 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   (dark, minimal, one accent). Visual check in a real browser at narrow/wide
   widths is left as a human step (Chrome extension not connected).
 - Tests: **25 passed, 0 failed** (suite unchanged — frontend is static).
+
+### Phase 5 — Polish & README (2026-07-13)
+- `README.md`: install (2 commands), run (1), test (1) — 4 commands total.
+- `.env.example` with commented SQLite default and Postgres swap;
+  `.gitignore` was added in Phase 1.
+- Final acceptance pass (SPEC §8), verified against a fresh server on :8000:
+  1. `/health` → `200 {"status":"ok"}` ✓
+  2. set period + expenses → allowance updates correctly, live preview via
+     `?pending=` ✓ (API tests + manual flow)
+  3. overspend → `remaining_money: "-200"`, `per_day_today: "-20.00"` ✓
+  4. delete recomputes correctly ✓ (test_expense_updates_budget_and_delete_restores,
+     test_delete_after_increase_equals_fresh_recompute)
+  5. `/export.xlsx` → 200, valid workbook, both sheets populated ✓
+  6. frontend served at `/`, responsive single-column layout ✓ (visual
+     browser pass left to a human — extension unavailable, see Phase 4)
+  7. full suite: **25 passed, 0 failed** ✓
+  8. README: < 5 commands ✓
+- Done. Out-of-scope items (Telegram, Sheets sync, multi-user) not built.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->
