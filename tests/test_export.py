@@ -56,7 +56,7 @@ async def test_export_roundtrip(client):
         "Amount",
         "Comment",
         "Running balance",
-        "Per-day allowance at that point",
+        "Left to spend that day",
     )
     body = rows[1:]
     assert len(body) == len(api_expenses) == 3
@@ -71,7 +71,8 @@ async def test_export_roundtrip(client):
     assert balances == [D("750"), D("650"), D("599.50")]
     assert balances[-1] == D(api_budget["remaining_money"])
 
-    # per-day allowance at the last point matches the API (all added today)
+    # "left to spend that day" at the last point matches the API's headline
+    # number (all expenses were added today)
     assert D(str(body[-1][4])) == D(api_budget["per_day_today"])
 
     # dates are YYYY-MM-DD strings; comments preserved (blank for None —

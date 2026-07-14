@@ -29,6 +29,10 @@ const el = {
   emptyState: $("empty-state"),
   today: $("today"),
   perDay: $("per-day"),
+  overNote: $("over-note"),
+  rebase: $("rebase"),
+  nextDaily: $("next-daily"),
+  wasDaily: $("was-daily"),
   preview: $("preview"),
   previewValue: $("preview-value"),
   remaining: $("remaining"),
@@ -93,8 +97,18 @@ function renderBudget(budget) {
     el.settings.open = true;
     return;
   }
-  el.perDay.textContent = fmt(budget.per_day_today);
-  el.perDay.classList.toggle("negative", Number(budget.per_day_today) < 0);
+  // Today's number drops 1:1 with spending. Once it hits 0, further spending
+  // eats the overall budget: show 0 plus the rebased daily budget in red,
+  // exactly like the original app.
+  const over = Number(budget.per_day_today) <= 0;
+  el.perDay.textContent = fmt(over ? 0 : budget.per_day_today);
+  el.overNote.classList.toggle("hidden", !over);
+  const showRebase = over && budget.days_remaining > 1;
+  el.rebase.classList.toggle("hidden", !showRebase);
+  if (showRebase) {
+    el.nextDaily.textContent = fmt(budget.next_daily);
+    el.wasDaily.textContent = fmt(budget.daily_base);
+  }
   el.remaining.textContent = fmt(budget.remaining_money);
   const d = budget.days_remaining;
   el.daysLeft.textContent = d === 1 ? "last day" : `${d} days left`;

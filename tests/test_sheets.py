@@ -122,7 +122,7 @@ async def test_mutation_writes_expected_rows(client, fake_sheet):
     assert body[0][1] == 250.0
     assert body[0][2] == "food"
     assert body[0][3] == 750.0
-    assert body[0][4] == 75.0
+    assert body[0][4] == -150.0  # today's 100 budget - 250 spent, 1:1
 
 
 async def test_delete_resyncs(client, fake_sheet):

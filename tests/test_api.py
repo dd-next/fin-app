@@ -41,6 +41,10 @@ async def test_post_period_then_budget_summary(client):
     assert D(b["spent_total"]) == D("0")
     assert D(b["remaining_money"]) == D("1000")
     assert D(b["per_day_today"]) == D("100.00")
+    assert D(b["daily_base"]) == D("100.00")
+    assert D(b["budget_today"]) == D("100.00")
+    assert D(b["spent_today"]) == D("0")
+    assert D(b["next_daily"]) == D("200.00")  # untouched today rolls forward
 
 
 async def test_post_period_replaces_existing(client):
@@ -64,7 +68,9 @@ async def test_expense_updates_budget_and_delete_restores(client):
     expense_id = body["expense"]["id"]
     assert body["expense"]["comment"] == "food"
     assert D(body["budget"]["remaining_money"]) == D("750")
-    assert D(body["budget"]["per_day_today"]) == D("75.00")
+    # spending reduces TODAY 1:1: 100 budget - 250 spent, not (1000-250)/10
+    assert D(body["budget"]["budget_today"]) == D("100.00")
+    assert D(body["budget"]["per_day_today"]) == D("-150.00")
 
     resp = await client.delete(f"/expenses/{expense_id}")
     assert resp.status_code == 200
@@ -83,10 +89,10 @@ async def test_expenses_listed_newest_first(client):
 
 async def test_budget_pending_preview(client):
     await set_period(client, days=10, total="1000")
-    resp = await client.get("/budget", params={"pending": "100"})
+    resp = await client.get("/budget", params={"pending": "30"})
     assert resp.status_code == 200
     b = resp.json()
-    assert D(b["preview_after"]) == D("90.00")  # (1000-100)/10
+    assert D(b["preview_after"]) == D("70.00")  # today's 100.00 - 30
 
 
 async def test_overspend_negative_not_clamped(client):
@@ -94,7 +100,8 @@ async def test_overspend_negative_not_clamped(client):
     await client.post("/expenses", json={"amount": "150"})
     b = (await client.get("/budget")).json()
     assert D(b["remaining_money"]) == D("-50")
-    assert D(b["per_day_today"]) == D("-5.00")
+    assert D(b["per_day_today"]) == D("-140.00")  # 10 today - 150 spent
+    assert D(b["next_daily"]) == D("-5.56")  # -50/9, rebase preview
 
 
 async def test_delete_missing_expense_404(client):

@@ -9,9 +9,10 @@ undefined, pick the simplest option and record the decision in PROGRESS.md.
 A minimalist daily-budget tracker (a clone of "Тяжеловато" / Tzlvt).
 
 The user sets an amount of money and a period. The app divides the money across
-the remaining days and shows how much can be spent **today**. When the user adds
-an expense, today's allowance is recalculated live. Overspending today lowers the
-allowance for the remaining days.
+the days and shows how much can be spent **today**. Adding an expense reduces
+today's number by exactly that amount, live. Unspent money rolls forward into
+today; overspending today eats the overall budget and lowers the daily budget
+for the remaining days.
 
 No categories. No currencies (amounts are plain numbers). No auth (single-user,
 single-tenant). Dark, minimal UI.
@@ -70,15 +71,36 @@ Definitions (relative to a reference date `today`, default = `date.today()`):
     days_remaining  = max(days_total - days_elapsed, 1)    # never divide by 0
     spent_total     = sum(amount for expenses in the period)
     remaining_money = total_amount - spent_total
-    per_day_today   = remaining_money / days_remaining
+
+Daily budget — matches the original app: spending reduces TODAY, 1:1.
+(Changed 2026-07-15 by user request from the earlier
+`per_day_today = remaining_money / days_remaining`, which wrongly re-spread
+every expense over the whole rest of the period.)
+
+    daily_base starts at total_amount / days_total.
+    Replay each fully elapsed day in order (expenses grouped by their
+    created_at date, dates clamped into the period):
+      - the day's budget = daily_base + carry (unspent from earlier days)
+      - day ended with money left → carry = leftover (rolls forward)
+      - day ended overspent → the pool takes the hit; rebase:
+            daily_base = (total_amount - spent so far) / days after that day
+            carry = 0
+    budget_today  = daily_base + carry           # fixed for the whole day
+    spent_today   = sum of today's expenses
+    per_day_today = budget_today - spent_today   # drops 1:1, may go negative
+    next_daily    = daily_base + per_day_today              if per_day_today >= 0
+                  = remaining_money / max(days_remaining - 1, 1)  otherwise
 
 Live preview while typing an expense of size X (X not yet saved):
 
-    preview_after   = (remaining_money - X) / days_remaining
+    preview_after = per_day_today - X
 
 Rules / edge cases the math MUST handle correctly:
 - **Overspending:** `remaining_money` and `per_day_today` may go negative. Do NOT
-  clamp them to zero — show the real (negative) number.
+  clamp them to zero in the API — return the real (negative) numbers. The UI
+  (like the original) renders the over-state as: big "0", a "now spending the
+  overall budget" note, and the rebased `next_daily` in red with the previous
+  `daily_base` as "was".
 - **Last day:** `days_remaining == 1`, so `per_day_today == remaining_money`.
 - **After the period ends** (`today > end_date`): `days_remaining` stays at 1
   (guarded), no crash.
@@ -104,7 +126,8 @@ JSON everywhere except the export endpoint. Routes at root (no prefix).
   → the active period + budget summary, or `404` if none set.
 
 - `GET /budget`
-  → `{days_total, days_remaining, spent_total, remaining_money, per_day_today}`.
+  → `{days_total, days_remaining, spent_total, remaining_money, daily_base,
+  budget_today, spent_today, per_day_today, next_daily}`.
   Optional query `?pending=<amount>` → also returns `preview_after`.
 
 - `GET /expenses`
@@ -163,7 +186,9 @@ direction. Keep it minimal; do not pull in libraries you don't need.
 1. `GET /health` returns `200 {"status":"ok"}`.
 2. I can set a period, add several expenses, and today's allowance changes
    correctly and live.
-3. Overspending shows a negative allowance (not clamped).
+3. Spending reduces today's number 1:1. Overspending keeps the API numbers
+   negative (not clamped); the UI shows the original's over-state (0 +
+   "now spending the overall budget" + rebased daily budget in red).
 4. Deleting an expense recomputes the allowance correctly.
 5. `GET /export.xlsx` downloads a valid file that opens in Excel / LibreOffice
    with both sheets populated.
@@ -178,7 +203,9 @@ Framework: `pytest`. API tests via `httpx.AsyncClient` against the FastAPI app.
 
 **Unit tests for `app/budget.py` (pure math) — `tests/test_budget.py`:**
 - normal case: an amount split across N days gives the expected per-day value.
-- after adding an expense, `per_day_today` drops as expected.
+- after adding an expense, `per_day_today` drops by exactly that amount (1:1).
+- unspent money rolls forward into today's budget.
+- an overspent day rebases `daily_base` to remaining/days-after-it.
 - overspend → `remaining_money` and `per_day_today` are negative (not clamped).
 - last day: `days_remaining == 1`, `per_day_today == remaining_money`.
 - after `end_date`: `days_remaining` guarded to 1, no crash.

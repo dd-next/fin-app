@@ -51,7 +51,11 @@ class BudgetOut(BaseModel):
     days_remaining: int
     spent_total: Decimal
     remaining_money: Decimal
+    daily_base: Decimal
+    budget_today: Decimal
+    spent_today: Decimal
     per_day_today: Decimal
+    next_daily: Decimal
     preview_after: Decimal | None = None
 
 

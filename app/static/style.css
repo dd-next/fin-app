@@ -58,6 +58,20 @@ html, body {
 
 .allowance.negative { color: var(--danger); }
 
+/* Today's budget exhausted: further spending eats the overall pool and the
+   rebased daily budget shows big and red, like the original app. */
+.over-note { margin: 4px 0 0; color: var(--muted); }
+
+.rebase { margin: 14px 0 0; }
+.rebase-value {
+  margin: 0;
+  font-size: clamp(2.2rem, 11vw, 3.2rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--danger);
+}
+.rebase-caption { margin: 0; color: var(--muted); font-size: 0.95rem; }
+
 .preview {
   margin: 4px 0 0;
   color: var(--muted);

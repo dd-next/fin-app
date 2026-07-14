@@ -158,6 +158,34 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Tests: **44 passed, 0 failed** (full suite; Sheets + Telegram both
   default-off, so the MVP behavior is unchanged).
 
+### Fix — daily budget copies the original app's semantics (2026-07-15)
+- Bug report with screenshots of the original Tzlvt: spending must reduce
+  **today's** number 1:1. Our spec'd formula `remaining / days_remaining`
+  re-spread every expense over the whole rest of the period, so today's
+  number barely moved (6000/15 with 493.33 spent showed 367.11 instead of
+  400 − 493.33). SPEC §4 itself was wrong; user asked to copy the original.
+- Rewrote `app/budget.py` (still a pure, stateless recompute): fixed
+  `daily_base = total/days`; unspent money rolls forward into today; an
+  overspent day eats the pool and rebases the base to remaining/days-after.
+  `compute_budget` now takes dated amounts. New summary/API fields:
+  `daily_base`, `budget_today`, `spent_today`, `next_daily`;
+  `per_day_today` is now today's number (budget_today − spent_today) and
+  `preview_after = per_day_today − pending`.
+- Export/Sheets: "Per-day allowance at that point" column → "Left to spend
+  that day" (replayed with the real math at each expense's date).
+- Frontend: over-state copied from the original — big "0", "Now spending
+  the overall budget", rebased daily budget big and red with "was X".
+- SPEC.md §1/§4/§5/§8/§9 updated to the new math (recorded as a user
+  override dated 2026-07-15). README wording updated.
+- Verified end-to-end against a live server on a scratch DB (screenshot
+  scenario reproduced: 400 → 6.67 → −93.33 with next_daily 393.33; carryover,
+  cross-day rebase, delete-recompute, export replay, ?pending preview, 422s;
+  UI over-state + normal state screenshotted via headless Chrome). Added
+  `.claude/skills/verify/SKILL.md` with the launch/drive recipe.
+- Tests: `test_budget.py` rewritten (17 unit tests incl. the bug-report
+  scenario); `test_api`/`test_export`/`test_sheets` updated.
+  **49 passed, 0 failed** (was 44).
+
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->
 

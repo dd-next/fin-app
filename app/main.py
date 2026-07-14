@@ -59,23 +59,29 @@ async def _budget_for(
     session: AsyncSession, period: Period, pending: Decimal | None = None
 ) -> BudgetOut:
     result = await session.execute(
-        select(Expense.amount).where(Expense.period_id == period.id)
+        select(Expense.created_at, Expense.amount).where(
+            Expense.period_id == period.id
+        )
     )
-    amounts = list(result.scalars())
+    dated = [
+        (created.date(), amount) for created, amount in result.all()
+    ]
     summary = budget.compute_budget(
-        period.total_amount, period.start_date, period.end_date, amounts
+        period.total_amount, period.start_date, period.end_date, dated
     )
     preview = None
     if pending is not None:
-        preview = budget.preview_after(
-            summary.remaining_money, pending, summary.days_remaining
-        )
+        preview = budget.preview_after(summary.per_day_today, pending)
     return BudgetOut(
         days_total=summary.days_total,
         days_remaining=summary.days_remaining,
         spent_total=summary.spent_total,
         remaining_money=summary.remaining_money,
+        daily_base=summary.daily_base,
+        budget_today=summary.budget_today,
+        spent_today=summary.spent_today,
         per_day_today=summary.per_day_today,
+        next_daily=summary.next_daily,
         preview_after=preview,
     )
 

@@ -27,7 +27,7 @@ EXPENSE_HEADERS = [
     "Amount",
     "Comment",
     "Running balance",
-    "Per-day allowance at that point",
+    "Left to spend that day",
 ]
 
 
@@ -42,7 +42,7 @@ def period_rows(
     .xlsx export and the Google Sheets sync so they always agree."""
     summary = budget.compute_budget(
         total_amount, start_date, end_date,
-        (e.amount for e in expenses), today=today,
+        [(e.created_at.date(), e.amount) for e in expenses], today=today,
     )
     return [
         ["total_amount", total_amount],
@@ -60,21 +60,26 @@ def expense_rows(
     end_date: date,
     expenses: Iterable[ExpenseRow],
 ) -> list[list]:
-    """The "Expenses" sheet body: expenses replayed in chronological order with
-    running balance and the per-day allowance at each point. No header row."""
+    """The "Expenses" sheet body: expenses replayed in chronological order
+    with the running balance and what was left to spend that day right after
+    each expense (the app's headline number at that moment). No header row."""
     rows: list[list] = []
     balance = total_amount
+    replayed: list[budget.DatedAmount] = []
     for e in sorted(expenses, key=lambda e: e.created_at):
         balance -= e.amount
         day = e.created_at.date()
-        days_left = budget.days_remaining(start_date, end_date, day)
+        replayed.append((day, e.amount))
+        at_that_point = budget.compute_budget(
+            total_amount, start_date, end_date, replayed, today=day
+        )
         rows.append(
             [
                 day.isoformat(),
                 e.amount,
                 e.comment or "",
                 balance,
-                budget.per_day(balance, days_left),
+                at_that_point.per_day_today,
             ]
         )
     return rows
@@ -89,6 +94,7 @@ def build_workbook(
 ) -> bytes:
     """One workbook, two sheets: "Period" (key/value) and "Expenses"
     (chronological replay with running balance and per-day allowance)."""
+    expenses = list(expenses)  # both sheets iterate it
     wb = Workbook()
 
     # --- Sheet "Period": two-column key/value table -------------------------
