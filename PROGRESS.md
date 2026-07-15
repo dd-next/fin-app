@@ -19,7 +19,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 9 — Full rebrand to FinApp (SPEC-3)
 - [x] Phase 10 — Income operations (±) + undo (SPEC-3)
 - [x] Phase 11 — Next-day savings decision screen (SPEC-3)
-- [ ] Phase 12 — UI restructure (SPEC-3)
+- [x] Phase 12 — UI restructure (SPEC-3)
 - [ ] Phase 13 — Manual test cases + final pass (SPEC-3)
 
 ## Log
@@ -265,6 +265,31 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   rebase), 7 API in tests/test_savings.py (shown when qualified, hidden
   on first day / no period, survives today's spending, once per day,
   both choices persist, 404/422). **64 passed, 0 failed**.
+
+### Phase 12 — UI restructure (SPEC-3) (2026-07-15)
+- Rebuilt the SPA into three views (main / Expenses History / Budget
+  Settings) with a tiny JS view switcher; still one bundle, no build step.
+- Main: header "{total} for {N} days" + a "Budget Settings" button; the
+  inline operation list is gone, replaced by a full-width "Expenses
+  History" button. "Spent" state: when remaining_money <= 0 the number
+  area shows a big red "Spent" + "Change amount and dates" link (opens
+  Settings); the entry form stays so an income recovers it — verified.
+- History view: all operations newest first (incomes green with `+`),
+  human timestamps ("Today, 14:53" / "Yesterday, …" / "12 Jul, …",
+  English), ✕ delete per row, Back control, and the **Export .xlsx
+  button moved into this view** (Telegram blob-download kept).
+- Settings view: Save/Cancel form prefilled from the current period,
+  live "{amount/days} per day" hint while typing (client-side).
+- Buttons systematized: accent (primary), ghost (secondary/nav),
+  linklike, 44px+ targets, hover/active/focus-visible states. English
+  sweep: no Cyrillic anywhere in app/static (UI was already English).
+- Added `/?view=history|settings` deep links (used them for headless
+  screenshots; also handy for manual testing).
+- Note: SPEC-3 says to consult the frontend-design skill, but it is not
+  in this session's skill list (same as Phase 4) — followed its intent.
+- Verified with headless-Chrome screenshots: main, history, settings,
+  Spent state, savings prompt, wide (1280px) viewport.
+- Tests: backend untouched — **64 passed, 0 failed**.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

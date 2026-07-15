@@ -32,61 +32,103 @@
 
   <main class="app">
 
-    <!-- No period yet -->
-    <section id="empty-state" class="card hidden">
-      <h1 class="muted">Set a budget to start</h1>
-    </section>
+    <!-- ================= Main view ================= -->
+    <section id="view-main" class="view">
 
-    <!-- Today's allowance -->
-    <section id="today" class="hidden">
-      <p class="label">You can spend today</p>
-      <p id="per-day" class="allowance">0</p>
-      <p id="over-note" class="over-note hidden">Now spending the overall budget</p>
-      <div id="rebase" class="rebase hidden">
-        <p id="next-daily" class="rebase-value"></p>
-        <p class="rebase-caption">new daily budget · was <span id="was-daily"></span></p>
-      </div>
-      <p id="preview" class="preview hidden">
-        <span id="preview-label">after this purchase:</span> <span id="preview-value"></span>
-      </p>
-      <p class="meta">
-        <span id="remaining"></span> left · <span id="days-left"></span>
-      </p>
-    </section>
+      <header id="main-header" class="topbar hidden">
+        <span id="period-summary" class="period-summary"></span>
+        <button id="open-settings" type="button" class="ghost small">
+          Budget Settings
+        </button>
+      </header>
 
-    <!-- Add operation (expense or income) -->
-    <section id="spend" class="card hidden">
-      <form id="operation-form" autocomplete="off">
-        <div id="kind-toggle" class="segmented" role="group" aria-label="Operation type">
-          <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
-          <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
+      <!-- No period yet -->
+      <section id="empty-state" class="card center hidden">
+        <h1 class="muted">Set a budget to start</h1>
+        <button id="empty-open-settings" type="button" class="accent">
+          Budget Settings
+        </button>
+      </section>
+
+      <!-- Today's allowance -->
+      <section id="today" class="hidden">
+        <div id="today-numbers">
+          <p class="label">You can spend today</p>
+          <p id="per-day" class="allowance">0</p>
+          <p id="over-note" class="over-note hidden">Now spending the overall budget</p>
+          <div id="rebase" class="rebase hidden">
+            <p id="next-daily" class="rebase-value"></p>
+            <p class="rebase-caption">new daily budget · was <span id="was-daily"></span></p>
+          </div>
+          <p id="preview" class="preview hidden">
+            <span id="preview-label">after this purchase:</span> <span id="preview-value"></span>
+          </p>
+          <p class="meta">
+            <span id="remaining"></span> left · <span id="days-left"></span>
+          </p>
         </div>
-        <div class="row">
-          <input id="operation-amount" type="text" inputmode="decimal"
-                 placeholder="0.00" aria-label="Amount" required>
-          <button id="operation-submit" type="submit" class="accent">Spent</button>
+        <!-- Whole budget gone: big red "Spent" instead of numbers -->
+        <div id="spent-state" class="hidden">
+          <p class="spent-big">Spent</p>
+          <p class="over-note">The whole budget is spent</p>
+          <button id="spent-open-settings" type="button" class="linklike">
+            Change amount and dates
+          </button>
         </div>
-        <input id="operation-comment" type="text" maxlength="200"
-               placeholder="Comment (optional)" aria-label="Comment">
-      </form>
-      <button id="undo" type="button" class="undo hidden"></button>
+      </section>
+
+      <!-- Add operation (expense or income) -->
+      <section id="spend" class="card hidden">
+        <form id="operation-form" autocomplete="off">
+          <div id="kind-toggle" class="segmented" role="group" aria-label="Operation type">
+            <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
+            <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
+          </div>
+          <div class="row">
+            <input id="operation-amount" type="text" inputmode="decimal"
+                   placeholder="0.00" aria-label="Amount" required>
+            <button id="operation-submit" type="submit" class="accent">Spent</button>
+          </div>
+          <input id="operation-comment" type="text" maxlength="200"
+                 placeholder="Comment (optional)" aria-label="Comment">
+        </form>
+        <button id="undo" type="button" class="undo hidden"></button>
+      </section>
+
+      <button id="open-history" type="button" class="ghost big hidden">
+        Expenses History
+      </button>
+
     </section>
 
-    <!-- Operation list -->
-    <section id="history" class="hidden">
-      <h2 class="label">Expenses</h2>
+    <!-- ================= Expenses History view ================= -->
+    <section id="view-history" class="view hidden">
+      <header class="topbar">
+        <button id="history-back" type="button" class="ghost small back">‹ Back</button>
+        <h2 class="view-title">Expenses History</h2>
+      </header>
       <ul id="operation-list"></ul>
+      <p id="history-empty" class="muted center hidden">No operations yet.</p>
+      <p class="footer">
+        <a id="download" class="ghost big linkbutton" href="/export.xlsx" download>
+          Export .xlsx
+        </a>
+      </p>
     </section>
 
-    <!-- Period settings -->
-    <section class="card">
-      <details id="settings">
-        <summary>Budget settings</summary>
+    <!-- ================= Budget Settings view ================= -->
+    <section id="view-settings" class="view hidden">
+      <header class="topbar">
+        <button id="settings-back" type="button" class="ghost small back">‹ Back</button>
+        <h2 class="view-title">Budget Settings</h2>
+      </header>
+      <section class="card">
         <form id="period-form" autocomplete="off">
           <label>Amount
             <input id="period-amount" type="text" inputmode="decimal"
                    placeholder="30000" required>
           </label>
+          <p id="per-day-hint" class="hint tall hidden"></p>
           <div class="row">
             <label>From
               <input id="period-start" type="date" required>
@@ -95,15 +137,14 @@
               <input id="period-end" type="date" required>
             </label>
           </div>
-          <button type="submit" class="accent">Set budget</button>
-          <p class="hint">Setting a new budget replaces the current one and its expenses.</p>
+          <div class="row">
+            <button type="submit" class="accent">Save</button>
+            <button id="settings-cancel" type="button" class="ghost">Cancel</button>
+          </div>
+          <p class="hint">Saving a new budget replaces the current one and its operations.</p>
         </form>
-      </details>
+      </section>
     </section>
-
-    <p class="footer">
-      <a id="download" href="/export.xlsx" download>Download .xlsx</a>
-    </p>
 
   </main>
   <div id="toast" class="toast hidden"></div>

@@ -26,8 +26,14 @@ function authHeaders() {
 }
 
 const el = {
+  // main view
+  mainHeader: $("main-header"),
+  periodSummary: $("period-summary"),
+  openSettings: $("open-settings"),
   emptyState: $("empty-state"),
+  emptyOpenSettings: $("empty-open-settings"),
   today: $("today"),
+  todayNumbers: $("today-numbers"),
   perDay: $("per-day"),
   overNote: $("over-note"),
   rebase: $("rebase"),
@@ -38,6 +44,8 @@ const el = {
   previewValue: $("preview-value"),
   remaining: $("remaining"),
   daysLeft: $("days-left"),
+  spentState: $("spent-state"),
+  spentOpenSettings: $("spent-open-settings"),
   spend: $("spend"),
   kindToggle: $("kind-toggle"),
   operationForm: $("operation-form"),
@@ -45,13 +53,21 @@ const el = {
   operationComment: $("operation-comment"),
   operationSubmit: $("operation-submit"),
   undo: $("undo"),
-  history: $("history"),
+  openHistory: $("open-history"),
+  // history view
+  historyBack: $("history-back"),
   operationList: $("operation-list"),
-  settings: $("settings"),
+  historyEmpty: $("history-empty"),
+  download: $("download"),
+  // settings view
+  settingsBack: $("settings-back"),
+  settingsCancel: $("settings-cancel"),
   periodForm: $("period-form"),
   periodAmount: $("period-amount"),
   periodStart: $("period-start"),
   periodEnd: $("period-end"),
+  perDayHint: $("per-day-hint"),
+  // shared
   toast: $("toast"),
   savingsPrompt: $("savings-prompt"),
   savedAmount: $("saved-amount"),
@@ -61,11 +77,28 @@ const el = {
   choiceIncreaseCaption: $("choice-increase-caption"),
 };
 
-// ---- entry-mode state --------------------------------------------------------
+// ---- state ---------------------------------------------------------------------
 
 let kind = "expense"; // what the form submits: 'expense' | 'income'
-let lastBudget = null; // latest /budget payload (for client-side income preview)
+let lastBudget = null; // latest budget payload (for client-side income preview)
+let lastPeriod = null; // latest period payload (prefills Budget Settings)
 let lastOperation = null; // {id, amount} of the just-added op, for Undo
+
+// ---- views ---------------------------------------------------------------------
+
+const views = {
+  main: $("view-main"),
+  history: $("view-history"),
+  settings: $("view-settings"),
+};
+
+function showView(name) {
+  for (const [key, section] of Object.entries(views)) {
+    section.classList.toggle("hidden", key !== name);
+  }
+  if (name === "settings") prefillSettings();
+  window.scrollTo(0, 0);
+}
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -79,6 +112,18 @@ function fmt(value) {
 
 function validAmount(raw) {
   return /^\d+(\.\d{1,2})?$/.test(raw.trim());
+}
+
+// "Today, 13:10" / "Yesterday, 09:02" / "12 Jul, 09:02" (English)
+function fmtWhen(iso) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return `Today, ${time}`;
+  if (diffDays === 1) return `Yesterday, ${time}`;
+  const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${day}, ${time}`;
 }
 
 let toastTimer;
@@ -107,13 +152,19 @@ function renderBudget(budget) {
   lastBudget = budget;
   const hasPeriod = budget !== null;
   el.emptyState.classList.toggle("hidden", hasPeriod);
+  el.mainHeader.classList.toggle("hidden", !hasPeriod);
   el.today.classList.toggle("hidden", !hasPeriod);
   el.spend.classList.toggle("hidden", !hasPeriod);
-  el.history.classList.toggle("hidden", !hasPeriod);
-  if (!hasPeriod) {
-    el.settings.open = true;
-    return;
-  }
+  el.openHistory.classList.toggle("hidden", !hasPeriod);
+  if (!hasPeriod) return;
+
+  // Whole budget gone → big red "Spent" replaces the numbers. Adding an
+  // income makes remaining_money positive again and recovers automatically.
+  const allSpent = Number(budget.remaining_money) <= 0;
+  el.todayNumbers.classList.toggle("hidden", allSpent);
+  el.spentState.classList.toggle("hidden", !allSpent);
+  if (allSpent) return;
+
   // Today's number drops 1:1 with spending. Once it hits 0, further spending
   // eats the overall budget: show 0 plus the rebased daily budget in red
   // (the reference behavior).
@@ -131,9 +182,20 @@ function renderBudget(budget) {
   el.daysLeft.textContent = d === 1 ? "last day" : `${d} days left`;
 }
 
+function renderPeriod(period, budget) {
+  lastPeriod = period;
+  if (period && budget) {
+    const days = budget.days_total;
+    el.periodSummary.textContent =
+      `${fmt(period.total_amount)} for ${days} ${days === 1 ? "day" : "days"}`;
+  }
+}
+
 function renderOperations(operations) {
+  const items = operations || [];
+  el.historyEmpty.classList.toggle("hidden", items.length > 0);
   el.operationList.replaceChildren(
-    ...(operations || []).map((op) => {
+    ...items.map((op) => {
       const li = document.createElement("li");
       const income = op.kind === "income";
 
@@ -148,7 +210,7 @@ function renderOperations(operations) {
       comment.textContent = op.comment || "";
       const when = document.createElement("div");
       when.className = "op-date";
-      when.textContent = op.created_at.slice(0, 10);
+      when.textContent = fmtWhen(op.created_at);
       info.append(comment, when);
 
       const del = document.createElement("button");
@@ -200,11 +262,15 @@ el.undo.addEventListener("click", async () => {
 // ---- data flow --------------------------------------------------------------
 
 async function refresh() {
-  const [budget, operations] = await Promise.all([
-    api("/budget"),
+  const [periodWithBudget, operations] = await Promise.all([
+    api("/period"),
     api("/operations"),
   ]);
-  renderBudget(budget);
+  renderBudget(periodWithBudget && periodWithBudget.budget);
+  renderPeriod(
+    periodWithBudget && periodWithBudget.period,
+    periodWithBudget && periodWithBudget.budget
+  );
   renderOperations(operations);
 }
 
@@ -290,6 +356,50 @@ async function deleteOperation(id) {
   }
 }
 
+// ---- navigation -----------------------------------------------------------------
+
+el.openHistory.addEventListener("click", () => showView("history"));
+el.historyBack.addEventListener("click", () => showView("main"));
+el.openSettings.addEventListener("click", () => showView("settings"));
+el.emptyOpenSettings.addEventListener("click", () => showView("settings"));
+el.spentOpenSettings.addEventListener("click", () => showView("settings"));
+el.settingsBack.addEventListener("click", () => showView("main"));
+el.settingsCancel.addEventListener("click", () => showView("main"));
+
+// ---- Budget Settings ------------------------------------------------------------
+
+function prefillSettings() {
+  const iso = (d) => d.toISOString().slice(0, 10);
+  if (lastPeriod) {
+    el.periodAmount.value = lastPeriod.total_amount;
+    el.periodStart.value = lastPeriod.start_date;
+    el.periodEnd.value = lastPeriod.end_date;
+  } else {
+    // Sensible defaults: today → end of month.
+    const today = new Date();
+    el.periodAmount.value = "";
+    el.periodStart.value = iso(today);
+    el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  }
+  updatePerDayHint();
+}
+
+// Live "{X} per day" hint under the amount while typing (client-side).
+function updatePerDayHint() {
+  const raw = el.periodAmount.value.trim();
+  const start = new Date(el.periodStart.value);
+  const end = new Date(el.periodEnd.value);
+  const days = Math.round((end - start) / 86400000) + 1;
+  const ok = validAmount(raw) && Number.isFinite(days) && days >= 1;
+  el.perDayHint.classList.toggle("hidden", !ok);
+  if (ok) {
+    el.perDayHint.textContent = `${fmt(Number(raw) / days)} per day`;
+  }
+}
+el.periodAmount.addEventListener("input", updatePerDayHint);
+el.periodStart.addEventListener("input", updatePerDayHint);
+el.periodEnd.addEventListener("input", updatePerDayHint);
+
 el.periodForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const amount = el.periodAmount.value.trim();
@@ -311,16 +421,16 @@ el.periodForm.addEventListener("submit", async (event) => {
         end_date: el.periodEnd.value,
       }),
     });
-    el.settings.open = false;
     showUndo(null); // a new period invalidates the last-operation undo
     await refresh();
+    showView("main");
   } catch (err) {
     toast(err.message);
   }
 });
 
 // Inside Telegram the .xlsx link needs the auth header, so fetch it as a blob.
-$("download").addEventListener("click", async (event) => {
+el.download.addEventListener("click", async (event) => {
   if (!(tg && tg.initData)) return; // plain browser: let the link work as-is
   event.preventDefault();
   try {
@@ -376,11 +486,13 @@ el.choiceIncrease.addEventListener("click", () => decideSavings("increase_daily"
 // ---- init --------------------------------------------------------------------
 
 (function init() {
-  // Sensible defaults for the period form: today → end of month.
-  const today = new Date();
-  const iso = (d) => d.toISOString().slice(0, 10);
-  el.periodStart.value = iso(today);
-  el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  prefillSettings();
   maybeShowSavingsPrompt();
-  refresh().catch((err) => toast(err.message));
+  refresh()
+    .then(() => {
+      // Deep link for manual testing: /?view=history or /?view=settings
+      const v = new URLSearchParams(location.search).get("view");
+      if (v && views[v]) showView(v);
+    })
+    .catch((err) => toast(err.message));
 })();
