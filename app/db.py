@@ -22,7 +22,18 @@ def _enable_sqlite_foreign_keys(dbapi_connection, connection_record):
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./tzlvt.db")
+DEFAULT_DATABASE_URL = "sqlite+aiosqlite:///./finapp.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
+
+# Exists solely for the one-time migration rename below; never used otherwise.
+_LEGACY_DB_FILE = "tzlvt.db"
+
+if DATABASE_URL == DEFAULT_DATABASE_URL:
+    # One-time data migration for the app rename (default SQLite URL only):
+    # adopt the old DB file if the new one doesn't exist yet.
+    _new_db_file = DEFAULT_DATABASE_URL.rsplit("/", 1)[-1]
+    if not os.path.exists(_new_db_file) and os.path.exists(_LEGACY_DB_FILE):
+        os.replace(_LEGACY_DB_FILE, _new_db_file)
 
 engine = create_async_engine(DATABASE_URL)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)

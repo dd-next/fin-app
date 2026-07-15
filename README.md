@@ -1,10 +1,10 @@
-# Tzlvt clone — minimalist daily-budget tracker
+# FinApp — minimalist daily-budget tracker
 
 Set an amount and a period; the app splits the money across the days and
 shows what you can spend **today**. Add an expense and today's number drops
 by exactly that amount. Money you don't spend rolls into tomorrow; blowing
 past today's budget eats the overall pool and rebases the daily budget for
-the remaining days — just like the original app.
+the remaining days.
 
 Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
 dark UI, `.xlsx` export.
@@ -32,7 +32,9 @@ pytest
 
 ## Notes
 
-- Data lives in `./tzlvt.db` (SQLite, created automatically on first run).
+- Data lives in `./finapp.db` (SQLite, created automatically on first run).
+  Upgrading from a pre-rename install: the app renames the old DB file to
+  `finapp.db` automatically on startup (default SQLite URL only).
 - Migrations: `alembic upgrade head` (optional for local dev — the app also
   creates tables on startup).
 - Postgres later: set `DATABASE_URL` (see `.env.example`) — nothing else

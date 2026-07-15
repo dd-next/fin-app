@@ -35,7 +35,7 @@ async def test_export_roundtrip(client):
     assert resp.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-    assert resp.headers["content-disposition"] == 'attachment; filename="tzlvt-export.xlsx"'
+    assert resp.headers["content-disposition"] == 'attachment; filename="finapp-export.xlsx"'
 
     wb = load_workbook(BytesIO(resp.content))
     assert wb.sheetnames == ["Period", "Expenses"]

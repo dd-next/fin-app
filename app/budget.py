@@ -6,7 +6,7 @@ and return Decimals, so this module can be unit-tested in isolation.
 All money values are Decimal — never float. Displayed per-day / allowance
 values are rounded to 2 decimals; stored amounts stay exact.
 
-Semantics copied from the original app (Tzlvt):
+The reference behavior:
 
 - Setting a period fixes a daily base: total_amount / days_total.
 - A day's budget is the base plus whatever previous days left unspent
@@ -112,7 +112,7 @@ def compute_budget(
 
     # Replay the fully elapsed days: unspent allowance rolls forward; a day
     # that ended overspent ate the pool, so the daily base rebases over the
-    # days after it — exactly what the original app does.
+    # days after it — exactly the reference behavior.
     daily = total_amount / total
     carry = ZERO
     spent_before_today = ZERO

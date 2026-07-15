@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 
 from app import budget
 
-FILENAME = "tzlvt-export.xlsx"
+FILENAME = "finapp-export.xlsx"
 CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 

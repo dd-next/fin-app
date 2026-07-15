@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Tzlvt clone", lifespan=lifespan)
+app = FastAPI(title="FinApp", lifespan=lifespan)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.

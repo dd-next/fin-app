@@ -1,4 +1,4 @@
-/* Tzlvt clone — dark, minimal, one orange accent, large calm type. */
+/* FinApp — dark, minimal, one orange accent, large calm type. */
 
 :root {
   --bg: #121212;
@@ -59,7 +59,7 @@ html, body {
 .allowance.negative { color: var(--danger); }
 
 /* Today's budget exhausted: further spending eats the overall pool and the
-   rebased daily budget shows big and red, like the original app. */
+   rebased daily budget shows big and red (the reference behavior). */
 .over-note { margin: 4px 0 0; color: var(--muted); }
 
 .rebase { margin: 14px 0 0; }

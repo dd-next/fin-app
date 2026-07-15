@@ -1,6 +1,6 @@
 """Unit tests for the pure budget math in app/budget.py.
 
-Semantics under test are the original app's (Tzlvt): a fixed daily base,
+Semantics under test are the reference behavior: a fixed daily base,
 unspent money rolling forward into today, spending reducing TODAY 1:1, and
 an overspent day eating the pool and rebasing the base for the days after.
 """

@@ -16,6 +16,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 6 — Shared export row-building (SPEC-2)
 - [x] Phase 7 — Google Sheets full re-sync (SPEC-2)
 - [x] Phase 8 — Telegram Mini App (SPEC-2)
+- [x] Phase 9 — Full rebrand to FinApp (SPEC-3)
+- [ ] Phase 10 — Income operations (±) + undo (SPEC-3)
+- [ ] Phase 11 — Next-day savings decision screen (SPEC-3)
+- [ ] Phase 12 — UI restructure (SPEC-3)
+- [ ] Phase 13 — Manual test cases + final pass (SPEC-3)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -159,7 +164,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   default-off, so the MVP behavior is unchanged).
 
 ### Fix — daily budget copies the original app's semantics (2026-07-15)
-- Bug report with screenshots of the original Tzlvt: spending must reduce
+- Bug report with screenshots of the reference app: spending must reduce
   **today's** number 1:1. Our spec'd formula `remaining / days_remaining`
   re-spread every expense over the whole rest of the period, so today's
   number barely moved (6000/15 with 493.33 spent showed 367.11 instead of
@@ -185,6 +190,30 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Tests: `test_budget.py` rewritten (17 unit tests incl. the bug-report
   scenario); `test_api`/`test_export`/`test_sheets` updated.
   **49 passed, 0 failed** (was 44).
+
+### Phase 9 — Full rebrand to FinApp (SPEC-3) (2026-07-15)
+- Renamed everything to FinApp/finapp: DB default `finapp.db` (db.py,
+  alembic.ini, .env.example, Postgres example db name), FastAPI title,
+  export `FILENAME=finapp-export.xlsx` (+ test assertion + JS download
+  name), page `<title>`, README retitle, verify skill; old-name comment
+  phrasing in budget.py / app.js / style.css / test_budget.py replaced
+  with "the reference behavior"; historical docs (SPEC.md, PROGRESS.md)
+  reworded.
+- Existing data: chose the **code migration** route — `app/db.py` does a
+  one-time `os.replace(old → finapp.db)` at import, only when the default
+  SQLite URL is in use and `finapp.db` doesn't exist. The old filename
+  survives only as the `_LEGACY_DB_FILE` constant (allowed by SPEC-3
+  acceptance). Verified: the repo's live DB file was renamed to
+  `finapp.db` with data intact. README documents the auto-rename.
+- Acceptance grep is clean except (a) that constant and (b)
+  `SPEC-3-rebrand-and-gaps.md` itself, which necessarily names the banned
+  strings to define the ban — left as-is (it's the instruction, not a
+  reference).
+- Note: bare `pytest` stopped resolving the `app` package (no
+  site-packages install; pytest doesn't add cwd). Use
+  `python -m pytest` (adds cwd to sys.path). Environment quirk, not a
+  code change.
+- Tests: **49 passed, 0 failed**.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

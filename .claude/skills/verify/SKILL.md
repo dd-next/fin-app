@@ -1,11 +1,11 @@
 ---
 name: verify
-description: Launch and drive this app end-to-end (FastAPI + SPA) to verify a change against a scratch DB, without touching tzlvt.db.
+description: Launch and drive this app end-to-end (FastAPI + SPA) to verify a change against a scratch DB, without touching finapp.db.
 ---
 
 # Verify this app end-to-end
 
-## Launch (isolated — never against the repo's tzlvt.db)
+## Launch (isolated — never against the repo's finapp.db)
 
 ```sh
 DATABASE_URL="sqlite+aiosqlite:////ABS/PATH/scratch.db" \

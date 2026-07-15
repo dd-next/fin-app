@@ -1,4 +1,4 @@
-/* Tzlvt clone — vanilla JS, no build step.
+/* FinApp — vanilla JS, no build step.
    All numbers come from the API as strings; we only format for display. */
 
 "use strict";
@@ -98,8 +98,8 @@ function renderBudget(budget) {
     return;
   }
   // Today's number drops 1:1 with spending. Once it hits 0, further spending
-  // eats the overall budget: show 0 plus the rebased daily budget in red,
-  // exactly like the original app.
+  // eats the overall budget: show 0 plus the rebased daily budget in red
+  // (the reference behavior).
   const over = Number(budget.per_day_today) <= 0;
   el.perDay.textContent = fmt(over ? 0 : budget.per_day_today);
   el.overNote.classList.toggle("hidden", !over);
@@ -250,7 +250,7 @@ $("download").addEventListener("click", async (event) => {
     const url = URL.createObjectURL(await resp.blob());
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tzlvt-export.xlsx";
+    a.download = "finapp-export.xlsx";
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
