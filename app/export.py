@@ -43,13 +43,14 @@ def period_rows(
     end_date: date,
     operations: Iterable[OperationRow],
     today: date | None = None,
+    rebase_days: Iterable[date] = (),
 ) -> list[list]:
     """The "Period" sheet as a two-column key/value table. Shared by the
     .xlsx export and the Google Sheets sync so they always agree."""
     summary = budget.compute_budget(
         total_amount, start_date, end_date,
         [(o.created_at.date(), o.signed_amount) for o in operations],
-        today=today,
+        today=today, rebase_days=rebase_days,
     )
     return [
         ["total_amount", total_amount],
@@ -66,6 +67,7 @@ def expense_rows(
     start_date: date,
     end_date: date,
     operations: Iterable[OperationRow],
+    rebase_days: Iterable[date] = (),
 ) -> list[list]:
     """The "Expenses" sheet body: operations replayed in chronological order
     with the running balance and what was left to spend that day right after
@@ -73,12 +75,14 @@ def expense_rows(
     rows: list[list] = []
     balance = total_amount
     replayed: list[budget.DatedAmount] = []
+    rebase_days = list(rebase_days)
     for o in sorted(operations, key=lambda o: o.created_at):
         balance -= o.signed_amount
         day = o.created_at.date()
         replayed.append((day, o.signed_amount))
         at_that_point = budget.compute_budget(
-            total_amount, start_date, end_date, replayed, today=day
+            total_amount, start_date, end_date, replayed, today=day,
+            rebase_days=rebase_days,
         )
         rows.append(
             [
@@ -99,16 +103,20 @@ def build_workbook(
     end_date: date,
     operations: Iterable[OperationRow],
     today: date | None = None,
+    rebase_days: Iterable[date] = (),
 ) -> bytes:
     """One workbook, two sheets: "Period" (key/value) and "Expenses"
     (chronological replay with running balance and per-day allowance)."""
     operations = list(operations)  # both sheets iterate it
+    rebase_days = list(rebase_days)
     wb = Workbook()
 
     # --- Sheet "Period": two-column key/value table -------------------------
     ws = wb.active
     ws.title = "Period"
-    for row in period_rows(total_amount, start_date, end_date, operations, today):
+    for row in period_rows(
+        total_amount, start_date, end_date, operations, today, rebase_days
+    ):
         ws.append(row)
     _autosize(ws)
 
@@ -117,7 +125,9 @@ def build_workbook(
     ws.append(EXPENSE_HEADERS)
     for cell in ws[1]:
         cell.font = Font(bold=True)
-    for row in expense_rows(total_amount, start_date, end_date, operations):
+    for row in expense_rows(
+        total_amount, start_date, end_date, operations, rebase_days
+    ):
         ws.append(row)
     _autosize(ws)
 

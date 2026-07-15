@@ -53,6 +53,12 @@ const el = {
   periodStart: $("period-start"),
   periodEnd: $("period-end"),
   toast: $("toast"),
+  savingsPrompt: $("savings-prompt"),
+  savedAmount: $("saved-amount"),
+  choiceSpend: $("choice-spend"),
+  choiceSpendCaption: $("choice-spend-caption"),
+  choiceIncrease: $("choice-increase"),
+  choiceIncreaseCaption: $("choice-increase-caption"),
 };
 
 // ---- entry-mode state --------------------------------------------------------
@@ -331,6 +337,42 @@ $("download").addEventListener("click", async (event) => {
   }
 });
 
+// ---- next-day savings decision -------------------------------------------------
+
+async function maybeShowSavingsPrompt() {
+  let p;
+  try {
+    p = await api("/savings-prompt");
+  } catch {
+    return; // never block the app on the prompt
+  }
+  if (!p || !p.show) return;
+  const base = Number(p.spend_today_value) - Number(p.saved);
+  el.savedAmount.textContent = fmt(p.saved);
+  el.choiceSpendCaption.textContent =
+    `${fmt(p.spend_today_value)} instead of ${fmt(base)} today`;
+  el.choiceIncreaseCaption.textContent =
+    `${fmt(p.increase_daily_value)} instead of ${fmt(base)} per day`;
+  el.savingsPrompt.classList.remove("hidden");
+}
+
+async function decideSavings(choice) {
+  el.savingsPrompt.classList.add("hidden");
+  try {
+    await api("/savings-decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice }),
+    });
+    await refresh();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+el.choiceSpend.addEventListener("click", () => decideSavings("spend_today"));
+el.choiceIncrease.addEventListener("click", () => decideSavings("increase_daily"));
+
 // ---- init --------------------------------------------------------------------
 
 (function init() {
@@ -339,5 +381,6 @@ $("download").addEventListener("click", async (event) => {
   const iso = (d) => d.toISOString().slice(0, 10);
   el.periodStart.value = iso(today);
   el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  maybeShowSavingsPrompt();
   refresh().catch((err) => toast(err.message));
 })();

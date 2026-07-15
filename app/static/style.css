@@ -234,6 +234,56 @@ details[open] summary { margin-bottom: 14px; color: var(--text); }
 .footer a { color: var(--muted); text-decoration: underline; }
 .footer a:hover { color: var(--accent); }
 
+/* --- Next-day savings decision (full-screen) ------------------------------- */
+
+.savings {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.savings-inner {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: center;
+}
+
+.savings-title {
+  margin: 0;
+  font-size: clamp(2.4rem, 12vw, 3.4rem);
+  color: var(--income);
+}
+
+.savings-sub { margin: 0 0 10px; color: var(--muted); }
+.savings-sub strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+}
+.choice:hover { background: #242426; }
+.choice:active { filter: brightness(0.9); }
+.choice-title { font-weight: 600; font-size: 1.05rem; }
+.choice-caption {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .toast {
   position: fixed;
   left: 50%;

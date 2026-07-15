@@ -53,8 +53,13 @@ class Period(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
+    # Last local day the next-day savings prompt was answered (either choice).
+    prompt_ack_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     operations: Mapped[list["Operation"]] = relationship(
+        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
+    )
+    rebase_events: Mapped[list["RebaseEvent"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -80,3 +85,20 @@ class Operation(Base):
         """How much this operation takes from the pool: incomes are negative
         spending, which is exactly how the budget replay consumes them."""
         return -self.amount if self.kind == "income" else self.amount
+
+
+class RebaseEvent(Base):
+    """A user-chosen "increase the daily budget" day: the replay re-spreads
+    the remaining money evenly from this day on and resets the carry-over.
+    Stored as a record so the numbers stay a pure function of the DB."""
+
+    __tablename__ = "rebase_event"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("period.id", ondelete="CASCADE"), nullable=False
+    )
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
+
+    period: Mapped[Period] = relationship(back_populates="rebase_events")

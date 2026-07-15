@@ -10,6 +10,26 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+
+  <!-- Next-day savings decision: shown full-screen before the main screen -->
+  <div id="savings-prompt" class="savings hidden" role="dialog" aria-modal="true">
+    <div class="savings-inner">
+      <h1 class="savings-title">Nice!</h1>
+      <p class="savings-sub">
+        Yesterday you saved <strong id="saved-amount"></strong>.
+        Decide what to do with it.
+      </p>
+      <button id="choice-spend" type="button" class="choice">
+        <span class="choice-title">Spend it all today</span>
+        <span id="choice-spend-caption" class="choice-caption"></span>
+      </button>
+      <button id="choice-increase" type="button" class="choice">
+        <span class="choice-title">Increase the daily budget</span>
+        <span id="choice-increase-caption" class="choice-caption"></span>
+      </button>
+    </div>
+  </div>
+
   <main class="app">
 
     <!-- No period yet -->

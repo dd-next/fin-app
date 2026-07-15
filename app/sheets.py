@@ -66,22 +66,29 @@ def sync_now(
     start_date: date,
     end_date: date,
     operations: Iterable[export.OperationRow],
+    rebase_days: Iterable[date] = (),
 ) -> None:
     """Full re-sync. Raises on failure — use sync_safe() for fire-and-forget.
 
     Row layout is identical to the .xlsx export (same shared builders)."""
     operations = list(operations)
+    rebase_days = list(rebase_days)
     spreadsheet = _open_spreadsheet()
     _rewrite(
         spreadsheet,
         "Period",
-        export.period_rows(total_amount, start_date, end_date, operations),
+        export.period_rows(
+            total_amount, start_date, end_date, operations,
+            rebase_days=rebase_days,
+        ),
     )
     _rewrite(
         spreadsheet,
         "Expenses",
         [export.EXPENSE_HEADERS]
-        + export.expense_rows(total_amount, start_date, end_date, operations),
+        + export.expense_rows(
+            total_amount, start_date, end_date, operations, rebase_days
+        ),
     )
 
 
@@ -90,9 +97,10 @@ def sync_safe(
     start_date: date,
     end_date: date,
     operations: Iterable[export.OperationRow],
+    rebase_days: Iterable[date] = (),
 ) -> None:
     """Best-effort sync for BackgroundTasks: log failures, never raise."""
     try:
-        sync_now(total_amount, start_date, end_date, operations)
+        sync_now(total_amount, start_date, end_date, operations, rebase_days)
     except Exception:
         logger.exception("Google Sheets sync failed (data is safe in the DB)")

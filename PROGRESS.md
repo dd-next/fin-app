@@ -18,7 +18,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 8 — Telegram Mini App (SPEC-2)
 - [x] Phase 9 — Full rebrand to FinApp (SPEC-3)
 - [x] Phase 10 — Income operations (±) + undo (SPEC-3)
-- [ ] Phase 11 — Next-day savings decision screen (SPEC-3)
+- [x] Phase 11 — Next-day savings decision screen (SPEC-3)
 - [ ] Phase 12 — UI restructure (SPEC-3)
 - [ ] Phase 13 — Manual test cases + final pass (SPEC-3)
 
@@ -240,6 +240,31 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   2 new API (both-kinds round-trip, invalid kind 422), 1 new export
   (Type column + signed running balance); all suites updated to
   /operations. **55 passed, 0 failed**.
+
+### Phase 11 — Next-day savings decision ("Nice!" screen) (2026-07-15)
+- Persistence decision: a dedicated **`rebase_event` table** (period FK,
+  day) — NOT a zero-amount operation kind — so /operations, the history
+  list, and the export stay clean. Ack stored as `period.prompt_ack_date`.
+  Alembic 0003; the lifespan column-guard also patches pre-0003 DBs.
+- `budget.py`: `compute_budget(..., rebase_days=)` — at the START of a
+  rebase day the remaining money re-spreads over the days from it to the
+  end (inclusive) and carry resets; same mechanism as the overspend
+  rebase, replayed deterministically from stored events. Rebase days are
+  threaded through export/Sheets too, so their replay agrees with the app.
+- API: `GET /savings-prompt` → `{show:false}` or `{show:true, saved,
+  spend_today_value, increase_daily_value}`; shows when start < today <=
+  end AND ack < today AND carry > 0 (saved = budget_today − daily_base,
+  i.e. everything unspent days rolled into today — accumulates if the app
+  wasn't opened for several days). `POST /savings-decision {choice}` acks
+  (+ rebase event for increase_daily) and returns the updated budget.
+- Frontend: full-screen "Nice!" dialog before the main screen with both
+  option buttons and their computed numbers; either choice POSTs and
+  proceeds. Verified E2E on a scratch DB (prompt → increase_daily →
+  111.11 → prompt gone) + headless-Chrome screenshot.
+- Tests: 2 unit (rebase today / past day + interaction with overspend
+  rebase), 7 API in tests/test_savings.py (shown when qualified, hidden
+  on first day / no period, survives today's spending, once per day,
+  both choices persist, 404/422). **64 passed, 0 failed**.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

@@ -231,6 +231,35 @@ def test_income_delete_equals_fresh_recompute():
     assert with_income.remaining_money - without.remaining_money == D("300")
 
 
+def test_rebase_event_today_respreads_and_resets_carry():
+    # 1000/10; day 1 spends 40 → 60 carry, day 2 untouched → 160 carry into
+    # day 3. A user rebase on day 3 re-spreads 960 over days 3-10 instead.
+    when = date(2026, 7, 3)
+    plain = compute_budget(D("1000"), START, END, [on(1, "40")], today=when)
+    assert plain.budget_today == D("260.00")  # default carry-over behavior
+    rebased = compute_budget(D("1000"), START, END, [on(1, "40")],
+                             today=when, rebase_days=[when])
+    assert rebased.daily_base == D("120.00")  # 960 / 8
+    assert rebased.budget_today == D("120.00")  # carry reset
+    assert rebased.remaining_money == plain.remaining_money == D("960")
+
+
+def test_rebase_event_on_past_day_then_carry_resumes():
+    # Rebase on day 2 (base 960/9 = 106.67); days 2-3 untouched → their
+    # leftovers carry into day 4 on top of the new base.
+    s = compute_budget(D("1000"), START, END, [on(1, "40")],
+                       today=date(2026, 7, 4),
+                       rebase_days=[date(2026, 7, 2)])
+    assert s.daily_base == D("106.67")  # 960 / 9
+    assert s.budget_today == D("320.00")  # 3 × (960/9), exactly
+    # a later overspend still rebases on top of the voluntary one
+    s2 = compute_budget(D("1000"), START, END,
+                        [on(1, "40"), on(2, "400")],
+                        today=date(2026, 7, 3),
+                        rebase_days=[date(2026, 7, 2)])
+    assert s2.daily_base == D("70.00")  # (1000-440) / 8 after day-2 overspend
+
+
 def test_preview_after_pending_expense():
     # today shows 100.00, typing 30 previews 70.00
     assert preview_after(D("100.00"), D("30")) == D("70.00")

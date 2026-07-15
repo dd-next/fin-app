@@ -1,6 +1,7 @@
 """FastAPI app + routes."""
 
 from contextlib import asynccontextmanager
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
@@ -17,7 +18,7 @@ from sqlalchemy import inspect as sa_inspect, text
 from app import budget, export, sheets
 from app.telegram_auth import require_telegram_auth
 from app.db import engine, get_session
-from app.models import Base, Operation, Period
+from app.models import Base, Operation, Period, RebaseEvent
 from app.schemas import (
     BudgetOut,
     OperationIn,
@@ -26,6 +27,8 @@ from app.schemas import (
     PeriodIn,
     PeriodOut,
     PeriodWithBudget,
+    SavingsDecisionIn,
+    SavingsPromptOut,
 )
 
 
@@ -35,17 +38,26 @@ async def lifespan(app: FastAPI):
     # migration path; create_all is idempotent and a no-op after migrating).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # create_all never ALTERs an existing table, so a pre-`kind` DB needs
-        # the column added here (same as Alembic revision 0002, idempotent).
-        cols = await conn.run_sync(
-            lambda sync_conn: [
-                c["name"] for c in sa_inspect(sync_conn).get_columns("expense")
-            ]
-        )
-        if "kind" not in cols:
+
+        # create_all never ALTERs an existing table, so columns added after
+        # a DB was created need to be patched in here (mirrors Alembic
+        # revisions 0002/0003; idempotent).
+        async def missing(table: str, column: str) -> bool:
+            cols = await conn.run_sync(
+                lambda sync_conn: [
+                    c["name"] for c in sa_inspect(sync_conn).get_columns(table)
+                ]
+            )
+            return column not in cols
+
+        if await missing("expense", "kind"):
             await conn.execute(text(
                 "ALTER TABLE expense ADD COLUMN kind VARCHAR(10) "
                 "NOT NULL DEFAULT 'expense'"
+            ))
+        if await missing("period", "prompt_ack_date"):
+            await conn.execute(text(
+                "ALTER TABLE period ADD COLUMN prompt_ack_date DATE"
             ))
     yield
 
@@ -69,21 +81,36 @@ async def _require_period(session: AsyncSession) -> Period:
     return period
 
 
-async def _budget_for(
-    session: AsyncSession, period: Period, pending: Decimal | None = None
-) -> BudgetOut:
+async def _dated_amounts(
+    session: AsyncSession, period: Period
+) -> list[budget.DatedAmount]:
     result = await session.execute(
         select(Operation.created_at, Operation.amount, Operation.kind).where(
             Operation.period_id == period.id
         )
     )
     # Incomes are negative spending in the replay (see app/budget.py).
-    dated = [
+    return [
         (created.date(), -amount if kind == "income" else amount)
         for created, amount, kind in result.all()
     ]
+
+
+async def _rebase_days(session: AsyncSession, period: Period) -> list[date]:
+    result = await session.execute(
+        select(RebaseEvent.day).where(RebaseEvent.period_id == period.id)
+    )
+    return list(result.scalars())
+
+
+async def _budget_for(
+    session: AsyncSession, period: Period, pending: Decimal | None = None
+) -> BudgetOut:
+    dated = await _dated_amounts(session, period)
+    rebases = await _rebase_days(session, period)
     summary = budget.compute_budget(
-        period.total_amount, period.start_date, period.end_date, dated
+        period.total_amount, period.start_date, period.end_date, dated,
+        rebase_days=rebases,
     )
     preview = None
     if pending is not None:
@@ -127,12 +154,14 @@ async def _queue_sheets_sync(
     if not sheets.enabled():
         return
     rows = await _operation_snapshot(session, period)
+    rebases = await _rebase_days(session, period)
     background_tasks.add_task(
         sheets.sync_safe,
         period.total_amount,
         period.start_date,
         period.end_date,
         rows,
+        rebases,
     )
 
 
@@ -234,6 +263,58 @@ async def delete_operation(
     return await _budget_for(session, period)
 
 
+@app.get("/savings-prompt", response_model=SavingsPromptOut,
+         response_model_exclude_none=True, dependencies=[AUTH])
+async def savings_prompt(session: AsyncSession = Depends(get_session)):
+    """Next-day savings decision: shown once per calendar day, when yesterday
+    (or earlier untouched days) left a positive carry-over."""
+    period = await _active_period(session)
+    today = date.today()
+    if period is None or not (period.start_date < today <= period.end_date):
+        return SavingsPromptOut(show=False)
+    if period.prompt_ack_date is not None and period.prompt_ack_date >= today:
+        return SavingsPromptOut(show=False)
+
+    dated = await _dated_amounts(session, period)
+    rebases = await _rebase_days(session, period)
+    current = budget.compute_budget(
+        period.total_amount, period.start_date, period.end_date, dated,
+        rebase_days=rebases,
+    )
+    saved = current.budget_today - current.daily_base  # the carry-over
+    if saved <= 0:
+        return SavingsPromptOut(show=False)
+    respread = budget.compute_budget(
+        period.total_amount, period.start_date, period.end_date, dated,
+        rebase_days=[*rebases, today],
+    )
+    return SavingsPromptOut(
+        show=True,
+        saved=saved,
+        spend_today_value=current.budget_today,
+        increase_daily_value=respread.daily_base,
+    )
+
+
+@app.post("/savings-decision", dependencies=[AUTH])
+async def savings_decision(
+    body: SavingsDecisionIn,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
+    """Persist the user's choice. "spend_today" keeps the default carry-over
+    math and only acknowledges the prompt; "increase_daily" also records a
+    rebase event for today, so the replay re-spreads deterministically."""
+    period = await _require_period(session)
+    today = date.today()
+    if body.choice == "increase_daily":
+        session.add(RebaseEvent(period_id=period.id, day=today))
+    period.prompt_ack_date = today
+    await session.commit()
+    await _queue_sheets_sync(background_tasks, session, period)
+    return {"status": "ok", "budget": await _budget_for(session, period)}
+
+
 @app.post("/sheets/sync", dependencies=[AUTH])
 async def sheets_sync(session: AsyncSession = Depends(get_session)):
     """Manual "sync now": same full re-sync, run in a threadpool
@@ -242,6 +323,7 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
         return {"status": "disabled"}
     period = await _require_period(session)
     rows = await _operation_snapshot(session, period)
+    rebases = await _rebase_days(session, period)
     try:
         await run_in_threadpool(
             sheets.sync_now,
@@ -249,6 +331,7 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
             period.start_date,
             period.end_date,
             rows,
+            rebases,
         )
     except Exception:
         return {"status": "failed"}
@@ -259,8 +342,10 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
 async def export_xlsx(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
     rows = await _operation_snapshot(session, period)
+    rebases = await _rebase_days(session, period)
     data = export.build_workbook(
-        period.total_amount, period.start_date, period.end_date, rows
+        period.total_amount, period.start_date, period.end_date, rows,
+        rebase_days=rebases,
     )
     return StreamingResponse(
         BytesIO(data),

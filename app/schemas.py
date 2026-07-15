@@ -64,6 +64,20 @@ class BudgetOut(BaseModel):
     preview_after: Decimal | None = None
 
 
+class SavingsPromptOut(BaseModel):
+    """Next-day savings decision. When show is False the value fields are
+    omitted from the response."""
+
+    show: bool
+    saved: Decimal | None = None
+    spend_today_value: Decimal | None = None  # today's number if it rolls over
+    increase_daily_value: Decimal | None = None  # new daily base if re-spread
+
+
+class SavingsDecisionIn(BaseModel):
+    choice: Literal["spend_today", "increase_daily"]
+
+
 class PeriodWithBudget(BaseModel):
     period: PeriodOut
     budget: BudgetOut
