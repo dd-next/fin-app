@@ -20,7 +20,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 10 — Income operations (±) + undo (SPEC-3)
 - [x] Phase 11 — Next-day savings decision screen (SPEC-3)
 - [x] Phase 12 — UI restructure (SPEC-3)
-- [ ] Phase 13 — Manual test cases + final pass (SPEC-3)
+- [x] Phase 13 — Manual test cases + final pass (SPEC-3)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -290,6 +290,25 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Verified with headless-Chrome screenshots: main, history, settings,
   Spent state, savings prompt, wide (1280px) viewport.
 - Tests: backend untouched — **64 passed, 0 failed**.
+
+### Phase 13 — Manual test cases + final pass (SPEC-3) (2026-07-15)
+- `MANUAL_TEST_CASES.md` (Russian): TC-01…TC-15 covering all items from
+  SPEC-3 §13, written against the ACTUAL UI labels/endpoints/behaviors
+  after phases 9–12 (button texts, toast texts, export filename/columns,
+  Nice! captions, Spent state, deep links not required for any case).
+  The legacy DB filename is referenced via the `_LEGACY_DB_FILE` constant
+  pointer instead of literally, to keep the Phase-9 grep clean.
+- README: feature list updated (income/undo/Nice!/history+settings views/
+  Spent state); migration note now also mentions automatic column
+  patching. Install/run/test still 4 commands.
+- Final pass: rebrand grep clean (only the sanctioned `_LEGACY_DB_FILE`
+  constant + SPEC-3 itself); fresh-DB `alembic upgrade head` runs
+  0001→0002→0003 and yields the same schema the app builds; SPEC §8
+  acceptance criteria all re-verified this session (live /health, 1:1
+  math + over-state, delete recompute, export round-trip, responsive UI,
+  README).
+- Tests: **64 passed, 0 failed** (17+2 unit budget incl. income/rebase,
+  API, export, sheets, telegram, savings).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->
