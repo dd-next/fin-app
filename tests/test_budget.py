@@ -197,6 +197,40 @@ def test_delete_after_increase_equals_fresh_recompute():
     assert after_delete.per_day_today > with_all.per_day_today
 
 
+def test_income_today_raises_todays_number():
+    # Incomes enter the replay as negative amounts. +200 on day 1 raises
+    # today's number 1:1 and grows the pool.
+    s = compute_budget(D("1000"), START, END,
+                       [on(1, "40"), on(1, "-200")], today=START)
+    assert s.budget_today == D("100.00")
+    assert s.spent_today == D("-160")  # 40 spent, 200 received
+    assert s.per_day_today == D("260.00")  # 100 - 40 + 200
+    assert s.remaining_money == D("1160")
+
+
+def test_income_after_overspent_day_rolls_forward():
+    # Day 1 overspends (250 > 100) → rebase to 750/9. Day 2 receives 500,
+    # spends nothing → the whole 500 (plus day 2's base) carries into day 3.
+    s = compute_budget(D("1000"), START, END,
+                       [on(1, "250"), on(2, "-500")], today=date(2026, 7, 3))
+    assert s.daily_base == D("83.33")  # 750/9, set by the day-1 rebase
+    assert s.budget_today == D("666.67")  # 83.33 (base) + 83.33 + 500 (carry)
+    assert s.remaining_money == D("1250")
+
+
+def test_income_delete_equals_fresh_recompute():
+    # Removing an income is just recomputing without it — no hidden state.
+    with_income = compute_budget(D("1000"), START, END,
+                                 [on(1, "250"), on(2, "-300")],
+                                 today=date(2026, 7, 4))
+    without = compute_budget(D("1000"), START, END, [on(1, "250")],
+                             today=date(2026, 7, 4))
+    fresh = compute_budget(D("1000"), START, END, [on(1, "250")],
+                           today=date(2026, 7, 4))
+    assert without == fresh
+    assert with_income.remaining_money - without.remaining_money == D("300")
+
+
 def test_preview_after_pending_expense():
     # today shows 100.00, typing 30 previews 70.00
     assert preview_after(D("100.00"), D("30")) == D("70.00")

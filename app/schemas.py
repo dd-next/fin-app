@@ -2,12 +2,15 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Money parses as Decimal with at most 2 decimal places; malformed input → 422.
 MoneyIn = Annotated[Decimal, Field(max_digits=12, decimal_places=2)]
+
+# Operations are signed by kind, not by the amount (which stays positive).
+OperationKind = Literal["expense", "income"]
 
 
 class PeriodIn(BaseModel):
@@ -22,8 +25,9 @@ class PeriodIn(BaseModel):
         return self
 
 
-class ExpenseIn(BaseModel):
+class OperationIn(BaseModel):
     amount: MoneyIn
+    kind: OperationKind = "expense"
     comment: str | None = None
 
 
@@ -37,11 +41,12 @@ class PeriodOut(BaseModel):
     created_at: datetime
 
 
-class ExpenseOut(BaseModel):
+class OperationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     amount: Decimal
+    kind: OperationKind
     comment: str | None
     created_at: datetime
 
@@ -64,6 +69,6 @@ class PeriodWithBudget(BaseModel):
     budget: BudgetOut
 
 
-class ExpenseWithBudget(BaseModel):
-    expense: ExpenseOut
+class OperationWithBudget(BaseModel):
+    operation: OperationOut
     budget: BudgetOut

@@ -24,11 +24,11 @@ async def test_export_roundtrip(client):
     assert resp.status_code == 200
 
     for amount, comment in [("250", "groceries"), ("100", None), ("50.50", "coffee")]:
-        resp = await client.post("/expenses", json={"amount": amount, "comment": comment})
+        resp = await client.post("/operations", json={"amount": amount, "comment": comment})
         assert resp.status_code == 200
 
     api_budget = (await client.get("/budget")).json()
-    api_expenses = (await client.get("/expenses")).json()
+    api_operations = (await client.get("/operations")).json()
 
     resp = await client.get("/export.xlsx")
     assert resp.status_code == 200
@@ -49,38 +49,67 @@ async def test_export_roundtrip(client):
     assert D(str(period_kv["spent_total"])) == D(api_budget["spent_total"]) == D("400.50")
     assert D(str(period_kv["remaining"])) == D(api_budget["remaining_money"]) == D("599.50")
 
-    # --- Expenses sheet: header + one row per expense, replayed in order ----
+    # --- Expenses sheet: header + one row per operation, replayed in order --
     rows = list(wb["Expenses"].iter_rows(values_only=True))
     assert rows[0] == (
         "Date",
         "Amount",
+        "Type",
         "Comment",
         "Running balance",
         "Left to spend that day",
     )
     body = rows[1:]
-    assert len(body) == len(api_expenses) == 3
+    assert len(body) == len(api_operations) == 3
 
     # chronological order (API lists newest first — export replays oldest first)
     amounts = [D(str(r[1])) for r in body]
     assert amounts == [D("250"), D("100"), D("50.50")]
     assert sum(amounts) == D(api_budget["spent_total"])
+    assert [r[2] for r in body] == ["expense", "expense", "expense"]
 
     # running balance replays correctly and ends at the API's remaining_money
-    balances = [D(str(r[3])) for r in body]
+    balances = [D(str(r[4])) for r in body]
     assert balances == [D("750"), D("650"), D("599.50")]
     assert balances[-1] == D(api_budget["remaining_money"])
 
     # "left to spend that day" at the last point matches the API's headline
     # number (all expenses were added today)
-    assert D(str(body[-1][4])) == D(api_budget["per_day_today"])
+    assert D(str(body[-1][5])) == D(api_budget["per_day_today"])
 
     # dates are YYYY-MM-DD strings; comments preserved (blank for None —
     # openpyxl reads empty cells back as None)
     assert all(r[0] == start.isoformat() for r in body)
-    assert [r[2] or "" for r in body] == ["groceries", "", "coffee"]
+    assert [r[3] or "" for r in body] == ["groceries", "", "coffee"]
 
 
 async def test_export_404_when_no_period(client):
     resp = await client.get("/export.xlsx")
     assert resp.status_code == 404
+
+
+async def test_export_income_type_and_running_balance(client):
+    start = date.today()
+    resp = await client.post(
+        "/period",
+        json={
+            "total_amount": "1000",
+            "start_date": start.isoformat(),
+            "end_date": (start + timedelta(days=9)).isoformat(),
+        },
+    )
+    assert resp.status_code == 200
+    await client.post("/operations", json={"amount": "250"})
+    await client.post("/operations", json={"amount": "100", "kind": "income"})
+
+    resp = await client.get("/export.xlsx")
+    wb = load_workbook(BytesIO(resp.content))
+    body = list(wb["Expenses"].iter_rows(values_only=True))[1:]
+    assert [r[2] for r in body] == ["expense", "income"]
+    # amounts stay positive in the sheet; the Type column carries the sign,
+    # and the running balance applies it: 1000 - 250, then + 100
+    assert [D(str(r[1])) for r in body] == [D("250"), D("100")]
+    assert [D(str(r[4])) for r in body] == [D("750"), D("850")]
+
+    kv = {row[0]: row[1] for row in wb["Period"].iter_rows(values_only=True)}
+    assert D(str(kv["remaining"])) == D("850")

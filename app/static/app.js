@@ -34,15 +34,19 @@ const el = {
   nextDaily: $("next-daily"),
   wasDaily: $("was-daily"),
   preview: $("preview"),
+  previewLabel: $("preview-label"),
   previewValue: $("preview-value"),
   remaining: $("remaining"),
   daysLeft: $("days-left"),
   spend: $("spend"),
-  expenseForm: $("expense-form"),
-  expenseAmount: $("expense-amount"),
-  expenseComment: $("expense-comment"),
+  kindToggle: $("kind-toggle"),
+  operationForm: $("operation-form"),
+  operationAmount: $("operation-amount"),
+  operationComment: $("operation-comment"),
+  operationSubmit: $("operation-submit"),
+  undo: $("undo"),
   history: $("history"),
-  expenseList: $("expense-list"),
+  operationList: $("operation-list"),
   settings: $("settings"),
   periodForm: $("period-form"),
   periodAmount: $("period-amount"),
@@ -50,6 +54,12 @@ const el = {
   periodEnd: $("period-end"),
   toast: $("toast"),
 };
+
+// ---- entry-mode state --------------------------------------------------------
+
+let kind = "expense"; // what the form submits: 'expense' | 'income'
+let lastBudget = null; // latest /budget payload (for client-side income preview)
+let lastOperation = null; // {id, amount} of the just-added op, for Undo
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -88,6 +98,7 @@ async function api(path, options) {
 // ---- rendering -------------------------------------------------------------
 
 function renderBudget(budget) {
+  lastBudget = budget;
   const hasPeriod = budget !== null;
   el.emptyState.classList.toggle("hidden", hasPeriod);
   el.today.classList.toggle("hidden", !hasPeriod);
@@ -114,31 +125,32 @@ function renderBudget(budget) {
   el.daysLeft.textContent = d === 1 ? "last day" : `${d} days left`;
 }
 
-function renderExpenses(expenses) {
-  el.expenseList.replaceChildren(
-    ...(expenses || []).map((e) => {
+function renderOperations(operations) {
+  el.operationList.replaceChildren(
+    ...(operations || []).map((op) => {
       const li = document.createElement("li");
+      const income = op.kind === "income";
 
       const amount = document.createElement("span");
-      amount.className = "expense-amount";
-      amount.textContent = "−" + fmt(e.amount);
+      amount.className = "op-amount" + (income ? " income" : "");
+      amount.textContent = (income ? "+" : "−") + fmt(op.amount);
 
       const info = document.createElement("div");
-      info.className = "expense-info";
+      info.className = "op-info";
       const comment = document.createElement("div");
-      comment.className = "expense-comment";
-      comment.textContent = e.comment || "";
+      comment.className = "op-comment";
+      comment.textContent = op.comment || "";
       const when = document.createElement("div");
-      when.className = "expense-date";
-      when.textContent = e.created_at.slice(0, 10);
+      when.className = "op-date";
+      when.textContent = op.created_at.slice(0, 10);
       info.append(comment, when);
 
       const del = document.createElement("button");
       del.className = "delete";
       del.type = "button";
-      del.setAttribute("aria-label", "Delete expense");
+      del.setAttribute("aria-label", "Delete operation");
       del.textContent = "×";
-      del.addEventListener("click", () => deleteExpense(e.id));
+      del.addEventListener("click", () => deleteOperation(op.id));
 
       li.append(amount, info, del);
       return li;
@@ -146,66 +158,126 @@ function renderExpenses(expenses) {
   );
 }
 
-function renderPreview(budget) {
-  const show = budget && budget.preview_after !== undefined && budget.preview_after !== null;
+function renderPreview(value) {
+  const show = value !== undefined && value !== null && !Number.isNaN(Number(value));
   el.preview.classList.toggle("hidden", !show);
   if (show) {
-    el.previewValue.textContent = fmt(budget.preview_after);
-    el.previewValue.classList.toggle("negative", Number(budget.preview_after) < 0);
+    el.previewLabel.textContent =
+      kind === "income" ? "after this top-up:" : "after this purchase:";
+    el.previewValue.textContent = fmt(value);
+    el.previewValue.classList.toggle("negative", Number(value) < 0);
   }
 }
 
-// ---- data flow --------------------------------------------------------------
+// ---- undo last operation ------------------------------------------------------
 
-async function refresh() {
-  const [budget, expenses] = await Promise.all([api("/budget"), api("/expenses")]);
-  renderBudget(budget);
-  renderExpenses(expenses);
+function showUndo(operation) {
+  lastOperation = operation;
+  el.undo.classList.toggle("hidden", !operation);
+  if (operation) {
+    el.undo.textContent = `‹ Undo ${fmt(operation.amount)}`;
+  }
 }
 
-// Live "after this purchase" preview while typing.
-let previewTimer;
-el.expenseAmount.addEventListener("input", () => {
-  clearTimeout(previewTimer);
-  const raw = el.expenseAmount.value.trim();
-  if (!validAmount(raw)) {
-    renderPreview(null);
-    return;
-  }
-  previewTimer = setTimeout(async () => {
-    try {
-      renderPreview(await api(`/budget?pending=${encodeURIComponent(raw)}`));
-    } catch {
-      renderPreview(null);
-    }
-  }, 150);
-});
-
-el.expenseForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const amount = el.expenseAmount.value.trim();
-  if (!validAmount(amount)) {
-    toast("Enter an amount like 250 or 99.90");
-    return;
-  }
+el.undo.addEventListener("click", async () => {
+  if (!lastOperation) return;
+  const id = lastOperation.id;
+  showUndo(null);
   try {
-    await api("/expenses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount, comment: el.expenseComment.value.trim() || null }),
-    });
-    el.expenseForm.reset();
-    renderPreview(null);
+    await api(`/operations/${id}`, { method: "DELETE" });
     await refresh();
-    el.expenseAmount.focus();
   } catch (err) {
     toast(err.message);
   }
 });
 
-async function deleteExpense(id) {
+// ---- data flow --------------------------------------------------------------
+
+async function refresh() {
+  const [budget, operations] = await Promise.all([
+    api("/budget"),
+    api("/operations"),
+  ]);
+  renderBudget(budget);
+  renderOperations(operations);
+}
+
+// ---- entry mode toggle (Expense | Income) -------------------------------------
+
+function setKind(next) {
+  kind = next;
+  for (const btn of el.kindToggle.querySelectorAll(".seg")) {
+    const active = btn.dataset.kind === kind;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  }
+  el.spend.classList.toggle("income-mode", kind === "income");
+  el.operationSubmit.textContent = kind === "income" ? "Received" : "Spent";
+  el.operationSubmit.classList.toggle("income", kind === "income");
+  updatePreview();
+}
+
+el.kindToggle.addEventListener("click", (event) => {
+  const btn = event.target.closest(".seg");
+  if (btn) setKind(btn.dataset.kind);
+});
+
+// Live "after this operation" preview while typing. Expenses ask the server
+// (?pending=X); incomes are computed client-side from the latest budget.
+let previewTimer;
+function updatePreview() {
+  clearTimeout(previewTimer);
+  const raw = el.operationAmount.value.trim();
+  if (!validAmount(raw) || !lastBudget) {
+    renderPreview(null);
+    return;
+  }
+  if (kind === "income") {
+    renderPreview(Number(lastBudget.per_day_today) + Number(raw));
+    return;
+  }
+  previewTimer = setTimeout(async () => {
+    try {
+      const b = await api(`/budget?pending=${encodeURIComponent(raw)}`);
+      renderPreview(b && b.preview_after);
+    } catch {
+      renderPreview(null);
+    }
+  }, 150);
+}
+el.operationAmount.addEventListener("input", updatePreview);
+
+el.operationForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const amount = el.operationAmount.value.trim();
+  if (!validAmount(amount)) {
+    toast("Enter an amount like 250 or 99.90");
+    return;
+  }
   try {
-    await api(`/expenses/${id}`, { method: "DELETE" });
+    const body = await api("/operations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount,
+        kind,
+        comment: el.operationComment.value.trim() || null,
+      }),
+    });
+    el.operationForm.reset();
+    renderPreview(null);
+    showUndo({ id: body.operation.id, amount: body.operation.amount });
+    await refresh();
+    el.operationAmount.focus();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+async function deleteOperation(id) {
+  showUndo(null);
+  try {
+    await api(`/operations/${id}`, { method: "DELETE" });
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -234,6 +306,7 @@ el.periodForm.addEventListener("submit", async (event) => {
       }),
     });
     el.settings.open = false;
+    showUndo(null); // a new period invalidates the last-operation undo
     await refresh();
   } catch (err) {
     toast(err.message);

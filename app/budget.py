@@ -18,6 +18,11 @@ The reference behavior:
 
 Everything is derived from (period + dated expenses); there is no hidden
 state, so recomputing from scratch is always correct.
+
+Incomes (mid-period top-ups) enter the replay as NEGATIVE amounts: an
+income on day D is "negative spending", so it grows that day's leftover
+(and the pool) from day D onward. Callers sign the amounts; this module
+stays agnostic.
 """
 
 from dataclasses import dataclass

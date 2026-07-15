@@ -17,7 +17,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 7 — Google Sheets full re-sync (SPEC-2)
 - [x] Phase 8 — Telegram Mini App (SPEC-2)
 - [x] Phase 9 — Full rebrand to FinApp (SPEC-3)
-- [ ] Phase 10 — Income operations (±) + undo (SPEC-3)
+- [x] Phase 10 — Income operations (±) + undo (SPEC-3)
 - [ ] Phase 11 — Next-day savings decision screen (SPEC-3)
 - [ ] Phase 12 — UI restructure (SPEC-3)
 - [ ] Phase 13 — Manual test cases + final pass (SPEC-3)
@@ -214,6 +214,32 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   `python -m pytest` (adds cwd to sys.path). Environment quirk, not a
   code change.
 - Tests: **49 passed, 0 failed**.
+
+### Phase 10 — Income operations (±) + undo (SPEC-3) (2026-07-15)
+- Model: `Expense` → `Operation` (table still named `expense`), new `kind`
+  column ('expense'|'income', server default 'expense') via Alembic 0002;
+  the lifespan also ALTERs pre-0002 DBs (create_all can't add columns), so
+  zero-setup upgrades keep working — verified against a copy of the live DB.
+- Math: `budget.py` unchanged (still pure); incomes enter the existing
+  replay as NEGATIVE amounts, signed at the call sites
+  (`Operation.signed_amount`). Income today raises today's number 1:1;
+  income after an overspent day rolls forward via the normal carry.
+- API decision: **dropped `/expenses` entirely** (SPEC-3 allowed alias-or-
+  drop; single-user app, no external consumers). `POST/GET /operations`,
+  `DELETE /operations/{id}`; responses `{operation, budget}`, ops carry
+  `kind`. Invalid kind → 422 (Literal).
+- Export/Sheets: `OperationRow` (+kind), new "Type" column, running
+  balance signed. `spent_total`/`remaining_money` are now NET of incomes
+  (income = negative spending) — recorded as the intended semantics.
+- Frontend: Expense|Income segmented toggle (income = green accent,
+  button "Received"), income rows green with `+`, income live preview
+  computed client-side (server `?pending` still used for expenses),
+  inline "‹ Undo {amount}" after each add (DELETEs the just-created op,
+  cleared on delete/period change). Verified via headless-Chrome shot.
+- Tests: 3 new unit (income today / after overspend / delete-recompute),
+  2 new API (both-kinds round-trip, invalid kind 422), 1 new export
+  (Type column + signed running balance); all suites updated to
+  /operations. **55 passed, 0 failed**.
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

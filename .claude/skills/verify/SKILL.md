@@ -20,7 +20,8 @@ curl -s http://127.0.0.1:8765/health   # {"status":"ok"} when up
 ```sh
 curl -s -X POST :8765/period -H 'Content-Type: application/json' \
   -d '{"total_amount":"1000","start_date":"2026-07-14","end_date":"2026-07-23"}'
-curl -s -X POST :8765/expenses -d '{"amount":"90","comment":"x"}' -H 'Content-Type: application/json'
+curl -s -X POST :8765/operations -d '{"amount":"90","comment":"x"}' -H 'Content-Type: application/json'
+curl -s -X POST :8765/operations -d '{"amount":"50","kind":"income"}' -H 'Content-Type: application/json'
 curl -s ":8765/budget?pending=50"        # live preview
 curl -s :8765/export.xlsx -o /tmp/e.xlsx # read back with .venv openpyxl
 ```
@@ -29,8 +30,8 @@ Multi-day states: start the period in the past, and/or backdate expenses by
 writing to the scratch DB directly:
 
 ```sh
-sqlite3 scratch.db "INSERT INTO expense (period_id, amount, comment, created_at)
-  VALUES (1, '250', 'yesterday', '2026-07-14 12:00:00.000000');"
+sqlite3 scratch.db "INSERT INTO expense (period_id, amount, kind, comment, created_at)
+  VALUES (1, '250', 'expense', 'yesterday', '2026-07-14 12:00:00.000000');"
 ```
 
 Gotchas: amounts are stored as TEXT; `POST /period` deletes + recreates the

@@ -68,8 +68,8 @@ def sample_period(days=10):
 def test_workbook_matches_shared_row_functions():
     start, end = date(2026, 7, 1), date(2026, 7, 10)
     rows = [
-        export.ExpenseRow(datetime(2026, 7, 1, 9), D("250"), "groceries"),
-        export.ExpenseRow(datetime(2026, 7, 2, 9), D("100"), None),
+        export.OperationRow(datetime(2026, 7, 1, 9), D("250"), "groceries"),
+        export.OperationRow(datetime(2026, 7, 2, 9), D("100"), None, "income"),
     ]
     wb = load_workbook(
         BytesIO(export.build_workbook(D("1000"), start, end, rows, today=start))
@@ -92,9 +92,10 @@ def test_workbook_matches_shared_row_functions():
     for got, want in zip(expense_sheet[1:], expected_rows):
         assert got[0] == want[0]  # date
         assert D(str(got[1])) == want[1]  # amount
-        assert (got[2] or "") == want[2]  # comment
-        assert D(str(got[3])) == want[3]  # running balance
-        assert D(str(got[4])) == want[4]  # per-day allowance
+        assert got[2] == want[2]  # type (expense | income)
+        assert (got[3] or "") == want[3]  # comment
+        assert D(str(got[4])) == want[4]  # running balance
+        assert D(str(got[5])) == want[5]  # per-day allowance
 
 
 # ---- mutations trigger the sync ------------------------------------------------
@@ -104,7 +105,7 @@ async def test_mutation_writes_expected_rows(client, fake_sheet):
     resp = await client.post("/period", json=sample_period())
     assert resp.status_code == 200
 
-    resp = await client.post("/expenses", json={"amount": "250", "comment": "food"})
+    resp = await client.post("/operations", json={"amount": "250", "comment": "food"})
     assert resp.status_code == 200
 
     period_ws = fake_sheet.worksheets["Period"]
@@ -120,17 +121,18 @@ async def test_mutation_writes_expected_rows(client, fake_sheet):
     body = expenses_ws.rows[1:]
     assert len(body) == 1
     assert body[0][1] == 250.0
-    assert body[0][2] == "food"
-    assert body[0][3] == 750.0
-    assert body[0][4] == -150.0  # today's 100 budget - 250 spent, 1:1
+    assert body[0][2] == "expense"
+    assert body[0][3] == "food"
+    assert body[0][4] == 750.0
+    assert body[0][5] == -150.0  # today's 100 budget - 250 spent, 1:1
 
 
 async def test_delete_resyncs(client, fake_sheet):
     await client.post("/period", json=sample_period())
-    resp = await client.post("/expenses", json={"amount": "100"})
-    expense_id = resp.json()["expense"]["id"]
+    resp = await client.post("/operations", json={"amount": "100"})
+    operation_id = resp.json()["operation"]["id"]
 
-    resp = await client.delete(f"/expenses/{expense_id}")
+    resp = await client.delete(f"/operations/{operation_id}")
     assert resp.status_code == 200
 
     # sheet mirrors the DB again: no expense rows, full amount remaining
@@ -154,7 +156,7 @@ async def test_gspread_error_swallowed(client, monkeypatch):
 
     resp = await client.post("/period", json=sample_period())
     assert resp.status_code == 200
-    resp = await client.post("/expenses", json={"amount": "10"})
+    resp = await client.post("/operations", json={"amount": "10"})
     assert resp.status_code == 200  # sync failed silently, API unaffected
 
 
@@ -168,7 +170,7 @@ async def test_disabled_makes_zero_google_calls(client, monkeypatch):
     monkeypatch.setattr(sheets, "_open_spreadsheet", forbidden)
 
     await client.post("/period", json=sample_period())
-    resp = await client.post("/expenses", json={"amount": "10"})
+    resp = await client.post("/operations", json={"amount": "10"})
     assert resp.status_code == 200
 
 

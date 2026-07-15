@@ -27,30 +27,35 @@
         <p class="rebase-caption">new daily budget · was <span id="was-daily"></span></p>
       </div>
       <p id="preview" class="preview hidden">
-        after this purchase: <span id="preview-value"></span>
+        <span id="preview-label">after this purchase:</span> <span id="preview-value"></span>
       </p>
       <p class="meta">
         <span id="remaining"></span> left · <span id="days-left"></span>
       </p>
     </section>
 
-    <!-- Add expense -->
+    <!-- Add operation (expense or income) -->
     <section id="spend" class="card hidden">
-      <form id="expense-form" autocomplete="off">
-        <div class="row">
-          <input id="expense-amount" type="text" inputmode="decimal"
-                 placeholder="0.00" aria-label="Expense amount" required>
-          <button type="submit" class="accent">Spent</button>
+      <form id="operation-form" autocomplete="off">
+        <div id="kind-toggle" class="segmented" role="group" aria-label="Operation type">
+          <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
+          <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
         </div>
-        <input id="expense-comment" type="text" maxlength="200"
+        <div class="row">
+          <input id="operation-amount" type="text" inputmode="decimal"
+                 placeholder="0.00" aria-label="Amount" required>
+          <button id="operation-submit" type="submit" class="accent">Spent</button>
+        </div>
+        <input id="operation-comment" type="text" maxlength="200"
                placeholder="Comment (optional)" aria-label="Comment">
       </form>
+      <button id="undo" type="button" class="undo hidden"></button>
     </section>
 
-    <!-- Expense list -->
+    <!-- Operation list -->
     <section id="history" class="hidden">
       <h2 class="label">Expenses</h2>
-      <ul id="expense-list"></ul>
+      <ul id="operation-list"></ul>
     </section>
 
     <!-- Period settings -->

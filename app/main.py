@@ -12,15 +12,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import inspect as sa_inspect, text
+
 from app import budget, export, sheets
 from app.telegram_auth import require_telegram_auth
 from app.db import engine, get_session
-from app.models import Base, Expense, Period
+from app.models import Base, Operation, Period
 from app.schemas import (
     BudgetOut,
-    ExpenseIn,
-    ExpenseOut,
-    ExpenseWithBudget,
+    OperationIn,
+    OperationOut,
+    OperationWithBudget,
     PeriodIn,
     PeriodOut,
     PeriodWithBudget,
@@ -33,6 +35,18 @@ async def lifespan(app: FastAPI):
     # migration path; create_all is idempotent and a no-op after migrating).
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all never ALTERs an existing table, so a pre-`kind` DB needs
+        # the column added here (same as Alembic revision 0002, idempotent).
+        cols = await conn.run_sync(
+            lambda sync_conn: [
+                c["name"] for c in sa_inspect(sync_conn).get_columns("expense")
+            ]
+        )
+        if "kind" not in cols:
+            await conn.execute(text(
+                "ALTER TABLE expense ADD COLUMN kind VARCHAR(10) "
+                "NOT NULL DEFAULT 'expense'"
+            ))
     yield
 
 
@@ -59,12 +73,14 @@ async def _budget_for(
     session: AsyncSession, period: Period, pending: Decimal | None = None
 ) -> BudgetOut:
     result = await session.execute(
-        select(Expense.created_at, Expense.amount).where(
-            Expense.period_id == period.id
+        select(Operation.created_at, Operation.amount, Operation.kind).where(
+            Operation.period_id == period.id
         )
     )
+    # Incomes are negative spending in the replay (see app/budget.py).
     dated = [
-        (created.date(), amount) for created, amount in result.all()
+        (created.date(), -amount if kind == "income" else amount)
+        for created, amount, kind in result.all()
     ]
     summary = budget.compute_budget(
         period.total_amount, period.start_date, period.end_date, dated
@@ -86,17 +102,18 @@ async def _budget_for(
     )
 
 
-async def _expense_snapshot(
+async def _operation_snapshot(
     session: AsyncSession, period: Period
-) -> list[export.ExpenseRow]:
+) -> list[export.OperationRow]:
     result = await session.execute(
-        select(Expense).where(Expense.period_id == period.id)
+        select(Operation).where(Operation.period_id == period.id)
     )
     return [
-        export.ExpenseRow(
-            created_at=e.created_at, amount=e.amount, comment=e.comment
+        export.OperationRow(
+            created_at=o.created_at, amount=o.amount, comment=o.comment,
+            kind=o.kind,
         )
-        for e in result.scalars()
+        for o in result.scalars()
     ]
 
 
@@ -109,7 +126,7 @@ async def _queue_sheets_sync(
     gone by the time the task runs, after the response is sent."""
     if not sheets.enabled():
         return
-    rows = await _expense_snapshot(session, period)
+    rows = await _operation_snapshot(session, period)
     background_tasks.add_task(
         sheets.sync_safe,
         period.total_amount,
@@ -166,49 +183,53 @@ async def get_budget(
     return await _budget_for(session, period, pending)
 
 
-@app.get("/expenses", response_model=list[ExpenseOut], dependencies=[AUTH])
-async def list_expenses(session: AsyncSession = Depends(get_session)):
+@app.get("/operations", response_model=list[OperationOut], dependencies=[AUTH])
+async def list_operations(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
     result = await session.execute(
-        select(Expense)
-        .where(Expense.period_id == period.id)
-        .order_by(Expense.created_at.desc(), Expense.id.desc())
+        select(Operation)
+        .where(Operation.period_id == period.id)
+        .order_by(Operation.created_at.desc(), Operation.id.desc())
     )
-    return [ExpenseOut.model_validate(e) for e in result.scalars()]
+    return [OperationOut.model_validate(o) for o in result.scalars()]
 
 
-@app.post("/expenses", response_model=ExpenseWithBudget, dependencies=[AUTH])
-async def add_expense(
-    body: ExpenseIn,
+@app.post("/operations", response_model=OperationWithBudget, dependencies=[AUTH])
+async def add_operation(
+    body: OperationIn,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
     period = await _require_period(session)
-    expense = Expense(period_id=period.id, amount=body.amount, comment=body.comment)
-    session.add(expense)
+    operation = Operation(
+        period_id=period.id, amount=body.amount, kind=body.kind,
+        comment=body.comment,
+    )
+    session.add(operation)
     await session.commit()
-    await session.refresh(expense)
+    await session.refresh(operation)
     await _queue_sheets_sync(background_tasks, session, period)
-    return ExpenseWithBudget(
-        expense=ExpenseOut.model_validate(expense),
+    return OperationWithBudget(
+        operation=OperationOut.model_validate(operation),
         budget=await _budget_for(session, period),
     )
 
 
-@app.delete("/expenses/{expense_id}", response_model=BudgetOut, dependencies=[AUTH])
-async def delete_expense(
-    expense_id: int,
+@app.delete("/operations/{operation_id}", response_model=BudgetOut,
+            dependencies=[AUTH])
+async def delete_operation(
+    operation_id: int,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ):
-    expense = await session.get(Expense, expense_id)
-    if expense is None:
-        raise HTTPException(status_code=404, detail="Expense not found")
-    period = await session.get(Period, expense.period_id)
-    await session.delete(expense)
+    operation = await session.get(Operation, operation_id)
+    if operation is None:
+        raise HTTPException(status_code=404, detail="Operation not found")
+    period = await session.get(Period, operation.period_id)
+    await session.delete(operation)
     await session.commit()
     await _queue_sheets_sync(background_tasks, session, period)
-    # Everything is re-derived from (period + expenses), so deletion can
+    # Everything is re-derived from (period + operations), so deletion can
     # never corrupt the numbers.
     return await _budget_for(session, period)
 
@@ -220,7 +241,7 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
     if not sheets.enabled():
         return {"status": "disabled"}
     period = await _require_period(session)
-    rows = await _expense_snapshot(session, period)
+    rows = await _operation_snapshot(session, period)
     try:
         await run_in_threadpool(
             sheets.sync_now,
@@ -237,13 +258,7 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
 @app.get("/export.xlsx", dependencies=[AUTH])
 async def export_xlsx(session: AsyncSession = Depends(get_session)):
     period = await _require_period(session)
-    result = await session.execute(
-        select(Expense).where(Expense.period_id == period.id)
-    )
-    rows = [
-        export.ExpenseRow(created_at=e.created_at, amount=e.amount, comment=e.comment)
-        for e in result.scalars()
-    ]
+    rows = await _operation_snapshot(session, period)
     data = export.build_workbook(
         period.total_amount, period.start_date, period.end_date, rows
     )
