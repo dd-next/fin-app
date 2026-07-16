@@ -6,7 +6,7 @@ undefined, pick the simplest option and record the decision in PROGRESS.md.
 
 ## 1. What the app is
 
-A minimalist daily-budget tracker (modeled on a well-known reference app).
+A minimalist daily-budget tracker
 
 The user sets an amount of money and a period. The app divides the money across
 the days and shows how much can be spent **today**. Adding an expense reduces
