@@ -1,4 +1,8 @@
-"""SQLAlchemy models: period and expense."""
+"""SQLAlchemy models: period and operation (expense or income).
+
+The operation table is still named "expense" for historical reasons; the
+`kind` column ('expense' | 'income') generalizes it. Amounts are stored
+positive; `kind` carries the sign."""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -49,21 +53,52 @@ class Period(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
+    # Last local day the next-day savings prompt was answered (either choice).
+    prompt_ack_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    expenses: Mapped[list["Expense"]] = relationship(
+    operations: Mapped[list["Operation"]] = relationship(
+        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
+    )
+    rebase_events: Mapped[list["RebaseEvent"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
 
 
-class Expense(Base):
-    __tablename__ = "expense"
+class Operation(Base):
+    __tablename__ = "expense"  # historical name; rows are expenses AND incomes
 
     id: Mapped[int] = mapped_column(primary_key=True)
     period_id: Mapped[int] = mapped_column(
         ForeignKey("period.id", ondelete="CASCADE"), nullable=False
     )
     amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
+    kind: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="expense", server_default="expense"
+    )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
-    period: Mapped[Period] = relationship(back_populates="expenses")
+    period: Mapped[Period] = relationship(back_populates="operations")
+
+    @property
+    def signed_amount(self) -> Decimal:
+        """How much this operation takes from the pool: incomes are negative
+        spending, which is exactly how the budget replay consumes them."""
+        return -self.amount if self.kind == "income" else self.amount
+
+
+class RebaseEvent(Base):
+    """A user-chosen "increase the daily budget" day: the replay re-spreads
+    the remaining money evenly from this day on and resets the carry-over.
+    Stored as a record so the numbers stay a pure function of the DB."""
+
+    __tablename__ = "rebase_event"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("period.id", ondelete="CASCADE"), nullable=False
+    )
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
+
+    period: Mapped[Period] = relationship(back_populates="rebase_events")

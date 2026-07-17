@@ -49,30 +49,31 @@ async def test_post_period_then_budget_summary(client):
 
 async def test_post_period_replaces_existing(client):
     await set_period(client, days=10, total="1000")
-    resp = await client.post("/expenses", json={"amount": "50"})
+    resp = await client.post("/operations", json={"amount": "50"})
     assert resp.status_code == 200
 
     await set_period(client, days=5, total="500")
     b = (await client.get("/budget")).json()
     assert b["days_total"] == 5
     assert D(b["spent_total"]) == D("0")  # old expenses gone with old period
-    assert (await client.get("/expenses")).json() == []
+    assert (await client.get("/operations")).json() == []
 
 
 async def test_expense_updates_budget_and_delete_restores(client):
     await set_period(client, days=10, total="1000")
 
-    resp = await client.post("/expenses", json={"amount": "250", "comment": "food"})
+    resp = await client.post("/operations", json={"amount": "250", "comment": "food"})
     assert resp.status_code == 200
     body = resp.json()
-    expense_id = body["expense"]["id"]
-    assert body["expense"]["comment"] == "food"
+    operation_id = body["operation"]["id"]
+    assert body["operation"]["comment"] == "food"
+    assert body["operation"]["kind"] == "expense"  # the default
     assert D(body["budget"]["remaining_money"]) == D("750")
     # spending reduces TODAY 1:1: 100 budget - 250 spent, not (1000-250)/10
     assert D(body["budget"]["budget_today"]) == D("100.00")
     assert D(body["budget"]["per_day_today"]) == D("-150.00")
 
-    resp = await client.delete(f"/expenses/{expense_id}")
+    resp = await client.delete(f"/operations/{operation_id}")
     assert resp.status_code == 200
     b = resp.json()
     assert D(b["remaining_money"]) == D("1000")
@@ -82,8 +83,8 @@ async def test_expense_updates_budget_and_delete_restores(client):
 async def test_expenses_listed_newest_first(client):
     await set_period(client)
     for amount in ("10", "20", "30"):
-        await client.post("/expenses", json={"amount": amount})
-    items = (await client.get("/expenses")).json()
+        await client.post("/operations", json={"amount": amount})
+    items = (await client.get("/operations")).json()
     assert [D(e["amount"]) for e in items] == [D("30"), D("20"), D("10")]
 
 
@@ -97,7 +98,7 @@ async def test_budget_pending_preview(client):
 
 async def test_overspend_negative_not_clamped(client):
     await set_period(client, days=10, total="100")
-    await client.post("/expenses", json={"amount": "150"})
+    await client.post("/operations", json={"amount": "150"})
     b = (await client.get("/budget")).json()
     assert D(b["remaining_money"]) == D("-50")
     assert D(b["per_day_today"]) == D("-140.00")  # 10 today - 150 spent
@@ -106,7 +107,7 @@ async def test_overspend_negative_not_clamped(client):
 
 async def test_delete_missing_expense_404(client):
     await set_period(client)
-    resp = await client.delete("/expenses/99999")
+    resp = await client.delete("/operations/99999")
     assert resp.status_code == 404
 
 
@@ -132,7 +133,7 @@ async def test_bad_input_422(client):
     assert resp.status_code == 422
     # malformed expense
     await set_period(client)
-    resp = await client.post("/expenses", json={"amount": "abc"})
+    resp = await client.post("/operations", json={"amount": "abc"})
     assert resp.status_code == 422
     # malformed pending
     resp = await client.get("/budget", params={"pending": "xyz"})
@@ -140,5 +141,42 @@ async def test_bad_input_422(client):
 
 
 async def test_expense_without_period_404(client):
-    resp = await client.post("/expenses", json={"amount": "10"})
+    resp = await client.post("/operations", json={"amount": "10"})
     assert resp.status_code == 404
+
+
+async def test_operations_roundtrip_both_kinds(client):
+    await set_period(client, days=10, total="1000")
+
+    resp = await client.post("/operations", json={"amount": "100", "comment": "food"})
+    assert resp.status_code == 200
+    resp = await client.post(
+        "/operations", json={"amount": "50", "kind": "income", "comment": "refund"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["operation"]["kind"] == "income"
+    # income raises today's number 1:1: 100 - 100 + 50
+    assert D(body["budget"]["per_day_today"]) == D("50.00")
+    assert D(body["budget"]["remaining_money"]) == D("950")
+
+    items = (await client.get("/operations")).json()
+    assert [(i["kind"], D(i["amount"])) for i in items] == [
+        ("income", D("50")),
+        ("expense", D("100")),
+    ]
+
+    # deleting the income recomputes correctly
+    resp = await client.delete(f"/operations/{body['operation']['id']}")
+    assert resp.status_code == 200
+    b = resp.json()
+    assert D(b["per_day_today"]) == D("0.00")
+    assert D(b["remaining_money"]) == D("900")
+
+
+async def test_operation_invalid_kind_422(client):
+    await set_period(client)
+    resp = await client.post(
+        "/operations", json={"amount": "10", "kind": "transfer"}
+    )
+    assert resp.status_code == 422

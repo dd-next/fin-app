@@ -6,7 +6,7 @@ and return Decimals, so this module can be unit-tested in isolation.
 All money values are Decimal — never float. Displayed per-day / allowance
 values are rounded to 2 decimals; stored amounts stay exact.
 
-Semantics copied from the original app (Tzlvt):
+The reference behavior:
 
 - Setting a period fixes a daily base: total_amount / days_total.
 - A day's budget is the base plus whatever previous days left unspent
@@ -18,6 +18,11 @@ Semantics copied from the original app (Tzlvt):
 
 Everything is derived from (period + dated expenses); there is no hidden
 state, so recomputing from scratch is always correct.
+
+Incomes (mid-period top-ups) enter the replay as NEGATIVE amounts: an
+income on day D is "negative spending", so it grows that day's leftover
+(and the pool) from day D onward. Callers sign the amounts; this module
+stays agnostic.
 """
 
 from dataclasses import dataclass
@@ -89,11 +94,18 @@ def compute_budget(
     end_date: date,
     expenses: Iterable[DatedAmount],
     today: date | None = None,
+    rebase_days: Iterable[date] = (),
 ) -> BudgetSummary:
     """Derive the full budget summary from the period and its dated expenses.
 
     Everything is recomputed from scratch — there is no hidden state, so
     adding or deleting expenses can never corrupt the numbers.
+
+    `rebase_days` are user-triggered rebases (the "increase the daily
+    budget" choice): at the START of such a day the remaining money is
+    re-spread evenly over the days from it to the end (inclusive) and the
+    carry-over resets — the same mechanism as the overspend rebase, but
+    voluntary and persisted as an event.
     """
     today = today if today is not None else date.today()
     total = days_total(start_date, end_date)
@@ -109,15 +121,21 @@ def compute_budget(
         day = _clamp_day(day, start_date, ref)
         spent_by_day[day] = spent_by_day.get(day, ZERO) + amount
         spent += amount
+    rebases = {d for d in rebase_days if start_date <= d <= end_date}
 
     # Replay the fully elapsed days: unspent allowance rolls forward; a day
     # that ended overspent ate the pool, so the daily base rebases over the
-    # days after it — exactly what the original app does.
+    # days after it — exactly the reference behavior.
     daily = total_amount / total
     carry = ZERO
     spent_before_today = ZERO
     day = start_date
     while day < ref:
+        if day in rebases:
+            daily = (total_amount - spent_before_today) / (
+                (end_date - day).days + 1
+            )
+            carry = ZERO
         day_spent = spent_by_day.get(day, ZERO)
         spent_before_today += day_spent
         leftover = daily + carry - day_spent
@@ -127,6 +145,9 @@ def compute_budget(
             daily = (total_amount - spent_before_today) / (end_date - day).days
             carry = ZERO
         day += timedelta(days=1)
+    if ref in rebases:
+        daily = (total_amount - spent_before_today) / ((end_date - ref).days + 1)
+        carry = ZERO
 
     budget_today = daily + carry
     spent_today = spent - spent_before_today

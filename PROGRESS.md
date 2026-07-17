@@ -16,6 +16,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 6 — Shared export row-building (SPEC-2)
 - [x] Phase 7 — Google Sheets full re-sync (SPEC-2)
 - [x] Phase 8 — Telegram Mini App (SPEC-2)
+- [x] Phase 9 — Full rebrand to FinApp (SPEC-3)
+- [x] Phase 10 — Income operations (±) + undo (SPEC-3)
+- [x] Phase 11 — Next-day savings decision screen (SPEC-3)
+- [x] Phase 12 — UI restructure (SPEC-3)
+- [x] Phase 13 — Manual test cases + final pass (SPEC-3)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -159,7 +164,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   default-off, so the MVP behavior is unchanged).
 
 ### Fix — daily budget copies the original app's semantics (2026-07-15)
-- Bug report with screenshots of the original Tzlvt: spending must reduce
+- Bug report with screenshots of the reference app: spending must reduce
   **today's** number 1:1. Our spec'd formula `remaining / days_remaining`
   re-spread every expense over the whole rest of the period, so today's
   number barely moved (6000/15 with 493.33 spent showed 367.11 instead of
@@ -185,6 +190,125 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Tests: `test_budget.py` rewritten (17 unit tests incl. the bug-report
   scenario); `test_api`/`test_export`/`test_sheets` updated.
   **49 passed, 0 failed** (was 44).
+
+### Phase 9 — Full rebrand to FinApp (SPEC-3) (2026-07-15)
+- Renamed everything to FinApp/finapp: DB default `finapp.db` (db.py,
+  alembic.ini, .env.example, Postgres example db name), FastAPI title,
+  export `FILENAME=finapp-export.xlsx` (+ test assertion + JS download
+  name), page `<title>`, README retitle, verify skill; old-name comment
+  phrasing in budget.py / app.js / style.css / test_budget.py replaced
+  with "the reference behavior"; historical docs (SPEC.md, PROGRESS.md)
+  reworded.
+- Existing data: chose the **code migration** route — `app/db.py` does a
+  one-time `os.replace(old → finapp.db)` at import, only when the default
+  SQLite URL is in use and `finapp.db` doesn't exist. The old filename
+  survives only as the `_LEGACY_DB_FILE` constant (allowed by SPEC-3
+  acceptance). Verified: the repo's live DB file was renamed to
+  `finapp.db` with data intact. README documents the auto-rename.
+- Acceptance grep is clean except (a) that constant and (b)
+  `SPEC-3-rebrand-and-gaps.md` itself, which necessarily names the banned
+  strings to define the ban — left as-is (it's the instruction, not a
+  reference).
+- Note: bare `pytest` stopped resolving the `app` package (no
+  site-packages install; pytest doesn't add cwd). Use
+  `python -m pytest` (adds cwd to sys.path). Environment quirk, not a
+  code change.
+- Tests: **49 passed, 0 failed**.
+
+### Phase 10 — Income operations (±) + undo (SPEC-3) (2026-07-15)
+- Model: `Expense` → `Operation` (table still named `expense`), new `kind`
+  column ('expense'|'income', server default 'expense') via Alembic 0002;
+  the lifespan also ALTERs pre-0002 DBs (create_all can't add columns), so
+  zero-setup upgrades keep working — verified against a copy of the live DB.
+- Math: `budget.py` unchanged (still pure); incomes enter the existing
+  replay as NEGATIVE amounts, signed at the call sites
+  (`Operation.signed_amount`). Income today raises today's number 1:1;
+  income after an overspent day rolls forward via the normal carry.
+- API decision: **dropped `/expenses` entirely** (SPEC-3 allowed alias-or-
+  drop; single-user app, no external consumers). `POST/GET /operations`,
+  `DELETE /operations/{id}`; responses `{operation, budget}`, ops carry
+  `kind`. Invalid kind → 422 (Literal).
+- Export/Sheets: `OperationRow` (+kind), new "Type" column, running
+  balance signed. `spent_total`/`remaining_money` are now NET of incomes
+  (income = negative spending) — recorded as the intended semantics.
+- Frontend: Expense|Income segmented toggle (income = green accent,
+  button "Received"), income rows green with `+`, income live preview
+  computed client-side (server `?pending` still used for expenses),
+  inline "‹ Undo {amount}" after each add (DELETEs the just-created op,
+  cleared on delete/period change). Verified via headless-Chrome shot.
+- Tests: 3 new unit (income today / after overspend / delete-recompute),
+  2 new API (both-kinds round-trip, invalid kind 422), 1 new export
+  (Type column + signed running balance); all suites updated to
+  /operations. **55 passed, 0 failed**.
+
+### Phase 11 — Next-day savings decision ("Nice!" screen) (2026-07-15)
+- Persistence decision: a dedicated **`rebase_event` table** (period FK,
+  day) — NOT a zero-amount operation kind — so /operations, the history
+  list, and the export stay clean. Ack stored as `period.prompt_ack_date`.
+  Alembic 0003; the lifespan column-guard also patches pre-0003 DBs.
+- `budget.py`: `compute_budget(..., rebase_days=)` — at the START of a
+  rebase day the remaining money re-spreads over the days from it to the
+  end (inclusive) and carry resets; same mechanism as the overspend
+  rebase, replayed deterministically from stored events. Rebase days are
+  threaded through export/Sheets too, so their replay agrees with the app.
+- API: `GET /savings-prompt` → `{show:false}` or `{show:true, saved,
+  spend_today_value, increase_daily_value}`; shows when start < today <=
+  end AND ack < today AND carry > 0 (saved = budget_today − daily_base,
+  i.e. everything unspent days rolled into today — accumulates if the app
+  wasn't opened for several days). `POST /savings-decision {choice}` acks
+  (+ rebase event for increase_daily) and returns the updated budget.
+- Frontend: full-screen "Nice!" dialog before the main screen with both
+  option buttons and their computed numbers; either choice POSTs and
+  proceeds. Verified E2E on a scratch DB (prompt → increase_daily →
+  111.11 → prompt gone) + headless-Chrome screenshot.
+- Tests: 2 unit (rebase today / past day + interaction with overspend
+  rebase), 7 API in tests/test_savings.py (shown when qualified, hidden
+  on first day / no period, survives today's spending, once per day,
+  both choices persist, 404/422). **64 passed, 0 failed**.
+
+### Phase 12 — UI restructure (SPEC-3) (2026-07-15)
+- Rebuilt the SPA into three views (main / Expenses History / Budget
+  Settings) with a tiny JS view switcher; still one bundle, no build step.
+- Main: header "{total} for {N} days" + a "Budget Settings" button; the
+  inline operation list is gone, replaced by a full-width "Expenses
+  History" button. "Spent" state: when remaining_money <= 0 the number
+  area shows a big red "Spent" + "Change amount and dates" link (opens
+  Settings); the entry form stays so an income recovers it — verified.
+- History view: all operations newest first (incomes green with `+`),
+  human timestamps ("Today, 14:53" / "Yesterday, …" / "12 Jul, …",
+  English), ✕ delete per row, Back control, and the **Export .xlsx
+  button moved into this view** (Telegram blob-download kept).
+- Settings view: Save/Cancel form prefilled from the current period,
+  live "{amount/days} per day" hint while typing (client-side).
+- Buttons systematized: accent (primary), ghost (secondary/nav),
+  linklike, 44px+ targets, hover/active/focus-visible states. English
+  sweep: no Cyrillic anywhere in app/static (UI was already English).
+- Added `/?view=history|settings` deep links (used them for headless
+  screenshots; also handy for manual testing).
+- Note: SPEC-3 says to consult the frontend-design skill, but it is not
+  in this session's skill list (same as Phase 4) — followed its intent.
+- Verified with headless-Chrome screenshots: main, history, settings,
+  Spent state, savings prompt, wide (1280px) viewport.
+- Tests: backend untouched — **64 passed, 0 failed**.
+
+### Phase 13 — Manual test cases + final pass (SPEC-3) (2026-07-15)
+- `MANUAL_TEST_CASES.md` (Russian): TC-01…TC-15 covering all items from
+  SPEC-3 §13, written against the ACTUAL UI labels/endpoints/behaviors
+  after phases 9–12 (button texts, toast texts, export filename/columns,
+  Nice! captions, Spent state, deep links not required for any case).
+  The legacy DB filename is referenced via the `_LEGACY_DB_FILE` constant
+  pointer instead of literally, to keep the Phase-9 grep clean.
+- README: feature list updated (income/undo/Nice!/history+settings views/
+  Spent state); migration note now also mentions automatic column
+  patching. Install/run/test still 4 commands.
+- Final pass: rebrand grep clean (only the sanctioned `_LEGACY_DB_FILE`
+  constant + SPEC-3 itself); fresh-DB `alembic upgrade head` runs
+  0001→0002→0003 and yields the same schema the app builds; SPEC §8
+  acceptance criteria all re-verified this session (live /health, 1:1
+  math + over-state, delete recompute, export round-trip, responsive UI,
+  README).
+- Tests: **64 passed, 0 failed** (17+2 unit budget incl. income/rebase,
+  API, export, sheets, telegram, savings).
 
 ## Blocked
 <!-- Agent: if you get stuck, describe the problem, what you tried, and where you stopped. -->

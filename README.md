@@ -1,10 +1,23 @@
-# Tzlvt clone — minimalist daily-budget tracker
+# FinApp — minimalist daily-budget tracker
 
 Set an amount and a period; the app splits the money across the days and
 shows what you can spend **today**. Add an expense and today's number drops
 by exactly that amount. Money you don't spend rolls into tomorrow; blowing
 past today's budget eats the overall pool and rebases the daily budget for
-the remaining days — just like the original app.
+the remaining days.
+
+Features:
+- **Expenses and incomes**: the Expense | Income toggle records top-ups
+  mid-period; an income raises today's number 1:1 and grows the pool.
+- **Undo**: an inline "‹ Undo {amount}" control right after adding an
+  operation.
+- **Next-day savings decision**: if yesterday ended with money left over, a
+  full-screen "Nice!" prompt asks whether to spend it all today (default
+  carry-over) or increase the daily budget (re-spread the remaining money).
+- **Expenses History** view (all operations, human timestamps, delete) with
+  the **Export .xlsx** button inside it; **Budget Settings** view with a
+  live "{X} per day" preview.
+- "Spent" state when the whole budget is gone — recoverable with an income.
 
 Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
 dark UI, `.xlsx` export.
@@ -32,9 +45,13 @@ pytest
 
 ## Notes
 
-- Data lives in `./tzlvt.db` (SQLite, created automatically on first run).
+- Data lives in `./finapp.db` (SQLite, created automatically on first run).
+  Upgrading from a pre-rename install: the app renames the old DB file
+  (the legacy filename is the `_LEGACY_DB_FILE` constant in `app/db.py`)
+  to `finapp.db` automatically on startup (default SQLite URL only), and
+  older schemas get the new columns added automatically too.
 - Migrations: `alembic upgrade head` (optional for local dev — the app also
-  creates tables on startup).
+  creates tables and patches missing columns on startup).
 - Postgres later: set `DATABASE_URL` (see `.env.example`) — nothing else
   changes.
 - API docs at http://127.0.0.1:8000/docs; export at `/export.xlsx`.

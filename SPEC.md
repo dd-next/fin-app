@@ -1,4 +1,4 @@
-# Tzlvt-clone — Product & Technical Specification
+# FinApp — Product & Technical Specification
 
 This is the single source of truth for what to build. If anything here
 conflicts with your own assumptions, this file wins. If something is genuinely
@@ -6,7 +6,7 @@ undefined, pick the simplest option and record the decision in PROGRESS.md.
 
 ## 1. What the app is
 
-A minimalist daily-budget tracker (a clone of "Тяжеловато" / Tzlvt).
+A minimalist daily-budget tracker
 
 The user sets an amount of money and a period. The app divides the money across
 the days and shows how much can be spent **today**. Adding an expense reduces
@@ -143,7 +143,7 @@ JSON everywhere except the export endpoint. Routes at root (no prefix).
 - `GET /export.xlsx`
   → streams an `.xlsx` file (see section 6).
   `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
-  `Content-Disposition: attachment; filename="tzlvt-export.xlsx"`
+  `Content-Disposition: attachment; filename="finapp-export.xlsx"`
 
 Validation: amounts must parse as `Decimal`; `end_date >= start_date`; reject
 malformed input with `422` (Pydantic default).

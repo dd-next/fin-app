@@ -1,4 +1,4 @@
-/* Tzlvt clone — vanilla JS, no build step.
+/* FinApp — vanilla JS, no build step.
    All numbers come from the API as strings; we only format for display. */
 
 "use strict";
@@ -26,30 +26,79 @@ function authHeaders() {
 }
 
 const el = {
+  // main view
+  mainHeader: $("main-header"),
+  periodSummary: $("period-summary"),
+  openSettings: $("open-settings"),
   emptyState: $("empty-state"),
+  emptyOpenSettings: $("empty-open-settings"),
   today: $("today"),
+  todayNumbers: $("today-numbers"),
   perDay: $("per-day"),
   overNote: $("over-note"),
   rebase: $("rebase"),
   nextDaily: $("next-daily"),
   wasDaily: $("was-daily"),
   preview: $("preview"),
+  previewLabel: $("preview-label"),
   previewValue: $("preview-value"),
   remaining: $("remaining"),
   daysLeft: $("days-left"),
+  spentState: $("spent-state"),
+  spentOpenSettings: $("spent-open-settings"),
   spend: $("spend"),
-  expenseForm: $("expense-form"),
-  expenseAmount: $("expense-amount"),
-  expenseComment: $("expense-comment"),
-  history: $("history"),
-  expenseList: $("expense-list"),
-  settings: $("settings"),
+  kindToggle: $("kind-toggle"),
+  operationForm: $("operation-form"),
+  operationAmount: $("operation-amount"),
+  operationComment: $("operation-comment"),
+  operationSubmit: $("operation-submit"),
+  undo: $("undo"),
+  openHistory: $("open-history"),
+  // history view
+  historyBack: $("history-back"),
+  operationList: $("operation-list"),
+  historyEmpty: $("history-empty"),
+  download: $("download"),
+  // settings view
+  settingsBack: $("settings-back"),
+  settingsCancel: $("settings-cancel"),
   periodForm: $("period-form"),
   periodAmount: $("period-amount"),
   periodStart: $("period-start"),
   periodEnd: $("period-end"),
+  perDayHint: $("per-day-hint"),
+  // shared
   toast: $("toast"),
+  savingsPrompt: $("savings-prompt"),
+  savedAmount: $("saved-amount"),
+  choiceSpend: $("choice-spend"),
+  choiceSpendCaption: $("choice-spend-caption"),
+  choiceIncrease: $("choice-increase"),
+  choiceIncreaseCaption: $("choice-increase-caption"),
 };
+
+// ---- state ---------------------------------------------------------------------
+
+let kind = "expense"; // what the form submits: 'expense' | 'income'
+let lastBudget = null; // latest budget payload (for client-side income preview)
+let lastPeriod = null; // latest period payload (prefills Budget Settings)
+let lastOperation = null; // {id, amount} of the just-added op, for Undo
+
+// ---- views ---------------------------------------------------------------------
+
+const views = {
+  main: $("view-main"),
+  history: $("view-history"),
+  settings: $("view-settings"),
+};
+
+function showView(name) {
+  for (const [key, section] of Object.entries(views)) {
+    section.classList.toggle("hidden", key !== name);
+  }
+  if (name === "settings") prefillSettings();
+  window.scrollTo(0, 0);
+}
 
 // ---- helpers ---------------------------------------------------------------
 
@@ -63,6 +112,18 @@ function fmt(value) {
 
 function validAmount(raw) {
   return /^\d+(\.\d{1,2})?$/.test(raw.trim());
+}
+
+// "Today, 13:10" / "Yesterday, 09:02" / "12 Jul, 09:02" (English)
+function fmtWhen(iso) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+  const diffDays = Math.round((startOfDay(new Date()) - startOfDay(d)) / 86400000);
+  if (diffDays === 0) return `Today, ${time}`;
+  if (diffDays === 1) return `Yesterday, ${time}`;
+  const day = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return `${day}, ${time}`;
 }
 
 let toastTimer;
@@ -88,18 +149,25 @@ async function api(path, options) {
 // ---- rendering -------------------------------------------------------------
 
 function renderBudget(budget) {
+  lastBudget = budget;
   const hasPeriod = budget !== null;
   el.emptyState.classList.toggle("hidden", hasPeriod);
+  el.mainHeader.classList.toggle("hidden", !hasPeriod);
   el.today.classList.toggle("hidden", !hasPeriod);
   el.spend.classList.toggle("hidden", !hasPeriod);
-  el.history.classList.toggle("hidden", !hasPeriod);
-  if (!hasPeriod) {
-    el.settings.open = true;
-    return;
-  }
+  el.openHistory.classList.toggle("hidden", !hasPeriod);
+  if (!hasPeriod) return;
+
+  // Whole budget gone → big red "Spent" replaces the numbers. Adding an
+  // income makes remaining_money positive again and recovers automatically.
+  const allSpent = Number(budget.remaining_money) <= 0;
+  el.todayNumbers.classList.toggle("hidden", allSpent);
+  el.spentState.classList.toggle("hidden", !allSpent);
+  if (allSpent) return;
+
   // Today's number drops 1:1 with spending. Once it hits 0, further spending
-  // eats the overall budget: show 0 plus the rebased daily budget in red,
-  // exactly like the original app.
+  // eats the overall budget: show 0 plus the rebased daily budget in red
+  // (the reference behavior).
   const over = Number(budget.per_day_today) <= 0;
   el.perDay.textContent = fmt(over ? 0 : budget.per_day_today);
   el.overNote.classList.toggle("hidden", !over);
@@ -114,31 +182,43 @@ function renderBudget(budget) {
   el.daysLeft.textContent = d === 1 ? "last day" : `${d} days left`;
 }
 
-function renderExpenses(expenses) {
-  el.expenseList.replaceChildren(
-    ...(expenses || []).map((e) => {
+function renderPeriod(period, budget) {
+  lastPeriod = period;
+  if (period && budget) {
+    const days = budget.days_total;
+    el.periodSummary.textContent =
+      `${fmt(period.total_amount)} for ${days} ${days === 1 ? "day" : "days"}`;
+  }
+}
+
+function renderOperations(operations) {
+  const items = operations || [];
+  el.historyEmpty.classList.toggle("hidden", items.length > 0);
+  el.operationList.replaceChildren(
+    ...items.map((op) => {
       const li = document.createElement("li");
+      const income = op.kind === "income";
 
       const amount = document.createElement("span");
-      amount.className = "expense-amount";
-      amount.textContent = "−" + fmt(e.amount);
+      amount.className = "op-amount" + (income ? " income" : "");
+      amount.textContent = (income ? "+" : "−") + fmt(op.amount);
 
       const info = document.createElement("div");
-      info.className = "expense-info";
+      info.className = "op-info";
       const comment = document.createElement("div");
-      comment.className = "expense-comment";
-      comment.textContent = e.comment || "";
+      comment.className = "op-comment";
+      comment.textContent = op.comment || "";
       const when = document.createElement("div");
-      when.className = "expense-date";
-      when.textContent = e.created_at.slice(0, 10);
+      when.className = "op-date";
+      when.textContent = fmtWhen(op.created_at);
       info.append(comment, when);
 
       const del = document.createElement("button");
       del.className = "delete";
       del.type = "button";
-      del.setAttribute("aria-label", "Delete expense");
+      del.setAttribute("aria-label", "Delete operation");
       del.textContent = "×";
-      del.addEventListener("click", () => deleteExpense(e.id));
+      del.addEventListener("click", () => deleteOperation(op.id));
 
       li.append(amount, info, del);
       return li;
@@ -146,71 +226,179 @@ function renderExpenses(expenses) {
   );
 }
 
-function renderPreview(budget) {
-  const show = budget && budget.preview_after !== undefined && budget.preview_after !== null;
+function renderPreview(value) {
+  const show = value !== undefined && value !== null && !Number.isNaN(Number(value));
   el.preview.classList.toggle("hidden", !show);
   if (show) {
-    el.previewValue.textContent = fmt(budget.preview_after);
-    el.previewValue.classList.toggle("negative", Number(budget.preview_after) < 0);
+    el.previewLabel.textContent =
+      kind === "income" ? "after this top-up:" : "after this purchase:";
+    el.previewValue.textContent = fmt(value);
+    el.previewValue.classList.toggle("negative", Number(value) < 0);
   }
 }
+
+// ---- undo last operation ------------------------------------------------------
+
+function showUndo(operation) {
+  lastOperation = operation;
+  el.undo.classList.toggle("hidden", !operation);
+  if (operation) {
+    el.undo.textContent = `‹ Undo ${fmt(operation.amount)}`;
+  }
+}
+
+el.undo.addEventListener("click", async () => {
+  if (!lastOperation) return;
+  const id = lastOperation.id;
+  showUndo(null);
+  try {
+    await api(`/operations/${id}`, { method: "DELETE" });
+    await refresh();
+  } catch (err) {
+    toast(err.message);
+  }
+});
 
 // ---- data flow --------------------------------------------------------------
 
 async function refresh() {
-  const [budget, expenses] = await Promise.all([api("/budget"), api("/expenses")]);
-  renderBudget(budget);
-  renderExpenses(expenses);
+  const [periodWithBudget, operations] = await Promise.all([
+    api("/period"),
+    api("/operations"),
+  ]);
+  renderBudget(periodWithBudget && periodWithBudget.budget);
+  renderPeriod(
+    periodWithBudget && periodWithBudget.period,
+    periodWithBudget && periodWithBudget.budget
+  );
+  renderOperations(operations);
 }
 
-// Live "after this purchase" preview while typing.
+// ---- entry mode toggle (Expense | Income) -------------------------------------
+
+function setKind(next) {
+  kind = next;
+  for (const btn of el.kindToggle.querySelectorAll(".seg")) {
+    const active = btn.dataset.kind === kind;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  }
+  el.spend.classList.toggle("income-mode", kind === "income");
+  el.operationSubmit.textContent = kind === "income" ? "Received" : "Spent";
+  el.operationSubmit.classList.toggle("income", kind === "income");
+  updatePreview();
+}
+
+el.kindToggle.addEventListener("click", (event) => {
+  const btn = event.target.closest(".seg");
+  if (btn) setKind(btn.dataset.kind);
+});
+
+// Live "after this operation" preview while typing. Expenses ask the server
+// (?pending=X); incomes are computed client-side from the latest budget.
 let previewTimer;
-el.expenseAmount.addEventListener("input", () => {
+function updatePreview() {
   clearTimeout(previewTimer);
-  const raw = el.expenseAmount.value.trim();
-  if (!validAmount(raw)) {
+  const raw = el.operationAmount.value.trim();
+  if (!validAmount(raw) || !lastBudget) {
     renderPreview(null);
+    return;
+  }
+  if (kind === "income") {
+    renderPreview(Number(lastBudget.per_day_today) + Number(raw));
     return;
   }
   previewTimer = setTimeout(async () => {
     try {
-      renderPreview(await api(`/budget?pending=${encodeURIComponent(raw)}`));
+      const b = await api(`/budget?pending=${encodeURIComponent(raw)}`);
+      renderPreview(b && b.preview_after);
     } catch {
       renderPreview(null);
     }
   }, 150);
-});
+}
+el.operationAmount.addEventListener("input", updatePreview);
 
-el.expenseForm.addEventListener("submit", async (event) => {
+el.operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const amount = el.expenseAmount.value.trim();
+  const amount = el.operationAmount.value.trim();
   if (!validAmount(amount)) {
     toast("Enter an amount like 250 or 99.90");
     return;
   }
   try {
-    await api("/expenses", {
+    const body = await api("/operations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount, comment: el.expenseComment.value.trim() || null }),
+      body: JSON.stringify({
+        amount,
+        kind,
+        comment: el.operationComment.value.trim() || null,
+      }),
     });
-    el.expenseForm.reset();
+    el.operationForm.reset();
     renderPreview(null);
+    showUndo({ id: body.operation.id, amount: body.operation.amount });
     await refresh();
-    el.expenseAmount.focus();
+    el.operationAmount.focus();
   } catch (err) {
     toast(err.message);
   }
 });
 
-async function deleteExpense(id) {
+async function deleteOperation(id) {
+  showUndo(null);
   try {
-    await api(`/expenses/${id}`, { method: "DELETE" });
+    await api(`/operations/${id}`, { method: "DELETE" });
     await refresh();
   } catch (err) {
     toast(err.message);
   }
 }
+
+// ---- navigation -----------------------------------------------------------------
+
+el.openHistory.addEventListener("click", () => showView("history"));
+el.historyBack.addEventListener("click", () => showView("main"));
+el.openSettings.addEventListener("click", () => showView("settings"));
+el.emptyOpenSettings.addEventListener("click", () => showView("settings"));
+el.spentOpenSettings.addEventListener("click", () => showView("settings"));
+el.settingsBack.addEventListener("click", () => showView("main"));
+el.settingsCancel.addEventListener("click", () => showView("main"));
+
+// ---- Budget Settings ------------------------------------------------------------
+
+function prefillSettings() {
+  const iso = (d) => d.toISOString().slice(0, 10);
+  if (lastPeriod) {
+    el.periodAmount.value = lastPeriod.total_amount;
+    el.periodStart.value = lastPeriod.start_date;
+    el.periodEnd.value = lastPeriod.end_date;
+  } else {
+    // Sensible defaults: today → end of month.
+    const today = new Date();
+    el.periodAmount.value = "";
+    el.periodStart.value = iso(today);
+    el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  }
+  updatePerDayHint();
+}
+
+// Live "{X} per day" hint under the amount while typing (client-side).
+function updatePerDayHint() {
+  const raw = el.periodAmount.value.trim();
+  const start = new Date(el.periodStart.value);
+  const end = new Date(el.periodEnd.value);
+  const days = Math.round((end - start) / 86400000) + 1;
+  const ok = validAmount(raw) && Number.isFinite(days) && days >= 1;
+  el.perDayHint.classList.toggle("hidden", !ok);
+  if (ok) {
+    el.perDayHint.textContent = `${fmt(Number(raw) / days)} per day`;
+  }
+}
+el.periodAmount.addEventListener("input", updatePerDayHint);
+el.periodStart.addEventListener("input", updatePerDayHint);
+el.periodEnd.addEventListener("input", updatePerDayHint);
 
 el.periodForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -233,15 +421,16 @@ el.periodForm.addEventListener("submit", async (event) => {
         end_date: el.periodEnd.value,
       }),
     });
-    el.settings.open = false;
+    showUndo(null); // a new period invalidates the last-operation undo
     await refresh();
+    showView("main");
   } catch (err) {
     toast(err.message);
   }
 });
 
 // Inside Telegram the .xlsx link needs the auth header, so fetch it as a blob.
-$("download").addEventListener("click", async (event) => {
+el.download.addEventListener("click", async (event) => {
   if (!(tg && tg.initData)) return; // plain browser: let the link work as-is
   event.preventDefault();
   try {
@@ -250,7 +439,7 @@ $("download").addEventListener("click", async (event) => {
     const url = URL.createObjectURL(await resp.blob());
     const a = document.createElement("a");
     a.href = url;
-    a.download = "tzlvt-export.xlsx";
+    a.download = "finapp-export.xlsx";
     a.click();
     URL.revokeObjectURL(url);
   } catch (err) {
@@ -258,13 +447,52 @@ $("download").addEventListener("click", async (event) => {
   }
 });
 
+// ---- next-day savings decision -------------------------------------------------
+
+async function maybeShowSavingsPrompt() {
+  let p;
+  try {
+    p = await api("/savings-prompt");
+  } catch {
+    return; // never block the app on the prompt
+  }
+  if (!p || !p.show) return;
+  const base = Number(p.spend_today_value) - Number(p.saved);
+  el.savedAmount.textContent = fmt(p.saved);
+  el.choiceSpendCaption.textContent =
+    `${fmt(p.spend_today_value)} instead of ${fmt(base)} today`;
+  el.choiceIncreaseCaption.textContent =
+    `${fmt(p.increase_daily_value)} instead of ${fmt(base)} per day`;
+  el.savingsPrompt.classList.remove("hidden");
+}
+
+async function decideSavings(choice) {
+  el.savingsPrompt.classList.add("hidden");
+  try {
+    await api("/savings-decision", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ choice }),
+    });
+    await refresh();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+el.choiceSpend.addEventListener("click", () => decideSavings("spend_today"));
+el.choiceIncrease.addEventListener("click", () => decideSavings("increase_daily"));
+
 // ---- init --------------------------------------------------------------------
 
 (function init() {
-  // Sensible defaults for the period form: today → end of month.
-  const today = new Date();
-  const iso = (d) => d.toISOString().slice(0, 10);
-  el.periodStart.value = iso(today);
-  el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
-  refresh().catch((err) => toast(err.message));
+  prefillSettings();
+  maybeShowSavingsPrompt();
+  refresh()
+    .then(() => {
+      // Deep link for manual testing: /?view=history or /?view=settings
+      const v = new URLSearchParams(location.search).get("view");
+      if (v && views[v]) showView(v);
+    })
+    .catch((err) => toast(err.message));
 })();

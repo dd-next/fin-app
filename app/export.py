@@ -12,19 +12,25 @@ from openpyxl.utils import get_column_letter
 
 from app import budget
 
-FILENAME = "tzlvt-export.xlsx"
+FILENAME = "finapp-export.xlsx"
 CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-class ExpenseRow(NamedTuple):
+class OperationRow(NamedTuple):
     created_at: datetime
-    amount: Decimal
+    amount: Decimal  # always positive; kind carries the sign
     comment: str | None
+    kind: str = "expense"  # 'expense' | 'income'
+
+    @property
+    def signed_amount(self) -> Decimal:
+        return -self.amount if self.kind == "income" else self.amount
 
 
 EXPENSE_HEADERS = [
     "Date",
     "Amount",
+    "Type",
     "Comment",
     "Running balance",
     "Left to spend that day",
@@ -35,14 +41,16 @@ def period_rows(
     total_amount: Decimal,
     start_date: date,
     end_date: date,
-    expenses: Iterable[ExpenseRow],
+    operations: Iterable[OperationRow],
     today: date | None = None,
+    rebase_days: Iterable[date] = (),
 ) -> list[list]:
     """The "Period" sheet as a two-column key/value table. Shared by the
     .xlsx export and the Google Sheets sync so they always agree."""
     summary = budget.compute_budget(
         total_amount, start_date, end_date,
-        [(e.created_at.date(), e.amount) for e in expenses], today=today,
+        [(o.created_at.date(), o.signed_amount) for o in operations],
+        today=today, rebase_days=rebase_days,
     )
     return [
         ["total_amount", total_amount],
@@ -58,26 +66,30 @@ def expense_rows(
     total_amount: Decimal,
     start_date: date,
     end_date: date,
-    expenses: Iterable[ExpenseRow],
+    operations: Iterable[OperationRow],
+    rebase_days: Iterable[date] = (),
 ) -> list[list]:
-    """The "Expenses" sheet body: expenses replayed in chronological order
+    """The "Expenses" sheet body: operations replayed in chronological order
     with the running balance and what was left to spend that day right after
-    each expense (the app's headline number at that moment). No header row."""
+    each one (the app's headline number at that moment). No header row."""
     rows: list[list] = []
     balance = total_amount
     replayed: list[budget.DatedAmount] = []
-    for e in sorted(expenses, key=lambda e: e.created_at):
-        balance -= e.amount
-        day = e.created_at.date()
-        replayed.append((day, e.amount))
+    rebase_days = list(rebase_days)
+    for o in sorted(operations, key=lambda o: o.created_at):
+        balance -= o.signed_amount
+        day = o.created_at.date()
+        replayed.append((day, o.signed_amount))
         at_that_point = budget.compute_budget(
-            total_amount, start_date, end_date, replayed, today=day
+            total_amount, start_date, end_date, replayed, today=day,
+            rebase_days=rebase_days,
         )
         rows.append(
             [
                 day.isoformat(),
-                e.amount,
-                e.comment or "",
+                o.amount,
+                o.kind,
+                o.comment or "",
                 balance,
                 at_that_point.per_day_today,
             ]
@@ -89,18 +101,22 @@ def build_workbook(
     total_amount: Decimal,
     start_date: date,
     end_date: date,
-    expenses: Iterable[ExpenseRow],
+    operations: Iterable[OperationRow],
     today: date | None = None,
+    rebase_days: Iterable[date] = (),
 ) -> bytes:
     """One workbook, two sheets: "Period" (key/value) and "Expenses"
     (chronological replay with running balance and per-day allowance)."""
-    expenses = list(expenses)  # both sheets iterate it
+    operations = list(operations)  # both sheets iterate it
+    rebase_days = list(rebase_days)
     wb = Workbook()
 
     # --- Sheet "Period": two-column key/value table -------------------------
     ws = wb.active
     ws.title = "Period"
-    for row in period_rows(total_amount, start_date, end_date, expenses, today):
+    for row in period_rows(
+        total_amount, start_date, end_date, operations, today, rebase_days
+    ):
         ws.append(row)
     _autosize(ws)
 
@@ -109,7 +125,9 @@ def build_workbook(
     ws.append(EXPENSE_HEADERS)
     for cell in ws[1]:
         cell.font = Font(bold=True)
-    for row in expense_rows(total_amount, start_date, end_date, expenses):
+    for row in expense_rows(
+        total_amount, start_date, end_date, operations, rebase_days
+    ):
         ws.append(row)
     _autosize(ws)
 

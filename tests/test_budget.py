@@ -1,6 +1,6 @@
 """Unit tests for the pure budget math in app/budget.py.
 
-Semantics under test are the original app's (Tzlvt): a fixed daily base,
+Semantics under test are the reference behavior: a fixed daily base,
 unspent money rolling forward into today, spending reducing TODAY 1:1, and
 an overspent day eating the pool and rebasing the base for the days after.
 """
@@ -195,6 +195,69 @@ def test_delete_after_increase_equals_fresh_recompute():
     assert after_delete.remaining_money == D("950")
     assert after_delete.per_day_today == D("550.00")
     assert after_delete.per_day_today > with_all.per_day_today
+
+
+def test_income_today_raises_todays_number():
+    # Incomes enter the replay as negative amounts. +200 on day 1 raises
+    # today's number 1:1 and grows the pool.
+    s = compute_budget(D("1000"), START, END,
+                       [on(1, "40"), on(1, "-200")], today=START)
+    assert s.budget_today == D("100.00")
+    assert s.spent_today == D("-160")  # 40 spent, 200 received
+    assert s.per_day_today == D("260.00")  # 100 - 40 + 200
+    assert s.remaining_money == D("1160")
+
+
+def test_income_after_overspent_day_rolls_forward():
+    # Day 1 overspends (250 > 100) → rebase to 750/9. Day 2 receives 500,
+    # spends nothing → the whole 500 (plus day 2's base) carries into day 3.
+    s = compute_budget(D("1000"), START, END,
+                       [on(1, "250"), on(2, "-500")], today=date(2026, 7, 3))
+    assert s.daily_base == D("83.33")  # 750/9, set by the day-1 rebase
+    assert s.budget_today == D("666.67")  # 83.33 (base) + 83.33 + 500 (carry)
+    assert s.remaining_money == D("1250")
+
+
+def test_income_delete_equals_fresh_recompute():
+    # Removing an income is just recomputing without it — no hidden state.
+    with_income = compute_budget(D("1000"), START, END,
+                                 [on(1, "250"), on(2, "-300")],
+                                 today=date(2026, 7, 4))
+    without = compute_budget(D("1000"), START, END, [on(1, "250")],
+                             today=date(2026, 7, 4))
+    fresh = compute_budget(D("1000"), START, END, [on(1, "250")],
+                           today=date(2026, 7, 4))
+    assert without == fresh
+    assert with_income.remaining_money - without.remaining_money == D("300")
+
+
+def test_rebase_event_today_respreads_and_resets_carry():
+    # 1000/10; day 1 spends 40 → 60 carry, day 2 untouched → 160 carry into
+    # day 3. A user rebase on day 3 re-spreads 960 over days 3-10 instead.
+    when = date(2026, 7, 3)
+    plain = compute_budget(D("1000"), START, END, [on(1, "40")], today=when)
+    assert plain.budget_today == D("260.00")  # default carry-over behavior
+    rebased = compute_budget(D("1000"), START, END, [on(1, "40")],
+                             today=when, rebase_days=[when])
+    assert rebased.daily_base == D("120.00")  # 960 / 8
+    assert rebased.budget_today == D("120.00")  # carry reset
+    assert rebased.remaining_money == plain.remaining_money == D("960")
+
+
+def test_rebase_event_on_past_day_then_carry_resumes():
+    # Rebase on day 2 (base 960/9 = 106.67); days 2-3 untouched → their
+    # leftovers carry into day 4 on top of the new base.
+    s = compute_budget(D("1000"), START, END, [on(1, "40")],
+                       today=date(2026, 7, 4),
+                       rebase_days=[date(2026, 7, 2)])
+    assert s.daily_base == D("106.67")  # 960 / 9
+    assert s.budget_today == D("320.00")  # 3 × (960/9), exactly
+    # a later overspend still rebases on top of the voluntary one
+    s2 = compute_budget(D("1000"), START, END,
+                        [on(1, "40"), on(2, "400")],
+                        today=date(2026, 7, 3),
+                        rebase_days=[date(2026, 7, 2)])
+    assert s2.daily_base == D("70.00")  # (1000-440) / 8 after day-2 overspend
 
 
 def test_preview_after_pending_expense():

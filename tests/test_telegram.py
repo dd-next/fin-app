@@ -90,7 +90,7 @@ def auth_enabled(monkeypatch):
 async def test_data_endpoints_require_auth(client, auth_enabled):
     resp = await client.get("/budget")
     assert resp.status_code == 401
-    resp = await client.post("/expenses", json={"amount": "10"})
+    resp = await client.post("/operations", json={"amount": "10"})
     assert resp.status_code == 401
     resp = await client.get("/export.xlsx")
     assert resp.status_code == 401
