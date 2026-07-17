@@ -117,6 +117,12 @@
             <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
             <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
           </div>
+          <div id="category-row" class="row compact-row">
+            <select id="operation-category" aria-label="Category">
+              <option value="">Uncategorized</option>
+            </select>
+            <button id="new-category" type="button" class="ghost small">+ Category</button>
+          </div>
           <div class="row">
             <input id="operation-amount" type="text" inputmode="decimal"
                    placeholder="0.00" aria-label="Amount" required>
@@ -124,6 +130,7 @@
           </div>
           <input id="operation-comment" type="text" maxlength="200"
                  placeholder="Comment (optional)" aria-label="Comment">
+          <p id="category-warning" class="limit-warning hidden"></p>
         </form>
         <button id="undo" type="button" class="undo hidden"></button>
       </section>
@@ -176,6 +183,14 @@
           </div>
           <p class="hint">Periods stay in history. Date ranges in one space cannot overlap.</p>
         </form>
+      </section>
+      <section id="category-limits-card" class="card hidden">
+        <div class="section-heading">
+          <h3>Category limits</h3>
+          <button id="settings-new-category" type="button" class="ghost small">+ Category</button>
+        </div>
+        <div id="category-limit-list" class="limit-list"></div>
+        <p class="hint">Limits are optional. Real expenses are never blocked.</p>
       </section>
     </section>
 

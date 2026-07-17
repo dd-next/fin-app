@@ -132,6 +132,9 @@ class Workspace(Base):
     invites: Mapped[list["WorkspaceInvite"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    categories: Mapped[list["Category"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
 
 
 class WorkspaceMember(Base):
@@ -179,6 +182,34 @@ class WorkspaceInvite(Base):
     workspace: Mapped[Workspace] = relationship(back_populates="invites")
 
 
+class Category(Base):
+    __tablename__ = "category"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "normalized_name", name="uq_category_workspace_name"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="categories")
+    plans: Mapped[list["PeriodCategoryPlan"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan"
+    )
+
+
 class Period(Base):
     __tablename__ = "period"
 
@@ -203,6 +234,9 @@ class Period(Base):
     rebase_events: Mapped[list["RebaseEvent"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
+    category_plans: Mapped[list["PeriodCategoryPlan"]] = relationship(
+        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
+    )
 
     @property
     def status(self) -> str:
@@ -222,6 +256,12 @@ class Operation(Base):
         ForeignKey("period.id", ondelete="CASCADE"), nullable=False
     )
     amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     kind: Mapped[str] = mapped_column(
         String(10), nullable=False, default="expense", server_default="expense"
     )
@@ -232,6 +272,7 @@ class Operation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
     period: Mapped[Period] = relationship(back_populates="operations")
+    category: Mapped[Category | None] = relationship()
 
     @property
     def signed_amount(self) -> Decimal:
@@ -255,3 +296,28 @@ class RebaseEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
     period: Mapped[Period] = relationship(back_populates="rebase_events")
+
+
+class PeriodCategoryPlan(Base):
+    __tablename__ = "period_category_plan"
+    __table_args__ = (
+        UniqueConstraint("period_id", "category_id", name="uq_period_category_plan"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("period.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("category.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    limit_amount: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    period: Mapped[Period] = relationship(back_populates="category_plans")
+    category: Mapped[Category] = relationship(back_populates="plans")

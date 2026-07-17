@@ -21,6 +21,9 @@ Features:
   the **Export .xlsx** button inside it; **Budget Settings** view with a
   live "{X} per day" preview.
 - "Spent" state when the whole budget is gone — recoverable with an income.
+- **Workspace categories and period limits**: expenses may stay Uncategorized
+  or use a reusable category; exceeding a limit warns without hiding or
+  rejecting the real expense.
 
 Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
 dark UI, `.xlsx` export.

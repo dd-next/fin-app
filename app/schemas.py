@@ -82,6 +82,7 @@ class OperationIn(BaseModel):
     kind: OperationKind = "expense"
     comment: str | None = None
     occurred_on: date | None = None
+    category_id: int | None = None
 
 
 class PeriodOut(BaseModel):
@@ -101,11 +102,52 @@ class OperationOut(BaseModel):
 
     id: int
     period_id: int
+    category_id: int | None
+    created_by_user_id: int | None
     amount: Decimal
     kind: OperationKind
     comment: str | None
     occurred_on: date
     created_at: datetime
+
+
+class CategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class CategoryPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    archived: bool | None = None
+
+
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    workspace_id: int
+    name: str
+    archived_at: datetime | None
+
+
+class CategoryPlanIn(BaseModel):
+    limit_amount: MoneyIn | None = None
+
+
+class CategoryPlanOut(BaseModel):
+    category: CategoryOut
+    limit_amount: Decimal | None
+    spent: Decimal
+    remaining: Decimal | None
+    over_limit: bool
+
+
+class LimitWarning(BaseModel):
+    scope: Literal["category"]
+    target_id: int
+    name: str
+    limit_amount: Decimal
+    spent: Decimal
+    over_by: Decimal
 
 
 class BudgetOut(BaseModel):
@@ -143,3 +185,4 @@ class PeriodWithBudget(BaseModel):
 class OperationWithBudget(BaseModel):
     operation: OperationOut
     budget: BudgetOut
+    warnings: list[LimitWarning] = Field(default_factory=list)

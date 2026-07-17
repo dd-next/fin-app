@@ -19,8 +19,14 @@ from app import budget, export, sheets
 from app.auth import router as auth_router
 from app.access import require_workspace_access
 from app.workspaces import router as workspaces_router
+from app.categories import (
+    category_warning,
+    configured_category_limits,
+    require_category,
+    router as categories_router,
+)
 from app.db import engine, get_session
-from app.models import Base, Operation, Period, RebaseEvent, Workspace
+from app.models import Base, Operation, Period, RebaseEvent, Workspace, WorkspaceMember
 from app.schemas import (
     BudgetOut,
     OperationIn,
@@ -77,6 +83,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="FinApp", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(workspaces_router)
+app.include_router(categories_router)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
@@ -312,6 +319,12 @@ async def update_period(
         exclude_period_id=period.id,
     )
     if body.total_amount is not None:
+        allocated = await configured_category_limits(session, period.id)
+        if body.total_amount < allocated:
+            raise HTTPException(
+                status_code=409,
+                detail="Period total cannot be lower than configured category limits",
+            )
         period.total_amount = body.total_amount
     period.start_date = start_date
     period.end_date = end_date
@@ -374,6 +387,7 @@ async def add_operation(
     background_tasks: BackgroundTasks,
     period_id: int | None = None,
     workspace_id: int = 1,
+    member: WorkspaceMember | None = Depends(require_workspace_access),
     session: AsyncSession = Depends(get_session),
 ):
     period = await _require_period(session, period_id, workspace_id)
@@ -383,9 +397,20 @@ async def add_operation(
             status_code=422,
             detail="occurred_on must be inside the selected period",
         )
+    if body.kind != "expense" and body.category_id is not None:
+        raise HTTPException(
+            status_code=422, detail="Only expenses can have a category"
+        )
+    category = None
+    if body.category_id is not None:
+        category = await require_category(
+            session, body.category_id, workspace_id
+        )
     operation = Operation(
         period_id=period.id, amount=body.amount, kind=body.kind,
         comment=body.comment, occurred_on=occurred_on,
+        category_id=category.id if category else None,
+        created_by_user_id=member.user_id if member else None,
     )
     session.add(operation)
     await session.commit()
@@ -394,6 +419,11 @@ async def add_operation(
     return OperationWithBudget(
         operation=OperationOut.model_validate(operation),
         budget=await _budget_for(session, period),
+        warnings=(
+            await category_warning(session, period.id, category)
+            if category is not None
+            else []
+        ),
     )
 
 

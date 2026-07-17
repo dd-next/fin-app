@@ -165,6 +165,8 @@ form { display: flex; flex-direction: column; gap: 12px; }
 
 .row { display: flex; gap: 12px; }
 .row > * { flex: 1; min-width: 0; }
+.compact-row select { flex: 1; }
+.compact-row button { flex: 0 0 auto; }
 
 label {
   display: flex;
@@ -290,6 +292,14 @@ button.accent.income { background: var(--income); }
   font-variant-numeric: tabular-nums;
   margin-top: -6px;
 }
+.limit-warning { margin: 0; color: var(--danger); font-size: 0.9rem; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.section-heading h3 { margin: 0; font-size: 1rem; }
+.limit-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.limit-item { display: grid; grid-template-columns: 1fr 120px; gap: 10px; align-items: center; }
+.limit-item input { padding: 9px 10px; font-size: 1rem; }
+.limit-meta { color: var(--muted); font-size: 0.78rem; }
+.limit-meta.over { color: var(--danger); }
 
 /* --- Spent-out state (whole budget gone) ---------------------------------- */
 

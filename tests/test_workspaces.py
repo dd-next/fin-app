@@ -118,3 +118,32 @@ async def test_personal_workspace_cannot_issue_invites(client, web_auth):
     await create_owner(client)
     response = await client.post("/workspaces/1/invites")
     assert response.status_code == 409
+
+
+async def test_category_cannot_cross_workspace_boundary(client, web_auth):
+    await create_owner(client)
+    family = (await client.post("/workspaces", json={"name": "Family"})).json()
+    family_category = await client.post(
+        "/categories",
+        params={"workspace_id": family["id"]},
+        json={"name": "Family food"},
+    )
+    assert family_category.status_code == 200
+
+    today = date.today()
+    personal_period = await client.post(
+        "/periods",
+        params={"workspace_id": 1},
+        json={
+            "total_amount": "500",
+            "start_date": today.isoformat(),
+            "end_date": (today + timedelta(days=4)).isoformat(),
+        },
+    )
+    period_id = personal_period.json()["period"]["id"]
+    response = await client.post(
+        f"/periods/{period_id}/operations",
+        params={"workspace_id": 1},
+        json={"amount": "10", "category_id": family_category.json()["id"]},
+    )
+    assert response.status_code == 422

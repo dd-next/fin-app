@@ -26,7 +26,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 15 — Period history (SPEC-4)
 - [x] Phase 16 — Web authentication (SPEC-4)
 - [x] Phase 17 — Personal and shared workspaces (SPEC-4)
-- [ ] Phase 18 — Categories and limits (SPEC-4)
+- [x] Phase 18 — Categories and limits (SPEC-4)
 - [ ] Phase 19 — Pools (SPEC-4)
 - [ ] Phase 20 — Savings goals (SPEC-4)
 - [ ] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
@@ -77,6 +77,18 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   Tests: **74 passed, 0 failed**; JS syntax check passed.
 - Decision: unauthenticated legacy local/Telegram mode can access only workspace
   `1`; multi-workspace behavior requires web auth.
+
+### Phase 18 — Categories and limits (SPEC-4) (2026-07-17)
+- Added workspace categories with normalized uniqueness/archive semantics,
+  optional expense classification, operation authorship, and period-specific
+  category plans. Existing operations remain valid as Uncategorized.
+- Plan configuration rejects totals above the period amount, while real
+  overspending remains saved and returns exact category limit warnings.
+- Frontend gained category selection/quick-create, live over-limit preview, and
+  editable category limits in Budget Settings. Live DB upgraded to 0007 with
+  both legacy operations preserved. Tests: **77 passed, 0 failed**.
+- Decision: income categories remain out of scope; only expense operations
+  contribute to category spent totals.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

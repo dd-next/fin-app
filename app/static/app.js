@@ -68,6 +68,10 @@ const el = {
   operationForm: $("operation-form"),
   operationAmount: $("operation-amount"),
   operationComment: $("operation-comment"),
+  categoryRow: $("category-row"),
+  operationCategory: $("operation-category"),
+  newCategory: $("new-category"),
+  categoryWarning: $("category-warning"),
   operationSubmit: $("operation-submit"),
   undo: $("undo"),
   openHistory: $("open-history"),
@@ -85,6 +89,9 @@ const el = {
   periodStart: $("period-start"),
   periodEnd: $("period-end"),
   perDayHint: $("per-day-hint"),
+  categoryLimitsCard: $("category-limits-card"),
+  categoryLimitList: $("category-limit-list"),
+  settingsNewCategory: $("settings-new-category"),
   // shared
   toast: $("toast"),
   savingsPrompt: $("savings-prompt"),
@@ -108,6 +115,8 @@ let workspaces = [];
 let selectedWorkspaceId = Number(localStorage.getItem("selectedWorkspaceId")) || 1;
 let webAuthActive = false;
 const inviteToken = new URLSearchParams(location.search).get("invite");
+let categories = [];
+let categoryPlans = [];
 
 // ---- views ---------------------------------------------------------------------
 
@@ -290,6 +299,10 @@ function renderOperations(operations) {
       const comment = document.createElement("div");
       comment.className = "op-comment";
       comment.textContent = op.comment || "";
+      const category = categories.find((item) => item.id === op.category_id);
+      if (category) {
+        comment.textContent = op.comment ? `${category.name} · ${op.comment}` : category.name;
+      }
       const when = document.createElement("div");
       when.className = "op-date";
       when.textContent = fmtWhen(op.created_at);
@@ -306,6 +319,84 @@ function renderOperations(operations) {
       return li;
     })
   );
+}
+
+function renderCategories() {
+  const selected = el.operationCategory.value;
+  const options = [new Option("Uncategorized", "")];
+  for (const category of categories) options.push(new Option(category.name, category.id));
+  el.operationCategory.replaceChildren(...options);
+  if ([...el.operationCategory.options].some((o) => o.value === selected)) {
+    el.operationCategory.value = selected;
+  }
+}
+
+function renderCategoryPlans() {
+  el.categoryLimitsCard.classList.toggle(
+    "hidden", !selectedPeriodId || newPeriodMode
+  );
+  const plansByCategory = new Map(
+    categoryPlans.map((plan) => [plan.category.id, plan])
+  );
+  el.categoryLimitList.replaceChildren(
+    ...categories.map((category) => {
+      const plan = plansByCategory.get(category.id);
+      const row = document.createElement("label");
+      row.className = "limit-item";
+      const text = document.createElement("span");
+      text.textContent = category.name;
+      const meta = document.createElement("span");
+      meta.className = "limit-meta" + (plan && plan.over_limit ? " over" : "");
+      meta.textContent = plan ? `${fmt(plan.spent)} spent` : "No spending";
+      text.append(document.createElement("br"), meta);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.placeholder = "No limit";
+      input.value = plan && plan.limit_amount !== null ? plan.limit_amount : "";
+      input.addEventListener("change", () => saveCategoryLimit(category.id, input.value));
+      row.append(text, input);
+      return row;
+    })
+  );
+}
+
+async function saveCategoryLimit(categoryId, raw) {
+  if (raw.trim() && !validAmount(raw)) {
+    toast("Enter a positive limit or leave it blank");
+    renderCategoryPlans();
+    return;
+  }
+  try {
+    await api(
+      `/periods/${selectedPeriodId}/category-plans/${categoryId}${query()}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit_amount: raw.trim() || null }),
+      }
+    );
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+    await refresh();
+  }
+}
+
+function renderCategoryPreview(raw) {
+  if (kind !== "expense") {
+    el.categoryWarning.classList.add("hidden");
+    return;
+  }
+  const categoryId = Number(el.operationCategory.value);
+  const plan = categoryPlans.find((item) => item.category.id === categoryId);
+  const predicted = plan && validAmount(raw) ? Number(plan.spent) + Number(raw) : null;
+  const over = plan && plan.limit_amount !== null && predicted > Number(plan.limit_amount);
+  el.categoryWarning.classList.toggle("hidden", !over);
+  if (over) {
+    el.categoryWarning.textContent =
+      `${plan.category.name} will exceed its limit by ${fmt(predicted - Number(plan.limit_amount))}`;
+  }
 }
 
 function renderPreview(value) {
@@ -353,9 +444,17 @@ async function refresh() {
   else localStorage.removeItem("selectedPeriodId");
   renderPeriodOptions();
   const periodWithBudget = periods.find(({ period }) => period.id === selectedPeriodId) || null;
-  const operations = selectedPeriodId
-    ? await api(`/operations${selectedQuery()}`)
-    : [];
+  const [loadedCategories, operations, loadedPlans] = await Promise.all([
+    api(`/categories${query()}`),
+    selectedPeriodId ? api(`/operations${selectedQuery()}`) : Promise.resolve([]),
+    selectedPeriodId
+      ? api(`/periods/${selectedPeriodId}/category-plans${query()}`)
+      : Promise.resolve([]),
+  ]);
+  categories = loadedCategories || [];
+  categoryPlans = loadedPlans || [];
+  renderCategories();
+  renderCategoryPlans();
   renderBudget(periodWithBudget && periodWithBudget.budget);
   renderPeriod(
     periodWithBudget && periodWithBudget.period,
@@ -377,6 +476,7 @@ function setKind(next) {
     btn.setAttribute("aria-pressed", String(active));
   }
   el.spend.classList.toggle("income-mode", kind === "income");
+  el.categoryRow.classList.toggle("hidden", kind === "income");
   el.operationSubmit.textContent = kind === "income" ? "Received" : "Spent";
   el.operationSubmit.classList.toggle("income", kind === "income");
   updatePreview();
@@ -393,6 +493,7 @@ let previewTimer;
 function updatePreview() {
   clearTimeout(previewTimer);
   const raw = el.operationAmount.value.trim();
+  renderCategoryPreview(raw);
   if (!validAmount(raw) || !lastBudget) {
     renderPreview(null);
     return;
@@ -411,6 +512,27 @@ function updatePreview() {
   }, 150);
 }
 el.operationAmount.addEventListener("input", updatePreview);
+el.operationCategory.addEventListener("change", updatePreview);
+
+async function createCategoryFromPrompt() {
+  const name = window.prompt("Category name");
+  if (!name || !name.trim()) return;
+  try {
+    const category = await api(`/categories${query()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await refresh();
+    el.operationCategory.value = String(category.id);
+    updatePreview();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+el.newCategory.addEventListener("click", createCategoryFromPrompt);
+el.settingsNewCategory.addEventListener("click", createCategoryFromPrompt);
 
 el.operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -427,11 +549,19 @@ el.operationForm.addEventListener("submit", async (event) => {
         amount,
         kind,
         comment: el.operationComment.value.trim() || null,
+        category_id:
+          kind === "expense" && el.operationCategory.value
+            ? Number(el.operationCategory.value)
+            : null,
       }),
     });
     el.operationForm.reset();
     renderPreview(null);
     showUndo({ id: body.operation.id, amount: body.operation.amount });
+    if (body.warnings && body.warnings.length) {
+      const warning = body.warnings[0];
+      toast(`${warning.name} limit exceeded by ${fmt(warning.over_by)}`);
+    }
     await refresh();
     el.operationAmount.focus();
   } catch (err) {
@@ -489,6 +619,7 @@ function prefillSettings() {
     el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
   }
   updatePerDayHint();
+  renderCategoryPlans();
 }
 
 // Live "{X} per day" hint under the amount while typing (client-side).
