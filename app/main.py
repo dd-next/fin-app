@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import inspect as sa_inspect, text
 
 from app import budget, export, sheets
-from app.auth import require_auth, router as auth_router
+from app.auth import router as auth_router
+from app.access import require_workspace_access
+from app.workspaces import router as workspaces_router
 from app.db import engine, get_session
 from app.models import Base, Operation, Period, RebaseEvent, Workspace
 from app.schemas import (
@@ -74,10 +76,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="FinApp", lifespan=lifespan)
 app.include_router(auth_router)
+app.include_router(workspaces_router)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
-AUTH = Depends(require_auth)
+ACCESS = Depends(require_workspace_access)
 
 
 async def _active_period(
@@ -231,8 +234,8 @@ async def _period_with_budget(
     )
 
 
-@app.post("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
-@app.post("/periods", response_model=PeriodWithBudget, dependencies=[AUTH])
+@app.post("/period", response_model=PeriodWithBudget, dependencies=[ACCESS])
+@app.post("/periods", response_model=PeriodWithBudget, dependencies=[ACCESS])
 async def set_period(
     body: PeriodIn,
     background_tasks: BackgroundTasks,
@@ -255,7 +258,7 @@ async def set_period(
     return await _period_with_budget(session, period)
 
 
-@app.get("/periods", response_model=list[PeriodWithBudget], dependencies=[AUTH])
+@app.get("/periods", response_model=list[PeriodWithBudget], dependencies=[ACCESS])
 async def list_periods(
     workspace_id: int = 1, session: AsyncSession = Depends(get_session)
 ):
@@ -268,7 +271,7 @@ async def list_periods(
 
 
 @app.get(
-    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[AUTH]
+    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[ACCESS]
 )
 async def get_period_by_id(
     period_id: int,
@@ -281,7 +284,7 @@ async def get_period_by_id(
 
 
 @app.patch(
-    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[AUTH]
+    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[ACCESS]
 )
 async def update_period(
     period_id: int,
@@ -318,7 +321,7 @@ async def update_period(
     return await _period_with_budget(session, period)
 
 
-@app.get("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
+@app.get("/period", response_model=PeriodWithBudget, dependencies=[ACCESS])
 async def get_period(
     period_id: int | None = None,
     workspace_id: int = 1,
@@ -329,7 +332,7 @@ async def get_period(
 
 
 @app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True,
-         dependencies=[AUTH])
+         dependencies=[ACCESS])
 async def get_budget(
     pending: Decimal | None = None,
     period_id: int | None = None,
@@ -340,11 +343,11 @@ async def get_budget(
     return await _budget_for(session, period, pending)
 
 
-@app.get("/operations", response_model=list[OperationOut], dependencies=[AUTH])
+@app.get("/operations", response_model=list[OperationOut], dependencies=[ACCESS])
 @app.get(
     "/periods/{period_id}/operations",
     response_model=list[OperationOut],
-    dependencies=[AUTH],
+    dependencies=[ACCESS],
 )
 async def list_operations(
     period_id: int | None = None,
@@ -360,11 +363,11 @@ async def list_operations(
     return [OperationOut.model_validate(o) for o in result.scalars()]
 
 
-@app.post("/operations", response_model=OperationWithBudget, dependencies=[AUTH])
+@app.post("/operations", response_model=OperationWithBudget, dependencies=[ACCESS])
 @app.post(
     "/periods/{period_id}/operations",
     response_model=OperationWithBudget,
-    dependencies=[AUTH],
+    dependencies=[ACCESS],
 )
 async def add_operation(
     body: OperationIn,
@@ -395,11 +398,11 @@ async def add_operation(
 
 
 @app.delete("/operations/{operation_id}", response_model=BudgetOut,
-            dependencies=[AUTH])
+            dependencies=[ACCESS])
 @app.delete(
     "/periods/{period_id}/operations/{operation_id}",
     response_model=BudgetOut,
-    dependencies=[AUTH],
+    dependencies=[ACCESS],
 )
 async def delete_operation(
     operation_id: int,
@@ -423,11 +426,13 @@ async def delete_operation(
 
 
 @app.get("/savings-prompt", response_model=SavingsPromptOut,
-         response_model_exclude_none=True, dependencies=[AUTH])
-async def savings_prompt(session: AsyncSession = Depends(get_session)):
+         response_model_exclude_none=True, dependencies=[ACCESS])
+async def savings_prompt(
+    workspace_id: int = 1, session: AsyncSession = Depends(get_session)
+):
     """Next-day savings decision: shown once per calendar day, when yesterday
     (or earlier untouched days) left a positive carry-over."""
-    period = await _active_period(session)
+    period = await _active_period(session, workspace_id)
     today = date.today()
     if period is None or not (period.start_date < today <= period.end_date):
         return SavingsPromptOut(show=False)
@@ -455,16 +460,17 @@ async def savings_prompt(session: AsyncSession = Depends(get_session)):
     )
 
 
-@app.post("/savings-decision", dependencies=[AUTH])
+@app.post("/savings-decision", dependencies=[ACCESS])
 async def savings_decision(
     body: SavingsDecisionIn,
     background_tasks: BackgroundTasks,
+    workspace_id: int = 1,
     session: AsyncSession = Depends(get_session),
 ):
     """Persist the user's choice. "spend_today" keeps the default carry-over
     math and only acknowledges the prompt; "increase_daily" also records a
     rebase event for today, so the replay re-spreads deterministically."""
-    period = await _require_period(session)
+    period = await _require_period(session, workspace_id=workspace_id)
     today = date.today()
     if body.choice == "increase_daily":
         session.add(RebaseEvent(period_id=period.id, day=today))
@@ -474,13 +480,15 @@ async def savings_decision(
     return {"status": "ok", "budget": await _budget_for(session, period)}
 
 
-@app.post("/sheets/sync", dependencies=[AUTH])
-async def sheets_sync(session: AsyncSession = Depends(get_session)):
+@app.post("/sheets/sync", dependencies=[ACCESS])
+async def sheets_sync(
+    workspace_id: int = 1, session: AsyncSession = Depends(get_session)
+):
     """Manual "sync now": same full re-sync, run in a threadpool
     (gspread is synchronous). Returns ok/failed instead of raising."""
     if not sheets.enabled():
         return {"status": "disabled"}
-    period = await _require_period(session)
+    period = await _require_period(session, workspace_id=workspace_id)
     rows = await _operation_snapshot(session, period)
     rebases = await _rebase_days(session, period)
     try:
@@ -497,8 +505,8 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
     return {"status": "ok"}
 
 
-@app.get("/export.xlsx", dependencies=[AUTH])
-@app.get("/periods/{period_id}/export.xlsx", dependencies=[AUTH])
+@app.get("/export.xlsx", dependencies=[ACCESS])
+@app.get("/periods/{period_id}/export.xlsx", dependencies=[ACCESS])
 async def export_xlsx(
     period_id: int | None = None,
     workspace_id: int = 1,

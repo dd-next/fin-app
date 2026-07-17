@@ -30,6 +30,35 @@ class UserOut(BaseModel):
     display_name: str
 
 
+class WorkspaceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class WorkspaceOut(BaseModel):
+    id: int
+    name: str
+    kind: Literal["personal", "shared"]
+    timezone: str
+    role: Literal["owner", "editor"]
+
+
+class WorkspaceInviteOut(BaseModel):
+    token: str
+    workspace_id: int
+    expires_at: datetime
+
+
+class WorkspaceMemberOut(BaseModel):
+    user: UserOut
+    role: Literal["owner", "editor"]
+    joined_at: datetime
+
+
+class InviteAcceptanceOut(BaseModel):
+    user: UserOut
+    workspace: WorkspaceOut
+
+
 class PeriodIn(BaseModel):
     total_amount: MoneyIn
     start_date: date

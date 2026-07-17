@@ -25,7 +25,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 14 — Workspace and migration foundation (SPEC-4)
 - [x] Phase 15 — Period history (SPEC-4)
 - [x] Phase 16 — Web authentication (SPEC-4)
-- [ ] Phase 17 — Personal and shared workspaces (SPEC-4)
+- [x] Phase 17 — Personal and shared workspaces (SPEC-4)
 - [ ] Phase 18 — Categories and limits (SPEC-4)
 - [ ] Phase 19 — Pools (SPEC-4)
 - [ ] Phase 20 — Savings goals (SPEC-4)
@@ -66,6 +66,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   JS syntax check passed.
 - Decision: web auth remains config-gated for zero-setup local tests; when
   `WEB_AUTH_ENABLED=true`, every financial route requires a valid session.
+
+### Phase 17 — Personal and shared workspaces (SPEC-4) (2026-07-17)
+- Added owner/editor memberships, automatic personal spaces, shared-space
+  creation, member listing, and hashed one-time seven-day invitation tokens.
+- Bootstrap claims the migrated Personal workspace; invite signup creates the
+  second user's Personal space and joins the shared space in the same flow.
+- All financial endpoints now enforce workspace membership. UI gained a space
+  switcher, shared-space creation, invite-link signup, and member-safe queries.
+  Tests: **74 passed, 0 failed**; JS syntax check passed.
+- Decision: unauthenticated legacy local/Telegram mode can access only workspace
+  `1`; multi-workspace behavior requires web auth.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

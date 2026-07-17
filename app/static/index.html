@@ -13,9 +13,12 @@
 
   <div id="login-screen" class="login-screen hidden">
     <section class="card login-card">
-      <h1>FinApp</h1>
-      <p class="muted">Sign in to your budget</p>
+      <h1 id="login-title">FinApp</h1>
+      <p id="login-subtitle" class="muted">Sign in to your budget</p>
       <form id="login-form" autocomplete="on">
+        <label id="display-name-field" class="hidden">Display name
+          <input id="login-display-name" name="display_name" autocomplete="name">
+        </label>
         <label>Username
           <input id="login-username" name="username" autocomplete="username" required>
         </label>
@@ -49,6 +52,13 @@
   </div>
 
   <main class="app">
+
+    <nav id="workspace-bar" class="workspace-bar hidden">
+      <select id="workspace-select" aria-label="Financial space"></select>
+      <button id="create-workspace" type="button" class="ghost small">+ Shared</button>
+      <button id="invite-member" type="button" class="ghost small hidden">Invite</button>
+      <button id="workspace-logout" type="button" class="ghost small">Log out</button>
+    </nav>
 
     <!-- ================= Main view ================= -->
     <section id="view-main" class="view">

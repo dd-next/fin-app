@@ -22,7 +22,13 @@ async def bootstrap_owner(username: str, display_name: str | None) -> None:
             raise SystemExit("Passwords do not match")
         if len(password) < 10:
             raise SystemExit("Password must contain at least 10 characters")
-        user = await create_user(session, username, password, display_name)
+        user = await create_user(
+            session,
+            username,
+            password,
+            display_name,
+            claim_legacy_workspace=True,
+        )
         print(f"Created owner {user.username} (id={user.id})")
 
 

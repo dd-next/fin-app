@@ -51,6 +51,11 @@ python -m app.manage bootstrap-owner your_username
 Then set `WEB_AUTH_ENABLED=true`. Login sessions use an HttpOnly cookie; set
 `COOKIE_SECURE=true` when serving over HTTPS.
 
+The first owner receives the migrated Personal space. In the authenticated UI,
+use **+ Shared** to create the family space and **Invite** to copy a one-time
+7-day signup link for the second member. Both members edit finances; only the
+owner can issue invitations.
+
 ## Test
 
 ```sh

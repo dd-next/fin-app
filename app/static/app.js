@@ -27,11 +27,20 @@ function authHeaders() {
 
 const el = {
   loginScreen: $("login-screen"),
+  loginTitle: $("login-title"),
+  loginSubtitle: $("login-subtitle"),
   loginForm: $("login-form"),
+  displayNameField: $("display-name-field"),
+  loginDisplayName: $("login-display-name"),
   loginUsername: $("login-username"),
   loginPassword: $("login-password"),
   loginError: $("login-error"),
   logout: $("logout"),
+  workspaceBar: $("workspace-bar"),
+  workspaceSelect: $("workspace-select"),
+  createWorkspace: $("create-workspace"),
+  inviteMember: $("invite-member"),
+  workspaceLogout: $("workspace-logout"),
   // main view
   mainHeader: $("main-header"),
   periodSelect: $("period-select"),
@@ -95,6 +104,10 @@ let lastOperation = null; // {id, amount} of the just-added op, for Undo
 let periods = []; // [{period, budget}], newest first
 let selectedPeriodId = Number(localStorage.getItem("selectedPeriodId")) || null;
 let newPeriodMode = false;
+let workspaces = [];
+let selectedWorkspaceId = Number(localStorage.getItem("selectedWorkspaceId")) || 1;
+let webAuthActive = false;
+const inviteToken = new URLSearchParams(location.search).get("invite");
 
 // ---- views ---------------------------------------------------------------------
 
@@ -218,8 +231,46 @@ function renderPeriodOptions() {
   );
 }
 
-function selectedQuery() {
-  return selectedPeriodId ? `?period_id=${selectedPeriodId}` : "";
+function query(params) {
+  const values = new URLSearchParams({ workspace_id: selectedWorkspaceId });
+  for (const [key, value] of Object.entries(params || {})) {
+    if (value !== undefined && value !== null) values.set(key, value);
+  }
+  return `?${values.toString()}`;
+}
+
+function selectedQuery(extra) {
+  return query({ period_id: selectedPeriodId, ...(extra || {}) });
+}
+
+function renderWorkspaces() {
+  el.workspaceSelect.replaceChildren(
+    ...workspaces.map((workspace) => {
+      const option = document.createElement("option");
+      option.value = workspace.id;
+      option.textContent = workspace.name;
+      option.selected = workspace.id === selectedWorkspaceId;
+      return option;
+    })
+  );
+  const current = workspaces.find((w) => w.id === selectedWorkspaceId);
+  el.inviteMember.classList.toggle(
+    "hidden", !current || current.kind !== "shared" || current.role !== "owner"
+  );
+}
+
+async function loadWorkspaces() {
+  if (!webAuthActive) {
+    selectedWorkspaceId = 1;
+    return;
+  }
+  workspaces = (await api("/workspaces")) || [];
+  if (!workspaces.some((w) => w.id === selectedWorkspaceId)) {
+    selectedWorkspaceId = workspaces[0] ? workspaces[0].id : 1;
+  }
+  localStorage.setItem("selectedWorkspaceId", selectedWorkspaceId);
+  renderWorkspaces();
+  el.workspaceBar.classList.remove("hidden");
 }
 
 function renderOperations(operations) {
@@ -283,7 +334,7 @@ el.undo.addEventListener("click", async () => {
   const id = lastOperation.id;
   showUndo(null);
   try {
-    await api(`/operations/${id}`, { method: "DELETE" });
+    await api(`/operations/${id}${query()}`, { method: "DELETE" });
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -293,7 +344,7 @@ el.undo.addEventListener("click", async () => {
 // ---- data flow --------------------------------------------------------------
 
 async function refresh() {
-  periods = (await api("/periods")) || [];
+  periods = (await api(`/periods${query()}`)) || [];
   if (!periods.some(({ period }) => period.id === selectedPeriodId)) {
     const preferred = periods.find(({ period }) => period.status === "current") || periods[0];
     selectedPeriodId = preferred ? preferred.period.id : null;
@@ -312,8 +363,8 @@ async function refresh() {
   );
   renderOperations(operations);
   el.download.href = selectedPeriodId
-    ? `/export.xlsx?period_id=${selectedPeriodId}`
-    : "/export.xlsx";
+    ? `/export.xlsx${selectedQuery()}`
+    : `/export.xlsx${query()}`;
 }
 
 // ---- entry mode toggle (Expense | Income) -------------------------------------
@@ -352,10 +403,7 @@ function updatePreview() {
   }
   previewTimer = setTimeout(async () => {
     try {
-      const separator = selectedPeriodId ? "&" : "?";
-      const b = await api(
-        `/budget${selectedQuery()}${separator}pending=${encodeURIComponent(raw)}`
-      );
+      const b = await api(`/budget${selectedQuery({ pending: raw })}`);
       renderPreview(b && b.preview_after);
     } catch {
       renderPreview(null);
@@ -394,7 +442,7 @@ el.operationForm.addEventListener("submit", async (event) => {
 async function deleteOperation(id) {
   showUndo(null);
   try {
-    await api(`/operations/${id}`, { method: "DELETE" });
+    await api(`/operations/${id}${query()}`, { method: "DELETE" });
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -471,14 +519,14 @@ el.periodForm.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    let path = "/period";
+    let path = `/period${query()}`;
     let method = "POST";
     if (!newPeriodMode && selectedPeriodId) {
-      path = `/periods/${selectedPeriodId}`;
+      path = `/periods/${selectedPeriodId}${query()}`;
       method = "PATCH";
       if (lastPeriod && lastPeriod.status === "ended") {
         if (!window.confirm("This period has ended. Recalculate its history?")) return;
-        path += "?confirm_ended=true";
+        path += "&confirm_ended=true";
       }
     }
     const saved = await api(path, {
@@ -524,7 +572,7 @@ el.download.addEventListener("click", async (event) => {
 async function maybeShowSavingsPrompt() {
   let p;
   try {
-    p = await api("/savings-prompt");
+    p = await api(`/savings-prompt${query()}`);
   } catch {
     return; // never block the app on the prompt
   }
@@ -541,7 +589,7 @@ async function maybeShowSavingsPrompt() {
 async function decideSavings(choice) {
   el.savingsPrompt.classList.add("hidden");
   try {
-    await api("/savings-decision", {
+    await api(`/savings-decision${query()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ choice }),
@@ -562,20 +610,68 @@ el.periodSelect.addEventListener("change", async () => {
   await refresh();
 });
 
+el.workspaceSelect.addEventListener("change", async () => {
+  selectedWorkspaceId = Number(el.workspaceSelect.value);
+  localStorage.setItem("selectedWorkspaceId", selectedWorkspaceId);
+  selectedPeriodId = null;
+  showUndo(null);
+  renderWorkspaces();
+  await refresh();
+});
+
+el.createWorkspace.addEventListener("click", async () => {
+  const name = window.prompt("Shared workspace name", "Family");
+  if (!name || !name.trim()) return;
+  try {
+    const workspace = await api("/workspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await loadWorkspaces();
+    selectedWorkspaceId = workspace.id;
+    localStorage.setItem("selectedWorkspaceId", selectedWorkspaceId);
+    renderWorkspaces();
+    selectedPeriodId = null;
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
+el.inviteMember.addEventListener("click", async () => {
+  try {
+    const invite = await api(`/workspaces/${selectedWorkspaceId}/invites`, {
+      method: "POST",
+    });
+    const url = `${location.origin}/?invite=${encodeURIComponent(invite.token)}`;
+    if (navigator.clipboard) await navigator.clipboard.writeText(url);
+    window.prompt("Invite link (valid for 7 days)", url);
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
 el.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   el.loginError.classList.add("hidden");
   try {
-    await api("/auth/login", {
+    const path = inviteToken
+      ? `/invites/${encodeURIComponent(inviteToken)}/accept`
+      : "/auth/login";
+    await api(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: el.loginUsername.value.trim(),
         password: el.loginPassword.value,
+        ...(inviteToken ? { display_name: el.loginDisplayName.value.trim() || null } : {}),
       }),
     });
     el.loginForm.reset();
     el.loginScreen.classList.add("hidden");
+    history.replaceState({}, "", location.pathname);
+    await loadWorkspaces();
     await startApp();
   } catch (error) {
     el.loginError.textContent = "Invalid username or password";
@@ -583,11 +679,14 @@ el.loginForm.addEventListener("submit", async (event) => {
   }
 });
 
-el.logout.addEventListener("click", async () => {
+async function logout() {
   await api("/auth/logout", { method: "POST" });
+  el.workspaceBar.classList.add("hidden");
   el.loginScreen.classList.remove("hidden");
   el.loginUsername.focus();
-});
+}
+el.logout.addEventListener("click", logout);
+el.workspaceLogout.addEventListener("click", logout);
 
 // ---- init --------------------------------------------------------------------
 
@@ -606,7 +705,16 @@ async function startApp() {
   try {
     const config = await api("/auth/config");
     if (config && config.enabled) {
+      webAuthActive = true;
       el.logout.classList.remove("hidden");
+      if (inviteToken) {
+        el.loginTitle.textContent = "Join family";
+        el.loginSubtitle.textContent = "Create your FinApp account";
+        el.displayNameField.classList.remove("hidden");
+        el.loginScreen.classList.remove("hidden");
+        el.loginUsername.focus();
+        return;
+      }
       try {
         await api("/auth/me");
       } catch (error) {
@@ -617,6 +725,7 @@ async function startApp() {
         }
         throw error;
       }
+      await loadWorkspaces();
     }
     await startApp();
   } catch (error) {

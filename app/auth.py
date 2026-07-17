@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import AuthSession, User, utcnow
+from app.models import AuthSession, User, Workspace, WorkspaceMember, utcnow
 from app.schemas import BootstrapIn, LoginIn, UserOut
 from app import telegram_auth
 
@@ -50,7 +50,12 @@ def _token_hash(token: str) -> str:
 
 
 async def create_user(
-    session: AsyncSession, username: str, password: str, display_name: str | None
+    session: AsyncSession,
+    username: str,
+    password: str,
+    display_name: str | None,
+    *,
+    claim_legacy_workspace: bool = False,
 ) -> User:
     username = username.strip()
     user = User(
@@ -62,6 +67,33 @@ async def create_user(
     )
     session.add(user)
     try:
+        await session.flush()
+        if claim_legacy_workspace:
+            workspace = await session.get(Workspace, 1)
+            if workspace is None:
+                workspace = Workspace(
+                    id=1,
+                    name="Personal",
+                    kind="personal",
+                    timezone="Asia/Ho_Chi_Minh",
+                )
+                session.add(workspace)
+                await session.flush()
+        else:
+            workspace = Workspace(
+                name=f"{user.display_name}'s Personal",
+                kind="personal",
+                timezone="Asia/Ho_Chi_Minh",
+            )
+            session.add(workspace)
+            await session.flush()
+        session.add(
+            WorkspaceMember(
+                workspace_id=workspace.id,
+                user_id=user.id,
+                role="owner",
+            )
+        )
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -172,7 +204,11 @@ async def bootstrap(
     ):
         raise HTTPException(status_code=403, detail="Valid bootstrap token required")
     user = await create_user(
-        session, body.username, body.password, body.display_name
+        session,
+        body.username,
+        body.password,
+        body.display_name,
+        claim_legacy_workspace=True,
     )
     raw = await create_session(session, user)
     set_session_cookie(response, raw)

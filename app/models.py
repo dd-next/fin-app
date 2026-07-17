@@ -3,7 +3,17 @@
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text, TypeDecorator
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    TypeDecorator,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -68,6 +78,9 @@ class User(Base):
     sessions: Mapped[list["AuthSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    memberships: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AuthSession(Base):
@@ -113,6 +126,57 @@ class Workspace(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     periods: Mapped[list["Period"]] = relationship(back_populates="workspace")
+    members: Mapped[list["WorkspaceMember"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+    invites: Mapped[list["WorkspaceInvite"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_member"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "user_id", name="uq_workspace_member"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="editor")
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+
+    workspace: Mapped[Workspace] = relationship(back_populates="members")
+    user: Mapped[User] = relationship(back_populates="memberships")
+
+
+class WorkspaceInvite(Base):
+    __tablename__ = "workspace_invite"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    token_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="editor")
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="invites")
 
 
 class Period(Base):

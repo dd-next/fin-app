@@ -93,6 +93,14 @@ html, body {
 .period-picker .period-summary { display: block; margin-top: 3px; }
 .topbar-actions { display: flex; gap: 6px; }
 
+.workspace-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.workspace-bar select { flex: 1; min-width: 0; padding: 8px 10px; font-size: 0.95rem; }
+.workspace-bar .ghost.small { padding-inline: 10px; }
+
 /* --- Today's allowance -------------------------------------------------- */
 
 #today { text-align: center; padding-top: 8px; }
