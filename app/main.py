@@ -20,11 +20,12 @@ from app.auth import router as auth_router
 from app.access import require_workspace_access
 from app.workspaces import router as workspaces_router
 from app.categories import (
-    category_warning,
-    configured_category_limits,
+    operation_limit_warnings,
     require_category,
+    top_level_allocated,
     router as categories_router,
 )
+from app.pools import clone_period_plan, router as pools_router
 from app.db import engine, get_session
 from app.models import Base, Operation, Period, RebaseEvent, Workspace, WorkspaceMember
 from app.schemas import (
@@ -84,6 +85,7 @@ app = FastAPI(title="FinApp", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(categories_router)
+app.include_router(pools_router)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
@@ -247,11 +249,22 @@ async def set_period(
     body: PeriodIn,
     background_tasks: BackgroundTasks,
     workspace_id: int = 1,
+    clone_from_period_id: int | None = None,
     session: AsyncSession = Depends(get_session),
 ):
     await _assert_no_period_overlap(
         session, workspace_id, body.start_date, body.end_date
     )
+    source_period = None
+    if clone_from_period_id is not None:
+        source_period = await _require_period(
+            session, clone_from_period_id, workspace_id
+        )
+        if await top_level_allocated(session, source_period.id) > body.total_amount:
+            raise HTTPException(
+                status_code=409,
+                detail="Cloned plan exceeds the new period total amount",
+            )
     period = Period(
         workspace_id=workspace_id,
         total_amount=body.total_amount,
@@ -259,6 +272,9 @@ async def set_period(
         end_date=body.end_date,
     )
     session.add(period)
+    await session.flush()
+    if source_period is not None:
+        await clone_period_plan(session, source_period.id, period.id)
     await session.commit()
     await session.refresh(period)
     await _queue_sheets_sync(background_tasks, session, period)
@@ -319,7 +335,7 @@ async def update_period(
         exclude_period_id=period.id,
     )
     if body.total_amount is not None:
-        allocated = await configured_category_limits(session, period.id)
+        allocated = await top_level_allocated(session, period.id)
         if body.total_amount < allocated:
             raise HTTPException(
                 status_code=409,
@@ -420,7 +436,7 @@ async def add_operation(
         operation=OperationOut.model_validate(operation),
         budget=await _budget_for(session, period),
         warnings=(
-            await category_warning(session, period.id, category)
+            await operation_limit_warnings(session, period.id, category)
             if category is not None
             else []
         ),

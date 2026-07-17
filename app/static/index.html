@@ -128,6 +128,10 @@
                    placeholder="0.00" aria-label="Amount" required>
             <button id="operation-submit" type="submit" class="accent">Spent</button>
           </div>
+          <label id="clone-plan-field" class="checkbox-label hidden">
+            <input id="clone-plan" type="checkbox" checked>
+            Copy category limits and pool allocations from the selected period
+          </label>
           <input id="operation-comment" type="text" maxlength="200"
                  placeholder="Comment (optional)" aria-label="Comment">
           <p id="category-warning" class="limit-warning hidden"></p>
@@ -183,6 +187,14 @@
           </div>
           <p class="hint">Periods stay in history. Date ranges in one space cannot overlap.</p>
         </form>
+      </section>
+      <section id="pool-plans-card" class="card hidden">
+        <div class="section-heading">
+          <h3>Pools</h3>
+          <button id="settings-new-pool" type="button" class="ghost small">+ Pool</button>
+        </div>
+        <div id="pool-plan-list" class="limit-list"></div>
+        <p class="hint">Pool balances reset in each period.</p>
       </section>
       <section id="category-limits-card" class="card hidden">
         <div class="section-heading">

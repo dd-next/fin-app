@@ -14,6 +14,8 @@ from app.models import (
     Operation,
     Period,
     PeriodCategoryPlan,
+    PeriodPoolPlan,
+    Pool,
     WorkspaceMember,
     utcnow,
 )
@@ -67,7 +69,34 @@ async def category_spent(
     return sum(values, ZERO)
 
 
-async def category_warning(
+async def pool_spent(
+    session: AsyncSession, period_id: int, pool_plan_id: int
+) -> Decimal:
+    category_ids = list(
+        (
+            await session.execute(
+                select(PeriodCategoryPlan.category_id).where(
+                    PeriodCategoryPlan.period_id == period_id,
+                    PeriodCategoryPlan.pool_plan_id == pool_plan_id,
+                )
+            )
+        ).scalars()
+    )
+    if not category_ids:
+        return ZERO
+    values = (
+        await session.execute(
+            select(Operation.amount).where(
+                Operation.period_id == period_id,
+                Operation.kind == "expense",
+                Operation.category_id.in_(category_ids),
+            )
+        )
+    ).scalars()
+    return sum(values, ZERO)
+
+
+async def operation_limit_warnings(
     session: AsyncSession, period_id: int, category: Category
 ) -> list[LimitWarning]:
     plan = (
@@ -78,21 +107,38 @@ async def category_warning(
             )
         )
     ).scalar_one_or_none()
-    if plan is None or plan.limit_amount is None:
+    if plan is None:
         return []
+    warnings: list[LimitWarning] = []
     spent = await category_spent(session, period_id, category.id)
-    if spent <= plan.limit_amount:
-        return []
-    return [
-        LimitWarning(
-            scope="category",
-            target_id=category.id,
-            name=category.name,
-            limit_amount=plan.limit_amount,
-            spent=spent,
-            over_by=spent - plan.limit_amount,
+    if plan.limit_amount is not None and spent > plan.limit_amount:
+        warnings.append(
+            LimitWarning(
+                scope="category",
+                target_id=category.id,
+                name=category.name,
+                limit_amount=plan.limit_amount,
+                spent=spent,
+                over_by=spent - plan.limit_amount,
+            )
         )
-    ]
+    if plan.pool_plan_id is not None:
+        pool_plan = await session.get(PeriodPoolPlan, plan.pool_plan_id)
+        if pool_plan is not None:
+            pool_value = await pool_spent(session, period_id, pool_plan.id)
+            if pool_value > pool_plan.allocated_amount:
+                pool = await session.get(Pool, pool_plan.pool_id)
+                warnings.append(
+                    LimitWarning(
+                        scope="pool",
+                        target_id=pool_plan.id,
+                        name=pool.name if pool else "Pool",
+                        limit_amount=pool_plan.allocated_amount,
+                        spent=pool_value,
+                        over_by=pool_value - pool_plan.allocated_amount,
+                    )
+                )
+    return warnings
 
 
 async def configured_category_limits(
@@ -108,6 +154,55 @@ async def configured_category_limits(
         )
     values = (await session.execute(statement)).scalars()
     return sum((value for value in values if value is not None), ZERO)
+
+
+async def pool_child_limits(
+    session: AsyncSession,
+    pool_plan_id: int,
+    *,
+    exclude_category_id: int | None = None,
+) -> Decimal:
+    statement = select(PeriodCategoryPlan.limit_amount).where(
+        PeriodCategoryPlan.pool_plan_id == pool_plan_id,
+        PeriodCategoryPlan.limit_amount.is_not(None),
+    )
+    if exclude_category_id is not None:
+        statement = statement.where(
+            PeriodCategoryPlan.category_id != exclude_category_id
+        )
+    values = (await session.execute(statement)).scalars()
+    return sum((value for value in values if value is not None), ZERO)
+
+
+async def top_level_allocated(
+    session: AsyncSession,
+    period_id: int,
+    *,
+    exclude_category_id: int | None = None,
+    exclude_pool_plan_id: int | None = None,
+) -> Decimal:
+    pool_statement = select(PeriodPoolPlan.allocated_amount).where(
+        PeriodPoolPlan.period_id == period_id
+    )
+    if exclude_pool_plan_id is not None:
+        pool_statement = pool_statement.where(
+            PeriodPoolPlan.id != exclude_pool_plan_id
+        )
+    pool_values = (await session.execute(pool_statement)).scalars()
+
+    category_statement = select(PeriodCategoryPlan.limit_amount).where(
+        PeriodCategoryPlan.period_id == period_id,
+        PeriodCategoryPlan.pool_plan_id.is_(None),
+        PeriodCategoryPlan.limit_amount.is_not(None),
+    )
+    if exclude_category_id is not None:
+        category_statement = category_statement.where(
+            PeriodCategoryPlan.category_id != exclude_category_id
+        )
+    category_values = (await session.execute(category_statement)).scalars()
+    return sum(pool_values, ZERO) + sum(
+        (value for value in category_values if value is not None), ZERO
+    )
 
 
 @router.get("/categories", response_model=list[CategoryOut])
@@ -211,6 +306,7 @@ async def list_category_plans(
                 over_limit=(
                     plan.limit_amount is not None and spent > plan.limit_amount
                 ),
+                pool_plan_id=plan.pool_plan_id,
             )
         )
     return response
@@ -232,14 +328,34 @@ async def put_category_plan(
     if period is None or period.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Period not found")
     category = await require_category(session, category_id, workspace_id)
-    allocated_elsewhere = await configured_category_limits(
-        session, period_id, exclude_category_id=category_id
-    )
-    if body.limit_amount is not None and allocated_elsewhere + body.limit_amount > period.total_amount:
-        raise HTTPException(
-            status_code=409,
-            detail="Category limits exceed the period total amount",
+    pool_plan = None
+    if body.pool_plan_id is not None:
+        pool_plan = await session.get(PeriodPoolPlan, body.pool_plan_id)
+        if pool_plan is None or pool_plan.period_id != period_id:
+            raise HTTPException(status_code=422, detail="Invalid pool plan")
+        child_limits = await pool_child_limits(
+            session, pool_plan.id, exclude_category_id=category_id
         )
+        if (
+            body.limit_amount is not None
+            and child_limits + body.limit_amount > pool_plan.allocated_amount
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Category limits exceed the pool allocation",
+            )
+    else:
+        allocated_elsewhere = await top_level_allocated(
+            session, period_id, exclude_category_id=category_id
+        )
+        if (
+            body.limit_amount is not None
+            and allocated_elsewhere + body.limit_amount > period.total_amount
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="Category limits exceed the period total amount",
+            )
     plan = (
         await session.execute(
             select(PeriodCategoryPlan).where(
@@ -253,10 +369,12 @@ async def put_category_plan(
             period_id=period_id,
             category_id=category_id,
             limit_amount=body.limit_amount,
+            pool_plan_id=body.pool_plan_id,
         )
         session.add(plan)
     else:
         plan.limit_amount = body.limit_amount
+        plan.pool_plan_id = body.pool_plan_id
     await session.commit()
     spent = await category_spent(session, period_id, category_id)
     return CategoryPlanOut(
@@ -265,4 +383,5 @@ async def put_category_plan(
         spent=spent,
         remaining=(plan.limit_amount - spent if plan.limit_amount is not None else None),
         over_limit=(plan.limit_amount is not None and spent > plan.limit_amount),
+        pool_plan_id=plan.pool_plan_id,
     )

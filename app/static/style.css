@@ -189,6 +189,8 @@ input, select {
 input:focus, select:focus { outline: 2px solid var(--accent); border-color: transparent; }
 input::placeholder { color: #5a5a5e; }
 input[type="date"] { color-scheme: dark; }
+input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--accent); }
+.checkbox-label { flex-direction: row; align-items: center; font-size: 0.85rem; }
 
 button {
   padding: 14px 18px;
@@ -296,8 +298,10 @@ button.accent.income { background: var(--income); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .section-heading h3 { margin: 0; font-size: 1rem; }
 .limit-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-.limit-item { display: grid; grid-template-columns: 1fr 120px; gap: 10px; align-items: center; }
+.limit-item { display: grid; grid-template-columns: 1fr 110px; gap: 10px; align-items: center; }
+.limit-item.with-pool { grid-template-columns: 1fr 110px 120px; }
 .limit-item input { padding: 9px 10px; font-size: 1rem; }
+.limit-item select { padding: 9px 8px; font-size: 0.9rem; }
 .limit-meta { color: var(--muted); font-size: 0.78rem; }
 .limit-meta.over { color: var(--danger); }
 

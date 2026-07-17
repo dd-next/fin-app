@@ -24,6 +24,9 @@ Features:
 - **Workspace categories and period limits**: expenses may stay Uncategorized
   or use a reusable category; exceeding a limit warns without hiding or
   rejecting the real expense.
+- **Budget pools**: group period categories into envelopes such as Home or Food,
+  validate nested allocations, and optionally copy the plan into the next
+  period without rolling spending forward.
 
 Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
 dark UI, `.xlsx` export.

@@ -135,6 +135,9 @@ class Workspace(Base):
     categories: Mapped[list["Category"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    pools: Mapped[list["Pool"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
 
 
 class WorkspaceMember(Base):
@@ -210,6 +213,32 @@ class Category(Base):
     )
 
 
+class Pool(Base):
+    __tablename__ = "pool"
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "normalized_name", name="uq_pool_workspace_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="pools")
+    plans: Mapped[list["PeriodPoolPlan"]] = relationship(
+        back_populates="pool", cascade="all, delete-orphan"
+    )
+
+
 class Period(Base):
     __tablename__ = "period"
 
@@ -235,6 +264,9 @@ class Period(Base):
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
     category_plans: Mapped[list["PeriodCategoryPlan"]] = relationship(
+        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
+    )
+    pool_plans: Mapped[list["PeriodPoolPlan"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -312,6 +344,11 @@ class PeriodCategoryPlan(Base):
         ForeignKey("category.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     limit_amount: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    pool_plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("period_pool_plan.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )
@@ -321,3 +358,34 @@ class PeriodCategoryPlan(Base):
 
     period: Mapped[Period] = relationship(back_populates="category_plans")
     category: Mapped[Category] = relationship(back_populates="plans")
+    pool_plan: Mapped["PeriodPoolPlan | None"] = relationship(
+        back_populates="category_plans"
+    )
+
+
+class PeriodPoolPlan(Base):
+    __tablename__ = "period_pool_plan"
+    __table_args__ = (
+        UniqueConstraint("period_id", "pool_id", name="uq_period_pool_plan"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("period.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    pool_id: Mapped[int] = mapped_column(
+        ForeignKey("pool.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    allocated_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    period: Mapped[Period] = relationship(back_populates="pool_plans")
+    pool: Mapped[Pool] = relationship(back_populates="plans")
+    category_plans: Mapped[list[PeriodCategoryPlan]] = relationship(
+        back_populates="pool_plan"
+    )

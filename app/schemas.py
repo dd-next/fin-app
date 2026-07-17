@@ -131,6 +131,7 @@ class CategoryOut(BaseModel):
 
 class CategoryPlanIn(BaseModel):
     limit_amount: MoneyIn | None = None
+    pool_plan_id: int | None = None
 
 
 class CategoryPlanOut(BaseModel):
@@ -139,10 +140,42 @@ class CategoryPlanOut(BaseModel):
     spent: Decimal
     remaining: Decimal | None
     over_limit: bool
+    pool_plan_id: int | None
+
+
+class PoolCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+
+
+class PoolPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    archived: bool | None = None
+
+
+class PoolOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    workspace_id: int
+    name: str
+    archived_at: datetime | None
+
+
+class PoolPlanIn(BaseModel):
+    allocated_amount: MoneyIn
+
+
+class PoolPlanOut(BaseModel):
+    id: int
+    pool: PoolOut
+    allocated_amount: Decimal
+    spent: Decimal
+    remaining: Decimal
+    over_limit: bool
 
 
 class LimitWarning(BaseModel):
-    scope: Literal["category"]
+    scope: Literal["category", "pool"]
     target_id: int
     name: str
     limit_amount: Decimal

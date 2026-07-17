@@ -89,6 +89,11 @@ const el = {
   periodStart: $("period-start"),
   periodEnd: $("period-end"),
   perDayHint: $("per-day-hint"),
+  clonePlanField: $("clone-plan-field"),
+  clonePlan: $("clone-plan"),
+  poolPlansCard: $("pool-plans-card"),
+  poolPlanList: $("pool-plan-list"),
+  settingsNewPool: $("settings-new-pool"),
   categoryLimitsCard: $("category-limits-card"),
   categoryLimitList: $("category-limit-list"),
   settingsNewCategory: $("settings-new-category"),
@@ -117,6 +122,8 @@ let webAuthActive = false;
 const inviteToken = new URLSearchParams(location.search).get("invite");
 let categories = [];
 let categoryPlans = [];
+let pools = [];
+let poolPlans = [];
 
 // ---- views ---------------------------------------------------------------------
 
@@ -342,7 +349,7 @@ function renderCategoryPlans() {
     ...categories.map((category) => {
       const plan = plansByCategory.get(category.id);
       const row = document.createElement("label");
-      row.className = "limit-item";
+      row.className = "limit-item with-pool";
       const text = document.createElement("span");
       text.textContent = category.name;
       const meta = document.createElement("span");
@@ -354,14 +361,22 @@ function renderCategoryPlans() {
       input.inputMode = "decimal";
       input.placeholder = "No limit";
       input.value = plan && plan.limit_amount !== null ? plan.limit_amount : "";
-      input.addEventListener("change", () => saveCategoryLimit(category.id, input.value));
-      row.append(text, input);
+      const poolSelect = document.createElement("select");
+      poolSelect.append(new Option("No pool", ""));
+      for (const poolPlan of poolPlans) {
+        poolSelect.append(new Option(poolPlan.pool.name, poolPlan.id));
+      }
+      poolSelect.value = plan && plan.pool_plan_id ? String(plan.pool_plan_id) : "";
+      const save = () => saveCategoryPlan(category.id, input.value, poolSelect.value);
+      input.addEventListener("change", save);
+      poolSelect.addEventListener("change", save);
+      row.append(text, input, poolSelect);
       return row;
     })
   );
 }
 
-async function saveCategoryLimit(categoryId, raw) {
+async function saveCategoryPlan(categoryId, raw, poolPlanId) {
   if (raw.trim() && !validAmount(raw)) {
     toast("Enter a positive limit or leave it blank");
     renderCategoryPlans();
@@ -373,9 +388,57 @@ async function saveCategoryLimit(categoryId, raw) {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit_amount: raw.trim() || null }),
+        body: JSON.stringify({
+          limit_amount: raw.trim() || null,
+          pool_plan_id: poolPlanId ? Number(poolPlanId) : null,
+        }),
       }
     );
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+    await refresh();
+  }
+}
+
+function renderPoolPlans() {
+  el.poolPlansCard.classList.toggle("hidden", !selectedPeriodId || newPeriodMode);
+  const plansByPool = new Map(poolPlans.map((plan) => [plan.pool.id, plan]));
+  el.poolPlanList.replaceChildren(
+    ...pools.map((pool) => {
+      const plan = plansByPool.get(pool.id);
+      const row = document.createElement("label");
+      row.className = "limit-item";
+      const text = document.createElement("span");
+      text.textContent = pool.name;
+      const meta = document.createElement("span");
+      meta.className = "limit-meta" + (plan && plan.over_limit ? " over" : "");
+      meta.textContent = plan ? `${fmt(plan.spent)} spent` : "Not allocated";
+      text.append(document.createElement("br"), meta);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.placeholder = "Allocation";
+      input.value = plan ? plan.allocated_amount : "";
+      input.addEventListener("change", () => savePoolPlan(pool.id, input.value));
+      row.append(text, input);
+      return row;
+    })
+  );
+}
+
+async function savePoolPlan(poolId, raw) {
+  if (!validAmount(raw)) {
+    toast("Pool allocation must be a positive amount");
+    renderPoolPlans();
+    return;
+  }
+  try {
+    await api(`/periods/${selectedPeriodId}/pool-plans/${poolId}${query()}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ allocated_amount: raw.trim() }),
+    });
     await refresh();
   } catch (error) {
     toast(error.message);
@@ -391,12 +454,21 @@ function renderCategoryPreview(raw) {
   const categoryId = Number(el.operationCategory.value);
   const plan = categoryPlans.find((item) => item.category.id === categoryId);
   const predicted = plan && validAmount(raw) ? Number(plan.spent) + Number(raw) : null;
-  const over = plan && plan.limit_amount !== null && predicted > Number(plan.limit_amount);
-  el.categoryWarning.classList.toggle("hidden", !over);
-  if (over) {
-    el.categoryWarning.textContent =
-      `${plan.category.name} will exceed its limit by ${fmt(predicted - Number(plan.limit_amount))}`;
+  const messages = [];
+  if (plan && plan.limit_amount !== null && predicted > Number(plan.limit_amount)) {
+    messages.push(
+      `${plan.category.name} will exceed its limit by ${fmt(predicted - Number(plan.limit_amount))}`
+    );
   }
+  const poolPlan = plan && poolPlans.find((item) => item.id === plan.pool_plan_id);
+  if (poolPlan && Number(poolPlan.spent) + Number(raw) > Number(poolPlan.allocated_amount)) {
+    messages.push(
+      `${poolPlan.pool.name} pool will exceed its allocation by ` +
+      fmt(Number(poolPlan.spent) + Number(raw) - Number(poolPlan.allocated_amount))
+    );
+  }
+  el.categoryWarning.classList.toggle("hidden", messages.length === 0);
+  el.categoryWarning.textContent = messages.join(" · ");
 }
 
 function renderPreview(value) {
@@ -444,16 +516,23 @@ async function refresh() {
   else localStorage.removeItem("selectedPeriodId");
   renderPeriodOptions();
   const periodWithBudget = periods.find(({ period }) => period.id === selectedPeriodId) || null;
-  const [loadedCategories, operations, loadedPlans] = await Promise.all([
+  const [loadedCategories, loadedPools, operations, loadedPlans, loadedPoolPlans] = await Promise.all([
     api(`/categories${query()}`),
+    api(`/pools${query()}`),
     selectedPeriodId ? api(`/operations${selectedQuery()}`) : Promise.resolve([]),
     selectedPeriodId
       ? api(`/periods/${selectedPeriodId}/category-plans${query()}`)
       : Promise.resolve([]),
+    selectedPeriodId
+      ? api(`/periods/${selectedPeriodId}/pool-plans${query()}`)
+      : Promise.resolve([]),
   ]);
   categories = loadedCategories || [];
+  pools = loadedPools || [];
   categoryPlans = loadedPlans || [];
+  poolPlans = loadedPoolPlans || [];
   renderCategories();
+  renderPoolPlans();
   renderCategoryPlans();
   renderBudget(periodWithBudget && periodWithBudget.budget);
   renderPeriod(
@@ -534,6 +613,21 @@ async function createCategoryFromPrompt() {
 el.newCategory.addEventListener("click", createCategoryFromPrompt);
 el.settingsNewCategory.addEventListener("click", createCategoryFromPrompt);
 
+el.settingsNewPool.addEventListener("click", async () => {
+  const name = window.prompt("Pool name", "Home");
+  if (!name || !name.trim()) return;
+  try {
+    await api(`/pools${query()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
+});
+
 el.operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const amount = el.operationAmount.value.trim();
@@ -559,8 +653,11 @@ el.operationForm.addEventListener("submit", async (event) => {
     renderPreview(null);
     showUndo({ id: body.operation.id, amount: body.operation.amount });
     if (body.warnings && body.warnings.length) {
-      const warning = body.warnings[0];
-      toast(`${warning.name} limit exceeded by ${fmt(warning.over_by)}`);
+      toast(
+        body.warnings
+          .map((warning) => `${warning.name} exceeded by ${fmt(warning.over_by)}`)
+          .join(" · ")
+      );
     }
     await refresh();
     el.operationAmount.focus();
@@ -619,6 +716,10 @@ function prefillSettings() {
     el.periodEnd.value = iso(new Date(today.getFullYear(), today.getMonth() + 1, 0));
   }
   updatePerDayHint();
+  el.clonePlanField.classList.toggle(
+    "hidden", !newPeriodMode || !selectedPeriodId
+  );
+  renderPoolPlans();
   renderCategoryPlans();
 }
 
@@ -650,7 +751,11 @@ el.periodForm.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    let path = `/period${query()}`;
+    const cloneFrom =
+      newPeriodMode && el.clonePlan.checked && selectedPeriodId
+        ? selectedPeriodId
+        : null;
+    let path = `/period${query({ clone_from_period_id: cloneFrom })}`;
     let method = "POST";
     if (!newPeriodMode && selectedPeriodId) {
       path = `/periods/${selectedPeriodId}${query()}`;

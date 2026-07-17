@@ -27,7 +27,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 16 — Web authentication (SPEC-4)
 - [x] Phase 17 — Personal and shared workspaces (SPEC-4)
 - [x] Phase 18 — Categories and limits (SPEC-4)
-- [ ] Phase 19 — Pools (SPEC-4)
+- [x] Phase 19 — Pools (SPEC-4)
 - [ ] Phase 20 — Savings goals (SPEC-4)
 - [ ] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
 
@@ -89,6 +89,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   both legacy operations preserved. Tests: **77 passed, 0 failed**.
 - Decision: income categories remain out of scope; only expense operations
   contribute to category spent totals.
+
+### Phase 19 — Pools (SPEC-4) (2026-07-17)
+- Added reusable workspace pools, per-period allocations, and period-pinned
+  category-to-pool assignment. Top-level and nested allocation constraints are
+  validated independently without changing the pure daily-budget core.
+- Pool spend/remaining/overage is derived from categorized expenses; operations
+  can return category and pool warnings together.
+- New-period creation can explicitly clone pool/category plan structure while
+  leaving spending at zero. Settings UI supports pool creation, allocations,
+  assignments, live preview, and copy-plan choice. Tests: **79 passed, 0 failed**.
+- Decision: pools reset every period; there is no automatic balance rollover.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,
