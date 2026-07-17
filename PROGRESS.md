@@ -24,7 +24,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 13 — Manual test cases + final pass (SPEC-3)
 - [x] Phase 14 — Workspace and migration foundation (SPEC-4)
 - [x] Phase 15 — Period history (SPEC-4)
-- [ ] Phase 16 — Web authentication (SPEC-4)
+- [x] Phase 16 — Web authentication (SPEC-4)
 - [ ] Phase 17 — Personal and shared workspaces (SPEC-4)
 - [ ] Phase 18 — Categories and limits (SPEC-4)
 - [ ] Phase 19 — Pools (SPEC-4)
@@ -55,6 +55,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   and selected-period export. Tests: **69 passed, 0 failed**; JS syntax check passed.
 - Decision: when no live period exists, legacy unscoped routes select the newest
   period; explicit period endpoints are authoritative for history.
+
+### Phase 16 — Web authentication (SPEC-4) (2026-07-17)
+- Added Argon2id password hashing, `user`/`auth_session` persistence, opaque
+  HttpOnly 30-day cookies, login/logout/me/config endpoints, and a revocable
+  server-side session gate that coexists with the optional Telegram gate.
+- Added secure first-owner bootstrap via CLI plus a token-protected HTTP setup
+  endpoint, and a responsive login screen for the installed Safari web app.
+- Migrated the live DB to revision 0005. Tests: **72 passed, 0 failed**; frontend
+  JS syntax check passed.
+- Decision: web auth remains config-gated for zero-setup local tests; when
+  `WEB_AUTH_ENABLED=true`, every financial route requires a valid session.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

@@ -11,6 +11,24 @@
 </head>
 <body>
 
+  <div id="login-screen" class="login-screen hidden">
+    <section class="card login-card">
+      <h1>FinApp</h1>
+      <p class="muted">Sign in to your budget</p>
+      <form id="login-form" autocomplete="on">
+        <label>Username
+          <input id="login-username" name="username" autocomplete="username" required>
+        </label>
+        <label>Password
+          <input id="login-password" name="password" type="password"
+                 autocomplete="current-password" minlength="10" required>
+        </label>
+        <button type="submit" class="accent">Sign in</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </section>
+  </div>
+
   <!-- Next-day savings decision: shown full-screen before the main screen -->
   <div id="savings-prompt" class="savings hidden" role="dialog" aria-modal="true">
     <div class="savings-inner">
@@ -43,6 +61,7 @@
         <div class="topbar-actions">
           <button id="new-period" type="button" class="ghost small">New</button>
           <button id="open-settings" type="button" class="ghost small">Edit</button>
+          <button id="logout" type="button" class="ghost small hidden">Log out</button>
         </div>
       </header>
 

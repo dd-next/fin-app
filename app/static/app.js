@@ -26,6 +26,12 @@ function authHeaders() {
 }
 
 const el = {
+  loginScreen: $("login-screen"),
+  loginForm: $("login-form"),
+  loginUsername: $("login-username"),
+  loginPassword: $("login-password"),
+  loginError: $("login-error"),
+  logout: $("logout"),
   // main view
   mainHeader: $("main-header"),
   periodSelect: $("period-select"),
@@ -147,7 +153,9 @@ async function api(path, options) {
   if (!resp.ok) {
     if (resp.status === 404) return null;
     const body = await resp.json().catch(() => ({}));
-    throw new Error(body.detail ? JSON.stringify(body.detail) : `HTTP ${resp.status}`);
+    const error = new Error(body.detail ? JSON.stringify(body.detail) : `HTTP ${resp.status}`);
+    error.status = resp.status;
+    throw error;
   }
   return resp.json();
 }
@@ -554,19 +562,64 @@ el.periodSelect.addEventListener("change", async () => {
   await refresh();
 });
 
+el.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  el.loginError.classList.add("hidden");
+  try {
+    await api("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: el.loginUsername.value.trim(),
+        password: el.loginPassword.value,
+      }),
+    });
+    el.loginForm.reset();
+    el.loginScreen.classList.add("hidden");
+    await startApp();
+  } catch (error) {
+    el.loginError.textContent = "Invalid username or password";
+    el.loginError.classList.remove("hidden");
+  }
+});
+
+el.logout.addEventListener("click", async () => {
+  await api("/auth/logout", { method: "POST" });
+  el.loginScreen.classList.remove("hidden");
+  el.loginUsername.focus();
+});
+
 // ---- init --------------------------------------------------------------------
 
-(function init() {
+async function startApp() {
   prefillSettings();
-  refresh()
-    .then(async () => {
-      const selected = periods.find(({ period }) => period.id === selectedPeriodId);
-      if (selected && selected.period.status === "current") {
-        await maybeShowSavingsPrompt();
+  await refresh();
+  const selected = periods.find(({ period }) => period.id === selectedPeriodId);
+  if (selected && selected.period.status === "current") {
+    await maybeShowSavingsPrompt();
+  }
+  const v = new URLSearchParams(location.search).get("view");
+  if (v && views[v]) showView(v);
+}
+
+(async function init() {
+  try {
+    const config = await api("/auth/config");
+    if (config && config.enabled) {
+      el.logout.classList.remove("hidden");
+      try {
+        await api("/auth/me");
+      } catch (error) {
+        if (error.status === 401) {
+          el.loginScreen.classList.remove("hidden");
+          el.loginUsername.focus();
+          return;
+        }
+        throw error;
       }
-      // Deep link for manual testing: /?view=history or /?view=settings
-      const v = new URLSearchParams(location.search).get("view");
-      if (v && views[v]) showView(v);
-    })
-    .catch((err) => toast(err.message));
+    }
+    await startApp();
+  } catch (error) {
+    toast(error.message);
+  }
 })();

@@ -37,6 +37,20 @@ html, body {
 .muted { color: var(--muted); }
 .center { text-align: center; }
 
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--bg);
+}
+.login-card { width: min(100%, 400px); }
+.login-card h1 { margin: 0; color: var(--accent); }
+.login-card > p { margin-top: 4px; }
+.error { margin: 0; color: var(--danger); font-size: 0.9rem; }
+
 .view {
   display: flex;
   flex-direction: column;

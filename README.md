@@ -40,6 +40,17 @@ uvicorn app.main:app --reload
 
 Open http://127.0.0.1:8000 — set a budget, start spending.
 
+For the family web-auth mode, migrate and create the first owner before
+enabling `WEB_AUTH_ENABLED`:
+
+```sh
+alembic upgrade head
+python -m app.manage bootstrap-owner your_username
+```
+
+Then set `WEB_AUTH_ENABLED=true`. Login sessions use an HttpOnly cookie; set
+`COOKIE_SECURE=true` when serving over HTTPS.
+
 ## Test
 
 ```sh

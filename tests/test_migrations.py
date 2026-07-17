@@ -13,7 +13,7 @@ def _config(db_path: Path) -> Config:
     return config
 
 
-def test_0004_preserves_legacy_period_and_operations(tmp_path):
+def test_family_migrations_preserve_legacy_period_and_operations(tmp_path):
     db_path = tmp_path / "legacy.db"
     config = _config(db_path)
     command.upgrade(config, "0003")
@@ -32,7 +32,7 @@ def test_0004_preserves_legacy_period_and_operations(tmp_path):
         )
         conn.commit()
 
-    command.upgrade(config, "0004")
+    command.upgrade(config, "head")
 
     with sqlite3.connect(db_path) as conn:
         period = conn.execute(
@@ -44,6 +44,13 @@ def test_0004_preserves_legacy_period_and_operations(tmp_path):
         workspace = conn.execute(
             "SELECT id,name,kind FROM workspace"
         ).fetchone()
+        auth_tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' "
+                "AND name IN ('user','auth_session')"
+            )
+        }
 
     assert period == (7, "1000", 1)
     assert operation == (
@@ -55,3 +62,4 @@ def test_0004_preserves_legacy_period_and_operations(tmp_path):
         "2026-07-03",
     )
     assert workspace == (1, "Personal", "personal")
+    assert auth_tables == {"user", "auth_session"}

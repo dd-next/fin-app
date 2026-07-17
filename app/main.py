@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import inspect as sa_inspect, text
 
 from app import budget, export, sheets
-from app.telegram_auth import require_telegram_auth
+from app.auth import require_auth, router as auth_router
 from app.db import engine, get_session
 from app.models import Base, Operation, Period, RebaseEvent, Workspace
 from app.schemas import (
@@ -73,10 +73,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FinApp", lifespan=lifespan)
+app.include_router(auth_router)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
-AUTH = Depends(require_telegram_auth)
+AUTH = Depends(require_auth)
 
 
 async def _active_period(

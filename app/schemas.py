@@ -13,6 +13,23 @@ MoneyIn = Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
 OperationKind = Literal["expense", "income"]
 
 
+class LoginIn(BaseModel):
+    username: str = Field(min_length=3, max_length=64, pattern=r"^[^\s]+$")
+    password: str = Field(min_length=10, max_length=256)
+
+
+class BootstrapIn(LoginIn):
+    display_name: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    display_name: str
+
+
 class PeriodIn(BaseModel):
     total_amount: MoneyIn
     start_date: date

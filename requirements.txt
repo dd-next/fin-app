@@ -11,3 +11,4 @@ uvicorn
 pytest
 pytest-asyncio
 httpx
+argon2-cffi
