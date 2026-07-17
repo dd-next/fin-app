@@ -14,7 +14,7 @@ def web_auth(monkeypatch):
 
 async def bootstrap(client):
     response = await client.post(
-        "/auth/bootstrap",
+        "/api/v1/auth/bootstrap",
         json={
             "username": "owner",
             "password": PASSWORD,
@@ -27,11 +27,11 @@ async def bootstrap(client):
 
 
 async def test_web_auth_gate_bootstrap_and_logout(client, web_auth):
-    assert (await client.get("/auth/config")).json() == {"enabled": True}
-    assert (await client.get("/period")).status_code == 401
+    assert (await client.get("/api/v1/auth/config")).json() == {"enabled": True}
+    assert (await client.get("/api/v1/workspaces/1/period")).status_code == 401
 
     forbidden = await client.post(
-        "/auth/bootstrap",
+        "/api/v1/auth/bootstrap",
         json={"username": "owner", "password": PASSWORD},
     )
     assert forbidden.status_code == 403
@@ -43,38 +43,38 @@ async def test_web_auth_gate_bootstrap_and_logout(client, web_auth):
     assert response.json()["display_name"] == "Owner"
 
     # The AsyncClient retained the cookie from bootstrap.
-    assert (await client.get("/period")).status_code == 404
-    assert (await client.get("/auth/me")).json()["username"] == "owner"
+    assert (await client.get("/api/v1/workspaces/1/period")).status_code == 404
+    assert (await client.get("/api/v1/auth/me")).json()["username"] == "owner"
 
     duplicate = await client.post(
-        "/auth/bootstrap",
+        "/api/v1/auth/bootstrap",
         json={"username": "other", "password": PASSWORD},
         headers={"X-Bootstrap-Token": "setup-secret"},
     )
     assert duplicate.status_code == 409
 
-    assert (await client.post("/auth/logout")).status_code == 204
-    assert (await client.get("/period")).status_code == 401
+    assert (await client.post("/api/v1/auth/logout")).status_code == 204
+    assert (await client.get("/api/v1/workspaces/1/period")).status_code == 401
 
 
 async def test_login_success_and_failure(client, web_auth):
     await bootstrap(client)
-    await client.post("/auth/logout")
+    await client.post("/api/v1/auth/logout")
 
     bad = await client.post(
-        "/auth/login", json={"username": "OWNER", "password": "wrong-password"}
+        "/api/v1/auth/login", json={"username": "OWNER", "password": "wrong-password"}
     )
     assert bad.status_code == 401
 
     ok = await client.post(
-        "/auth/login", json={"username": "OWNER", "password": PASSWORD}
+        "/api/v1/auth/login", json={"username": "OWNER", "password": PASSWORD}
     )
     assert ok.status_code == 200
     assert ok.json()["username"] == "owner"
-    assert (await client.get("/auth/me")).status_code == 200
+    assert (await client.get("/api/v1/auth/me")).status_code == 200
 
 
 async def test_auth_disabled_keeps_local_zero_setup(client, monkeypatch):
     monkeypatch.delenv("WEB_AUTH_ENABLED", raising=False)
-    assert (await client.get("/auth/config")).json() == {"enabled": False}
-    assert (await client.get("/period")).status_code == 404
+    assert (await client.get("/api/v1/auth/config")).json() == {"enabled": False}
+    assert (await client.get("/api/v1/workspaces/1/period")).status_code == 404

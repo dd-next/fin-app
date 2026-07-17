@@ -334,7 +334,7 @@ class Operation(Base):
         ForeignKey("savings_goal.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     kind: Mapped[str] = mapped_column(
-        String(10), nullable=False, default="expense", server_default="expense"
+        String(32), nullable=False, default="expense", server_default="expense"
     )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     # The financial/calendar day used by budget replay. It is intentionally

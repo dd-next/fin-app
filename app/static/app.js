@@ -256,15 +256,20 @@ function renderPeriodOptions() {
 }
 
 function query(params) {
-  const values = new URLSearchParams({ workspace_id: selectedWorkspaceId });
+  const values = new URLSearchParams();
   for (const [key, value] of Object.entries(params || {})) {
     if (value !== undefined && value !== null) values.set(key, value);
   }
-  return `?${values.toString()}`;
+  const rendered = values.toString();
+  return rendered ? `?${rendered}` : "";
 }
 
-function selectedQuery(extra) {
-  return query({ period_id: selectedPeriodId, ...(extra || {}) });
+function workspacePath(path = "") {
+  return `/api/v1/workspaces/${selectedWorkspaceId}${path}`;
+}
+
+function periodPath(path = "") {
+  return workspacePath(`/periods/${selectedPeriodId}${path}`);
 }
 
 function renderWorkspaces() {
@@ -288,7 +293,7 @@ async function loadWorkspaces() {
     selectedWorkspaceId = 1;
     return;
   }
-  workspaces = (await api("/workspaces")) || [];
+  workspaces = (await api("/api/v1/workspaces")) || [];
   if (!workspaces.some((w) => w.id === selectedWorkspaceId)) {
     selectedWorkspaceId = workspaces[0] ? workspaces[0].id : 1;
   }
@@ -327,8 +332,15 @@ function renderOperations(operations) {
       }
       const when = document.createElement("div");
       when.className = "op-date";
-      when.textContent = fmtWhen(op.created_at);
+      when.textContent = `${op.occurred_on} · ${fmtWhen(op.created_at)}`;
       info.append(comment, when);
+
+      const edit = document.createElement("button");
+      edit.className = "edit-operation";
+      edit.type = "button";
+      edit.setAttribute("aria-label", "Edit operation");
+      edit.textContent = "Edit";
+      edit.addEventListener("click", () => editOperation(op));
 
       const del = document.createElement("button");
       del.className = "delete";
@@ -337,7 +349,7 @@ function renderOperations(operations) {
       del.textContent = "×";
       del.addEventListener("click", () => deleteOperation(op.id));
 
-      li.append(amount, info, del);
+      li.append(amount, info, edit, del);
       return li;
     })
   );
@@ -409,7 +421,7 @@ async function saveCategoryPlan(categoryId, raw, poolPlanId) {
   }
   try {
     await api(
-      `/periods/${selectedPeriodId}/category-plans/${categoryId}${query()}`,
+      periodPath(`/category-plans/${categoryId}`),
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -485,7 +497,7 @@ async function saveGoalPlan(goalId, raw) {
     return;
   }
   try {
-    await api(`/periods/${selectedPeriodId}/goal-plans/${goalId}${query()}`, {
+    await api(periodPath(`/goal-plans/${goalId}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ planned_amount: raw.trim() }),
@@ -504,7 +516,7 @@ async function savePoolPlan(poolId, raw) {
     return;
   }
   try {
-    await api(`/periods/${selectedPeriodId}/pool-plans/${poolId}${query()}`, {
+    await api(periodPath(`/pool-plans/${poolId}`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ allocated_amount: raw.trim() }),
@@ -582,7 +594,7 @@ el.undo.addEventListener("click", async () => {
   const id = lastOperation.id;
   showUndo(null);
   try {
-    await api(`/operations/${id}${query()}`, { method: "DELETE" });
+    await api(periodPath(`/operations/${id}`), { method: "DELETE" });
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -592,7 +604,7 @@ el.undo.addEventListener("click", async () => {
 // ---- data flow --------------------------------------------------------------
 
 async function refresh() {
-  periods = (await api(`/periods${query()}`)) || [];
+  periods = (await api(workspacePath("/periods"))) || [];
   if (!periods.some(({ period }) => period.id === selectedPeriodId)) {
     const preferred = periods.find(({ period }) => period.status === "current") || periods[0];
     selectedPeriodId = preferred ? preferred.period.id : null;
@@ -610,18 +622,18 @@ async function refresh() {
     loadedPoolPlans,
     loadedGoalPlans,
   ] = await Promise.all([
-    api(`/categories${query()}`),
-    api(`/pools${query()}`),
-    api(`/savings-goals${query()}`),
-    selectedPeriodId ? api(`/operations${selectedQuery()}`) : Promise.resolve([]),
+    api(workspacePath("/categories")),
+    api(workspacePath("/pools")),
+    api(workspacePath("/savings-goals")),
+    selectedPeriodId ? api(periodPath("/operations")) : Promise.resolve([]),
     selectedPeriodId
-      ? api(`/periods/${selectedPeriodId}/category-plans${query()}`)
+      ? api(periodPath("/category-plans"))
       : Promise.resolve([]),
     selectedPeriodId
-      ? api(`/periods/${selectedPeriodId}/pool-plans${query()}`)
+      ? api(periodPath("/pool-plans"))
       : Promise.resolve([]),
     selectedPeriodId
-      ? api(`/periods/${selectedPeriodId}/goal-plans${query()}`)
+      ? api(periodPath("/goal-plans"))
       : Promise.resolve([]),
   ]);
   categories = loadedCategories || [];
@@ -641,9 +653,7 @@ async function refresh() {
     periodWithBudget && periodWithBudget.budget
   );
   renderOperations(operations);
-  el.download.href = selectedPeriodId
-    ? `/export.xlsx${selectedQuery()}`
-    : `/export.xlsx${query()}`;
+  el.download.href = selectedPeriodId ? periodPath("/export.xlsx") : "#";
 }
 
 // ---- entry mode toggle (Expense | Income) -------------------------------------
@@ -690,7 +700,7 @@ function updatePreview() {
   }
   previewTimer = setTimeout(async () => {
     try {
-      const b = await api(`/budget${selectedQuery({ pending: raw })}`);
+      const b = await api(periodPath(`/budget${query({ pending: raw })}`));
       renderPreview(b && b.preview_after);
     } catch {
       renderPreview(null);
@@ -705,7 +715,7 @@ async function createCategoryFromPrompt() {
   const name = window.prompt("Category name");
   if (!name || !name.trim()) return;
   try {
-    const category = await api(`/categories${query()}`, {
+    const category = await api(workspacePath("/categories"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim() }),
@@ -725,7 +735,7 @@ el.settingsNewPool.addEventListener("click", async () => {
   const name = window.prompt("Pool name", "Home");
   if (!name || !name.trim()) return;
   try {
-    await api(`/pools${query()}`, {
+    await api(workspacePath("/pools"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim() }),
@@ -745,7 +755,7 @@ async function createGoalFromPrompt() {
     return;
   }
   try {
-    const goal = await api(`/savings-goals${query()}`, {
+    const goal = await api(workspacePath("/savings-goals"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), target_amount: target.trim() }),
@@ -768,7 +778,7 @@ el.operationForm.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    const body = await api(`/operations${selectedQuery()}`, {
+    const body = await api(periodPath("/operations"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -806,10 +816,49 @@ el.operationForm.addEventListener("submit", async (event) => {
 async function deleteOperation(id) {
   showUndo(null);
   try {
-    await api(`/operations/${id}${query()}`, { method: "DELETE" });
+    const confirmEnded = lastPeriod && lastPeriod.status === "ended";
+    if (confirmEnded && !window.confirm("Delete this operation from an ended period?")) return;
+    await api(
+      periodPath(`/operations/${id}${query({ confirm_ended: confirmEnded || null })}`),
+      { method: "DELETE" }
+    );
     await refresh();
   } catch (err) {
     toast(err.message);
+  }
+}
+
+async function editOperation(operation) {
+  const amount = window.prompt("Amount", operation.amount);
+  if (amount === null) return;
+  if (!validAmount(amount)) {
+    toast("Enter an amount like 250 or 99.90");
+    return;
+  }
+  const occurredOn = window.prompt("Financial date (YYYY-MM-DD)", operation.occurred_on);
+  if (occurredOn === null) return;
+  const comment = window.prompt("Comment", operation.comment || "");
+  if (comment === null) return;
+  const confirmEnded = lastPeriod && lastPeriod.status === "ended";
+  if (confirmEnded && !window.confirm("Recalculate this ended period?")) return;
+  try {
+    await api(
+      periodPath(
+        `/operations/${operation.id}${query({ confirm_ended: confirmEnded || null })}`
+      ),
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amount.trim(),
+          occurred_on: occurredOn.trim(),
+          comment: comment.trim() || null,
+        }),
+      }
+    );
+    await refresh();
+  } catch (error) {
+    toast(error.message);
   }
 }
 
@@ -893,14 +942,14 @@ el.periodForm.addEventListener("submit", async (event) => {
       newPeriodMode && el.clonePlan.checked && selectedPeriodId
         ? selectedPeriodId
         : null;
-    let path = `/period${query({ clone_from_period_id: cloneFrom })}`;
+    let path = workspacePath(`/periods${query({ clone_from_period_id: cloneFrom })}`);
     let method = "POST";
     if (!newPeriodMode && selectedPeriodId) {
-      path = `/periods/${selectedPeriodId}${query()}`;
+      path = periodPath();
       method = "PATCH";
       if (lastPeriod && lastPeriod.status === "ended") {
         if (!window.confirm("This period has ended. Recalculate its history?")) return;
-        path += "&confirm_ended=true";
+        path += "?confirm_ended=true";
       }
     }
     const saved = await api(path, {
@@ -946,7 +995,7 @@ el.download.addEventListener("click", async (event) => {
 async function maybeShowSavingsPrompt() {
   let p;
   try {
-    p = await api(`/savings-prompt${query()}`);
+    p = await api(workspacePath("/savings-prompt"));
   } catch {
     return; // never block the app on the prompt
   }
@@ -963,7 +1012,7 @@ async function maybeShowSavingsPrompt() {
 async function decideSavings(choice) {
   el.savingsPrompt.classList.add("hidden");
   try {
-    await api(`/savings-decision${query()}`, {
+    await api(workspacePath("/savings-decision"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ choice }),
@@ -997,7 +1046,7 @@ el.createWorkspace.addEventListener("click", async () => {
   const name = window.prompt("Shared workspace name", "Family");
   if (!name || !name.trim()) return;
   try {
-    const workspace = await api("/workspaces", {
+    const workspace = await api("/api/v1/workspaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim() }),
@@ -1015,7 +1064,7 @@ el.createWorkspace.addEventListener("click", async () => {
 
 el.inviteMember.addEventListener("click", async () => {
   try {
-    const invite = await api(`/workspaces/${selectedWorkspaceId}/invites`, {
+    const invite = await api(`/api/v1/workspaces/${selectedWorkspaceId}/invites`, {
       method: "POST",
     });
     const url = `${location.origin}/?invite=${encodeURIComponent(invite.token)}`;
@@ -1031,8 +1080,8 @@ el.loginForm.addEventListener("submit", async (event) => {
   el.loginError.classList.add("hidden");
   try {
     const path = inviteToken
-      ? `/invites/${encodeURIComponent(inviteToken)}/accept`
-      : "/auth/login";
+      ? `/api/v1/invites/${encodeURIComponent(inviteToken)}/accept`
+      : "/api/v1/auth/login";
     await api(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1054,7 +1103,7 @@ el.loginForm.addEventListener("submit", async (event) => {
 });
 
 async function logout() {
-  await api("/auth/logout", { method: "POST" });
+  await api("/api/v1/auth/logout", { method: "POST" });
   el.workspaceBar.classList.add("hidden");
   el.loginScreen.classList.remove("hidden");
   el.loginUsername.focus();
@@ -1077,7 +1126,7 @@ async function startApp() {
 
 (async function init() {
   try {
-    const config = await api("/auth/config");
+    const config = await api("/api/v1/auth/config");
     if (config && config.enabled) {
       webAuthActive = true;
       el.logout.classList.remove("hidden");
@@ -1090,7 +1139,7 @@ async function startApp() {
         return;
       }
       try {
-        await api("/auth/me");
+        await api("/api/v1/auth/me");
       } catch (error) {
         if (error.status === 401) {
           el.loginScreen.classList.remove("hidden");

@@ -19,6 +19,7 @@ from typing import Iterable
 from app import export
 
 logger = logging.getLogger(__name__)
+SHEETS_EXPENSE_HEADERS = export.EXPENSE_HEADERS[:6]
 
 
 def enabled() -> bool:
@@ -70,7 +71,8 @@ def sync_now(
 ) -> None:
     """Full re-sync. Raises on failure — use sync_safe() for fire-and-forget.
 
-    Row layout is identical to the .xlsx export (same shared builders)."""
+    The legacy six-column layout is intentionally preserved for Sheets while
+    XLSX grows family-only metadata columns."""
     operations = list(operations)
     rebase_days = list(rebase_days)
     spreadsheet = _open_spreadsheet()
@@ -85,10 +87,13 @@ def sync_now(
     _rewrite(
         spreadsheet,
         "Expenses",
-        [export.EXPENSE_HEADERS]
-        + export.expense_rows(
-            total_amount, start_date, end_date, operations, rebase_days
-        ),
+        [SHEETS_EXPENSE_HEADERS]
+        + [
+            row[:6]
+            for row in export.expense_rows(
+                total_amount, start_date, end_date, operations, rebase_days
+            )
+        ],
     )
 
 

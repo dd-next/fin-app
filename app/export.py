@@ -22,6 +22,10 @@ class OperationRow(NamedTuple):
     comment: str | None
     kind: str = "expense"  # 'expense' | 'income'
     occurred_on: date | None = None
+    category_name: str | None = None
+    pool_name: str | None = None
+    savings_goal_name: str | None = None
+    author_name: str | None = None
 
     @property
     def signed_amount(self) -> Decimal:
@@ -43,6 +47,10 @@ EXPENSE_HEADERS = [
     "Comment",
     "Running balance",
     "Left to spend that day",
+    "Category",
+    "Pool",
+    "Savings goal",
+    "Added by",
 ]
 
 
@@ -101,6 +109,10 @@ def expense_rows(
                 o.comment or "",
                 balance,
                 at_that_point.per_day_today,
+                o.category_name or "Uncategorized" if o.kind == "expense" else "",
+                o.pool_name or "",
+                o.savings_goal_name or "",
+                o.author_name or "",
             ]
         )
     return rows

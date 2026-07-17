@@ -70,14 +70,15 @@ savings goals.
 
 ## 7. API and export
 
-- New public application routes live under `/api/v1` and carry explicit
-  workspace and period identifiers.
+- New public application routes live under `/api/v1` and always carry an
+  explicit workspace identifier. Period history, corrections, plans, and
+  exports use explicit period identifiers; current-period read/write shortcuts
+  may exist for simple clients.
 - Authentication routes provide login, logout, and current-user context.
 - Mutation responses include the updated summary and any soft warnings.
-- XLSX export is period-specific and includes operation category, pool, and
-  author information when available.
-- Legacy root routes may exist only as temporary adapters during the frontend
-  transition.
+- XLSX export is period-specific and includes operation category, pool, savings
+  goal, and author information when available.
+- Legacy root financial routes are removed after the frontend transition.
 - Google Sheets synchronization is not expanded. A future Apps Script
   integration must use a workspace-scoped read-only credential.
 

@@ -1,7 +1,8 @@
-# FinApp — minimalist daily-budget tracker
+# FinApp — family daily-budget manager
 
-Product specifications live in [`specs/`](specs/); the current family-finance
-expansion is defined in `specs/SPEC-4-family-finance.md`.
+Product specifications live in [`specs/`](specs/); start with
+[`specs/SPEC.md`](specs/SPEC.md), then read
+[`specs/SPEC-4-family-finance.md`](specs/SPEC-4-family-finance.md).
 
 Set an amount and a period; the app splits the money across the days and
 shows what you can spend **today**. Add an expense and today's number drops
@@ -30,9 +31,15 @@ Features:
 - **Savings goals**: planned contributions participate in period allocation;
   Save/Withdraw ledger operations move money atomically and goal balances persist
   across periods.
+- **Personal and family spaces**: two users can share a workspace while keeping
+  personal periods isolated; owner/editor memberships are checked on every
+  financial request.
+- **Period history**: previous periods remain selectable and correctable instead
+  of being replaced by the next period.
 
-Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
-dark UI, `.xlsx` export.
+FastAPI + SQLite backend, Argon2id web authentication, vanilla-JS dark UI,
+and period-specific `.xlsx` export. The family beta intentionally uses one
+unit of money per workspace rather than multi-currency accounting.
 
 ## Install
 
@@ -44,6 +51,7 @@ pip install -r requirements.txt
 ## Run
 
 ```sh
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
@@ -76,18 +84,22 @@ pytest
 - Data lives in `./finapp.db` (SQLite, created automatically on first run).
   Upgrading from a pre-rename install: the app renames the old DB file
   (the legacy filename is the `_LEGACY_DB_FILE` constant in `app/db.py`)
-  to `finapp.db` automatically on startup (default SQLite URL only), and
-  older schemas get the new columns added automatically too.
-- Migrations: `alembic upgrade head` (optional for local dev — the app also
-  creates tables and patches missing columns on startup).
+  to `finapp.db` automatically on startup (default SQLite URL only).
+- Migrations: run `alembic upgrade head` before starting after every update.
+  Automatic table creation keeps a fresh local checkout convenient, but only
+  Alembic performs data-preserving upgrades of an existing database.
 - Postgres later: set `DATABASE_URL` (see `.env.example`) — nothing else
   changes.
-- API docs at http://127.0.0.1:8000/docs; export at `/export.xlsx`.
+- API docs are at http://127.0.0.1:8000/docs. Public application routes are
+  versioned as `/api/v1/workspaces/{workspace_id}/...`; export requires an
+  explicit period at
+  `/api/v1/workspaces/{workspace_id}/periods/{period_id}/export.xlsx`.
 
 ## Google Sheets sync (optional)
 
 The DB stays the source of truth; every mutation triggers a best-effort full
-re-sync that mirrors it into a spreadsheet (same layout as the .xlsx export).
+re-sync. Google Sheets intentionally keeps its legacy six-column operation
+layout for now; family metadata is available in the `.xlsx` export only.
 
 1. Google Cloud Console → enable the **Google Sheets API**.
 2. Create a **service account** and download its JSON key (an API key cannot
@@ -97,7 +109,8 @@ re-sync that mirrors it into a spreadsheet (same layout as the .xlsx export).
 4. Set `SHEETS_ENABLED`, `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_FILE`
    (see `.env.example`). Keep the JSON out of git.
 
-`POST /sheets/sync` forces a manual re-sync (e.g. after a Google outage).
+`POST /api/v1/workspaces/{workspace_id}/sheets/sync` forces a manual re-sync
+(e.g. after a Google outage).
 A Sheets failure never breaks the app — it's logged and the DB keeps the data.
 
 ## Telegram Mini App (optional)

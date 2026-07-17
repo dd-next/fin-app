@@ -51,6 +51,9 @@ def test_family_migrations_preserve_legacy_period_and_operations(tmp_path):
                 "AND name IN ('user','auth_session')"
             )
         }
+        operation_columns = {
+            row[1]: row[2] for row in conn.execute("PRAGMA table_info(operation)")
+        }
 
     assert period == (7, "1000", 1)
     assert operation == (
@@ -63,3 +66,4 @@ def test_family_migrations_preserve_legacy_period_and_operations(tmp_path):
     )
     assert workspace == (1, "Personal", "personal")
     assert auth_tables == {"user", "auth_session"}
+    assert operation_columns["kind"] == "VARCHAR(32)"

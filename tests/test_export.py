@@ -14,7 +14,7 @@ async def test_export_roundtrip(client):
     start = date.today()
     end = start + timedelta(days=9)  # 10-day period
     resp = await client.post(
-        "/period",
+        "/api/v1/workspaces/1/periods",
         json={
             "total_amount": "1000",
             "start_date": start.isoformat(),
@@ -22,15 +22,16 @@ async def test_export_roundtrip(client):
         },
     )
     assert resp.status_code == 200
+    period_id = resp.json()["period"]["id"]
 
     for amount, comment in [("250", "groceries"), ("100", None), ("50.50", "coffee")]:
-        resp = await client.post("/operations", json={"amount": amount, "comment": comment})
+        resp = await client.post("/api/v1/workspaces/1/operations", json={"amount": amount, "comment": comment})
         assert resp.status_code == 200
 
-    api_budget = (await client.get("/budget")).json()
-    api_operations = (await client.get("/operations")).json()
+    api_budget = (await client.get("/api/v1/workspaces/1/budget")).json()
+    api_operations = (await client.get("/api/v1/workspaces/1/operations")).json()
 
-    resp = await client.get("/export.xlsx")
+    resp = await client.get(f"/api/v1/workspaces/1/periods/{period_id}/export.xlsx")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -58,6 +59,10 @@ async def test_export_roundtrip(client):
         "Comment",
         "Running balance",
         "Left to spend that day",
+        "Category",
+        "Pool",
+        "Savings goal",
+        "Added by",
     )
     body = rows[1:]
     assert len(body) == len(api_operations) == 3
@@ -81,17 +86,73 @@ async def test_export_roundtrip(client):
     # openpyxl reads empty cells back as None)
     assert all(r[0] == start.isoformat() for r in body)
     assert [r[3] or "" for r in body] == ["groceries", "", "coffee"]
+    assert [r[6] for r in body] == ["Uncategorized"] * 3
+
+
+async def test_export_includes_category_pool_and_author(client, monkeypatch):
+    monkeypatch.setenv("WEB_AUTH_ENABLED", "true")
+    monkeypatch.setenv("BOOTSTRAP_TOKEN", "setup-secret")
+    owner = await client.post(
+        "/api/v1/auth/bootstrap",
+        json={
+            "username": "owner",
+            "password": "owner-password-123",
+            "display_name": "Alex",
+        },
+        headers={"X-Bootstrap-Token": "setup-secret"},
+    )
+    assert owner.status_code == 200
+
+    start = date.today()
+    period = await client.post(
+        "/api/v1/workspaces/1/periods",
+        json={
+            "total_amount": "1000",
+            "start_date": start.isoformat(),
+            "end_date": (start + timedelta(days=9)).isoformat(),
+        },
+    )
+    period_id = period.json()["period"]["id"]
+    category = (
+        await client.post(
+            "/api/v1/workspaces/1/categories", json={"name": "Rent"}
+        )
+    ).json()
+    pool = (
+        await client.post("/api/v1/workspaces/1/pools", json={"name": "Home"})
+    ).json()
+    pool_plan = (
+        await client.put(
+            f"/api/v1/workspaces/1/periods/{period_id}/pool-plans/{pool['id']}",
+            json={"allocated_amount": "500"},
+        )
+    ).json()
+    await client.put(
+        f"/api/v1/workspaces/1/periods/{period_id}/category-plans/{category['id']}",
+        json={"limit_amount": "500", "pool_plan_id": pool_plan["id"]},
+    )
+    await client.post(
+        f"/api/v1/workspaces/1/periods/{period_id}/operations",
+        json={"amount": "100", "category_id": category["id"]},
+    )
+
+    response = await client.get(
+        f"/api/v1/workspaces/1/periods/{period_id}/export.xlsx"
+    )
+    workbook = load_workbook(BytesIO(response.content))
+    row = list(workbook["Expenses"].iter_rows(values_only=True))[1]
+    assert row[6:] == ("Rent", "Home", None, "Alex")
 
 
 async def test_export_404_when_no_period(client):
-    resp = await client.get("/export.xlsx")
+    resp = await client.get("/api/v1/workspaces/1/periods/999/export.xlsx")
     assert resp.status_code == 404
 
 
 async def test_export_income_type_and_running_balance(client):
     start = date.today()
     resp = await client.post(
-        "/period",
+        "/api/v1/workspaces/1/periods",
         json={
             "total_amount": "1000",
             "start_date": start.isoformat(),
@@ -99,10 +160,11 @@ async def test_export_income_type_and_running_balance(client):
         },
     )
     assert resp.status_code == 200
-    await client.post("/operations", json={"amount": "250"})
-    await client.post("/operations", json={"amount": "100", "kind": "income"})
+    period_id = resp.json()["period"]["id"]
+    await client.post("/api/v1/workspaces/1/operations", json={"amount": "250"})
+    await client.post("/api/v1/workspaces/1/operations", json={"amount": "100", "kind": "income"})
 
-    resp = await client.get("/export.xlsx")
+    resp = await client.get(f"/api/v1/workspaces/1/periods/{period_id}/export.xlsx")
     wb = load_workbook(BytesIO(resp.content))
     body = list(wb["Expenses"].iter_rows(values_only=True))[1:]
     assert [r[2] for r in body] == ["expense", "income"]
@@ -122,13 +184,13 @@ async def test_export_can_target_historical_period(client):
         "start_date": (today - timedelta(days=10)).isoformat(),
         "end_date": (today - timedelta(days=1)).isoformat(),
     }
-    old_id = (await client.post("/periods", json=old)).json()["period"]["id"]
+    old_id = (await client.post("/api/v1/workspaces/1/periods", json=old)).json()["period"]["id"]
     await client.post(
-        f"/periods/{old_id}/operations",
+        f"/api/v1/workspaces/1/periods/{old_id}/operations",
         json={"amount": "25", "occurred_on": old["end_date"]},
     )
     await client.post(
-        "/periods",
+        "/api/v1/workspaces/1/periods",
         json={
             "total_amount": "1000",
             "start_date": today.isoformat(),
@@ -136,7 +198,7 @@ async def test_export_can_target_historical_period(client):
         },
     )
 
-    response = await client.get(f"/periods/{old_id}/export.xlsx")
+    response = await client.get(f"/api/v1/workspaces/1/periods/{old_id}/export.xlsx")
     assert response.status_code == 200
     workbook = load_workbook(BytesIO(response.content))
     period_values = {

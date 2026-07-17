@@ -18,8 +18,8 @@ def period_started_yesterday(days: int = 10, total: str = "1000") -> dict:
 
 async def test_prompt_shown_when_yesterday_saved(client):
     # started yesterday, nothing spent → yesterday's 100 carried into today
-    await client.post("/period", json=period_started_yesterday())
-    resp = await client.get("/savings-prompt")
+    await client.post("/api/v1/workspaces/1/periods", json=period_started_yesterday())
+    resp = await client.get("/api/v1/workspaces/1/savings-prompt")
     assert resp.status_code == 200
     p = resp.json()
     assert p["show"] is True
@@ -29,25 +29,25 @@ async def test_prompt_shown_when_yesterday_saved(client):
 
 
 async def test_prompt_hidden_on_first_day_and_without_period(client):
-    resp = await client.get("/savings-prompt")
+    resp = await client.get("/api/v1/workspaces/1/savings-prompt")
     assert resp.json() == {"show": False}  # no period at all
 
     start = date.today()
-    await client.post("/period", json={
+    await client.post("/api/v1/workspaces/1/periods", json={
         "total_amount": "1000",
         "start_date": start.isoformat(),
         "end_date": (start + timedelta(days=9)).isoformat(),
     })
-    resp = await client.get("/savings-prompt")
+    resp = await client.get("/api/v1/workspaces/1/savings-prompt")
     assert resp.json() == {"show": False}  # first day: no yesterday to judge
 
 
 async def test_prompt_survives_todays_spending(client):
     # saved is the carry at the START of today: spending today must not
     # change what yesterday left over (only answering hides the prompt).
-    await client.post("/period", json=period_started_yesterday())
-    await client.post("/operations", json={"amount": "150"})
-    p = (await client.get("/savings-prompt")).json()
+    await client.post("/api/v1/workspaces/1/periods", json=period_started_yesterday())
+    await client.post("/api/v1/workspaces/1/operations", json={"amount": "150"})
+    p = (await client.get("/api/v1/workspaces/1/savings-prompt")).json()
     assert p["show"] is True
     assert D(p["saved"]) == D("100.00")
     # (an overspent yesterday leaves zero carry → no prompt; that math is
@@ -55,12 +55,12 @@ async def test_prompt_survives_todays_spending(client):
 
 
 async def test_decision_spend_today_keeps_numbers_and_acks(client):
-    await client.post("/period", json=period_started_yesterday())
-    before = (await client.get("/budget")).json()
+    await client.post("/api/v1/workspaces/1/periods", json=period_started_yesterday())
+    before = (await client.get("/api/v1/workspaces/1/budget")).json()
     assert D(before["budget_today"]) == D("200.00")
 
     resp = await client.post(
-        "/savings-decision", json={"choice": "spend_today"}
+        "/api/v1/workspaces/1/savings-decision", json={"choice": "spend_today"}
     )
     assert resp.status_code == 200
     body = resp.json()
@@ -70,13 +70,13 @@ async def test_decision_spend_today_keeps_numbers_and_acks(client):
     assert D(body["budget"]["daily_base"]) == D("100.00")
 
     # prompt shows exactly once per qualifying day
-    assert (await client.get("/savings-prompt")).json() == {"show": False}
+    assert (await client.get("/api/v1/workspaces/1/savings-prompt")).json() == {"show": False}
 
 
 async def test_decision_increase_daily_respreads_and_persists(client):
-    await client.post("/period", json=period_started_yesterday())
+    await client.post("/api/v1/workspaces/1/periods", json=period_started_yesterday())
     resp = await client.post(
-        "/savings-decision", json={"choice": "increase_daily"}
+        "/api/v1/workspaces/1/savings-decision", json={"choice": "increase_daily"}
     )
     assert resp.status_code == 200
     b = resp.json()["budget"]
@@ -85,19 +85,19 @@ async def test_decision_increase_daily_respreads_and_persists(client):
     assert D(b["budget_today"]) == D("111.11")
 
     # persisted: a fresh GET recomputes the same numbers from the DB
-    again = (await client.get("/budget")).json()
+    again = (await client.get("/api/v1/workspaces/1/budget")).json()
     assert D(again["budget_today"]) == D("111.11")
-    assert (await client.get("/savings-prompt")).json() == {"show": False}
+    assert (await client.get("/api/v1/workspaces/1/savings-prompt")).json() == {"show": False}
 
 
 async def test_decision_without_period_404(client):
     resp = await client.post(
-        "/savings-decision", json={"choice": "spend_today"}
+        "/api/v1/workspaces/1/savings-decision", json={"choice": "spend_today"}
     )
     assert resp.status_code == 404
 
 
 async def test_decision_bad_choice_422(client):
-    await client.post("/period", json=period_started_yesterday())
-    resp = await client.post("/savings-decision", json={"choice": "hoard"})
+    await client.post("/api/v1/workspaces/1/periods", json=period_started_yesterday())
+    resp = await client.post("/api/v1/workspaces/1/savings-decision", json={"choice": "hoard"})
     assert resp.status_code == 422

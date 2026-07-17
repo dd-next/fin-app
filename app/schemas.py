@@ -88,6 +88,15 @@ class OperationIn(BaseModel):
     savings_goal_id: int | None = None
 
 
+class OperationPatch(BaseModel):
+    amount: MoneyIn | None = None
+    kind: OperationKind | None = None
+    comment: str | None = None
+    occurred_on: date | None = None
+    category_id: int | None = None
+    savings_goal_id: int | None = None
+
+
 class PeriodOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

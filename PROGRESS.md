@@ -29,7 +29,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 18 — Categories and limits (SPEC-4)
 - [x] Phase 19 — Pools (SPEC-4)
 - [x] Phase 20 — Savings goals (SPEC-4)
-- [ ] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
+- [x] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
@@ -111,6 +111,23 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   progress, plans, and live warnings. Tests: **81 passed, 0 failed**.
 - Decision: goal balance is derived from transfer operations; no mutable balance
   column or automatic end-of-period contribution exists.
+
+### Phase 21 — API v1, frontend, export, final verification (SPEC-4) (2026-07-17)
+- Moved all public application flows and the SPA to workspace-scoped `/api/v1`
+  routes, removed legacy root financial routes, and added operation correction
+  with ended-period confirmation and full derived-total recalculation.
+- XLSX now exports category, period-pinned pool, savings goal, and author; Google
+  Sheets deliberately keeps its legacy six-column format. Migration 0010 widens
+  operation kinds for savings transfers without changing stored rows.
+- Updated README, SPEC-4, manual scenarios, and API tests. Tests: **85 passed,
+  0 failed** (`python -m pytest`); `node --check app/static/app.js` passed.
+- Scratch-DB E2E passed for history, plan cloning, warnings, corrections,
+  savings, and XLSX; headless Chrome passed at 480×900 and 1280×900. Live DB
+  upgraded to 0010 with **1 period and 2 operations preserved**; additional
+  backup: `.backups/finapp-pre-api-v1-20260717.db`.
+- Decision: versioned current-period shortcuts remain for simple API clients,
+  while the frontend, history corrections, plans, and exports always use an
+  explicit period id.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

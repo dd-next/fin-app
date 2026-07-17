@@ -10,7 +10,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import inspect as sa_inspect, text
@@ -33,11 +33,25 @@ from app.goals import (
     router as goals_router,
 )
 from app.db import engine, get_session
-from app.models import Base, Operation, Period, RebaseEvent, Workspace, WorkspaceMember
+from app.models import (
+    Base,
+    Category,
+    Operation,
+    Period,
+    PeriodCategoryPlan,
+    PeriodPoolPlan,
+    Pool,
+    RebaseEvent,
+    SavingsGoal,
+    User,
+    Workspace,
+    WorkspaceMember,
+)
 from app.schemas import (
     BudgetOut,
     OperationIn,
     OperationOut,
+    OperationPatch,
     OperationWithBudget,
     PeriodIn,
     PeriodOut,
@@ -88,11 +102,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="FinApp", lifespan=lifespan)
-app.include_router(auth_router)
-app.include_router(workspaces_router)
-app.include_router(categories_router)
-app.include_router(pools_router)
-app.include_router(goals_router)
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(workspaces_router, prefix="/api/v1")
+app.include_router(
+    categories_router, prefix="/api/v1/workspaces/{workspace_id}"
+)
+app.include_router(pools_router, prefix="/api/v1/workspaces/{workspace_id}")
+app.include_router(goals_router, prefix="/api/v1/workspaces/{workspace_id}")
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
@@ -207,14 +223,38 @@ async def _operation_snapshot(
     session: AsyncSession, period: Period
 ) -> list[export.OperationRow]:
     result = await session.execute(
-        select(Operation).where(Operation.period_id == period.id)
+        select(
+            Operation,
+            Category.name,
+            Pool.name,
+            SavingsGoal.name,
+            User.display_name,
+        )
+        .outerjoin(Category, Category.id == Operation.category_id)
+        .outerjoin(
+            PeriodCategoryPlan,
+            and_(
+                PeriodCategoryPlan.period_id == Operation.period_id,
+                PeriodCategoryPlan.category_id == Operation.category_id,
+            ),
+        )
+        .outerjoin(
+            PeriodPoolPlan,
+            PeriodPoolPlan.id == PeriodCategoryPlan.pool_plan_id,
+        )
+        .outerjoin(Pool, Pool.id == PeriodPoolPlan.pool_id)
+        .outerjoin(SavingsGoal, SavingsGoal.id == Operation.savings_goal_id)
+        .outerjoin(User, User.id == Operation.created_by_user_id)
+        .where(Operation.period_id == period.id)
     )
     return [
         export.OperationRow(
             created_at=o.created_at, amount=o.amount, comment=o.comment,
             kind=o.kind, occurred_on=o.occurred_on,
+            category_name=category_name, pool_name=pool_name,
+            savings_goal_name=goal_name, author_name=author_name,
         )
-        for o in result.scalars()
+        for o, category_name, pool_name, goal_name, author_name in result.all()
     ]
 
 
@@ -253,8 +293,11 @@ async def _period_with_budget(
     )
 
 
-@app.post("/period", response_model=PeriodWithBudget, dependencies=[ACCESS])
-@app.post("/periods", response_model=PeriodWithBudget, dependencies=[ACCESS])
+@app.post(
+    "/api/v1/workspaces/{workspace_id}/periods",
+    response_model=PeriodWithBudget,
+    dependencies=[ACCESS],
+)
 async def set_period(
     body: PeriodIn,
     background_tasks: BackgroundTasks,
@@ -291,7 +334,11 @@ async def set_period(
     return await _period_with_budget(session, period)
 
 
-@app.get("/periods", response_model=list[PeriodWithBudget], dependencies=[ACCESS])
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/periods",
+    response_model=list[PeriodWithBudget],
+    dependencies=[ACCESS],
+)
 async def list_periods(
     workspace_id: int = 1, session: AsyncSession = Depends(get_session)
 ):
@@ -304,7 +351,9 @@ async def list_periods(
 
 
 @app.get(
-    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[ACCESS]
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}",
+    response_model=PeriodWithBudget,
+    dependencies=[ACCESS],
 )
 async def get_period_by_id(
     period_id: int,
@@ -317,7 +366,9 @@ async def get_period_by_id(
 
 
 @app.patch(
-    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[ACCESS]
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}",
+    response_model=PeriodWithBudget,
+    dependencies=[ACCESS],
 )
 async def update_period(
     period_id: int,
@@ -360,18 +411,35 @@ async def update_period(
     return await _period_with_budget(session, period)
 
 
-@app.get("/period", response_model=PeriodWithBudget, dependencies=[ACCESS])
-async def get_period(
-    period_id: int | None = None,
-    workspace_id: int = 1,
-    session: AsyncSession = Depends(get_session),
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/period",
+    response_model=PeriodWithBudget,
+    dependencies=[ACCESS],
+)
+async def get_current_period(
+    workspace_id: int, session: AsyncSession = Depends(get_session)
 ):
-    period = await _require_period(session, period_id, workspace_id)
-    return await _period_with_budget(session, period)
+    """Convenience view of the current (or newest) period.
+
+    Historical corrections and exports intentionally use an explicit period id.
+    """
+    return await _period_with_budget(
+        session, await _require_period(session, workspace_id=workspace_id)
+    )
 
 
-@app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True,
-         dependencies=[ACCESS])
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/budget",
+    response_model=BudgetOut,
+    response_model_exclude_none=True,
+    dependencies=[ACCESS],
+)
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/budget",
+    response_model=BudgetOut,
+    response_model_exclude_none=True,
+    dependencies=[ACCESS],
+)
 async def get_budget(
     pending: Decimal | None = None,
     period_id: int | None = None,
@@ -382,9 +450,13 @@ async def get_budget(
     return await _budget_for(session, period, pending)
 
 
-@app.get("/operations", response_model=list[OperationOut], dependencies=[ACCESS])
 @app.get(
-    "/periods/{period_id}/operations",
+    "/api/v1/workspaces/{workspace_id}/operations",
+    response_model=list[OperationOut],
+    dependencies=[ACCESS],
+)
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/operations",
     response_model=list[OperationOut],
     dependencies=[ACCESS],
 )
@@ -402,9 +474,13 @@ async def list_operations(
     return [OperationOut.model_validate(o) for o in result.scalars()]
 
 
-@app.post("/operations", response_model=OperationWithBudget, dependencies=[ACCESS])
 @app.post(
-    "/periods/{period_id}/operations",
+    "/api/v1/workspaces/{workspace_id}/operations",
+    response_model=OperationWithBudget,
+    dependencies=[ACCESS],
+)
+@app.post(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/operations",
     response_model=OperationWithBudget,
     dependencies=[ACCESS],
 )
@@ -475,10 +551,118 @@ async def add_operation(
     )
 
 
-@app.delete("/operations/{operation_id}", response_model=BudgetOut,
-            dependencies=[ACCESS])
+@app.patch(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/operations/{operation_id}",
+    response_model=OperationWithBudget,
+    dependencies=[ACCESS],
+)
+async def update_operation(
+    period_id: int,
+    operation_id: int,
+    body: OperationPatch,
+    background_tasks: BackgroundTasks,
+    workspace_id: int,
+    confirm_ended: bool = False,
+    session: AsyncSession = Depends(get_session),
+):
+    operation = await session.get(Operation, operation_id)
+    period = await session.get(Period, period_id)
+    if (
+        operation is None
+        or operation.period_id != period_id
+        or period is None
+        or period.workspace_id != workspace_id
+    ):
+        raise HTTPException(status_code=404, detail="Operation not found")
+    if period.status == "ended" and not confirm_ended:
+        raise HTTPException(
+            status_code=409,
+            detail="Editing an ended period requires confirm_ended=true",
+        )
+
+    amount = body.amount if body.amount is not None else operation.amount
+    kind = body.kind if body.kind is not None else operation.kind
+    occurred_on = body.occurred_on or operation.occurred_on
+    category_id = (
+        body.category_id
+        if "category_id" in body.model_fields_set
+        else operation.category_id
+    )
+    goal_id = (
+        body.savings_goal_id
+        if "savings_goal_id" in body.model_fields_set
+        else operation.savings_goal_id
+    )
+    if not period.start_date <= occurred_on <= period.end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="occurred_on must be inside the selected period",
+        )
+    if kind != "expense" and category_id is not None:
+        raise HTTPException(
+            status_code=422, detail="Only expenses can have a category"
+        )
+    category = (
+        await require_category(session, category_id, workspace_id)
+        if category_id is not None
+        else None
+    )
+    transfer_kinds = {"transfer_to_goal", "transfer_from_goal"}
+    if kind in transfer_kinds and goal_id is None:
+        raise HTTPException(
+            status_code=422, detail="Savings transfers require savings_goal_id"
+        )
+    if kind not in transfer_kinds and goal_id is not None:
+        raise HTTPException(
+            status_code=422, detail="Only savings transfers can reference a goal"
+        )
+    goal = (
+        await require_goal(session, goal_id, workspace_id)
+        if goal_id is not None
+        else None
+    )
+    if kind == "transfer_from_goal" and goal is not None:
+        available = await goal_balance(session, goal.id)
+        if operation.savings_goal_id == goal.id:
+            if operation.kind == "transfer_to_goal":
+                available -= operation.amount
+            elif operation.kind == "transfer_from_goal":
+                available += operation.amount
+        if available < amount:
+            raise HTTPException(
+                status_code=409, detail="Savings goal balance is insufficient"
+            )
+
+    operation.amount = amount
+    operation.kind = kind
+    operation.occurred_on = occurred_on
+    operation.category_id = category.id if category else None
+    operation.savings_goal_id = goal.id if goal else None
+    if "comment" in body.model_fields_set:
+        operation.comment = body.comment
+    await session.commit()
+    await session.refresh(operation)
+    await _queue_sheets_sync(background_tasks, session, period)
+    return OperationWithBudget(
+        operation=OperationOut.model_validate(operation),
+        budget=await _budget_for(session, period),
+        warnings=(
+            await operation_limit_warnings(session, period.id, category)
+            if category is not None
+            else await goal_plan_warning(session, period.id, goal)
+            if goal is not None
+            else []
+        ),
+    )
+
+
 @app.delete(
-    "/periods/{period_id}/operations/{operation_id}",
+    "/api/v1/workspaces/{workspace_id}/operations/{operation_id}",
+    response_model=BudgetOut,
+    dependencies=[ACCESS],
+)
+@app.delete(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/operations/{operation_id}",
     response_model=BudgetOut,
     dependencies=[ACCESS],
 )
@@ -487,14 +671,22 @@ async def delete_operation(
     background_tasks: BackgroundTasks,
     period_id: int | None = None,
     workspace_id: int = 1,
+    confirm_ended: bool = False,
     session: AsyncSession = Depends(get_session),
 ):
     operation = await session.get(Operation, operation_id)
-    if operation is None or (period_id is not None and operation.period_id != period_id):
+    if operation is None or (
+        period_id is not None and operation.period_id != period_id
+    ):
         raise HTTPException(status_code=404, detail="Operation not found")
     period = await session.get(Period, operation.period_id)
     if period is None or period.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Operation not found")
+    if period.status == "ended" and not confirm_ended:
+        raise HTTPException(
+            status_code=409,
+            detail="Editing an ended period requires confirm_ended=true",
+        )
     await session.delete(operation)
     await session.commit()
     await _queue_sheets_sync(background_tasks, session, period)
@@ -503,8 +695,12 @@ async def delete_operation(
     return await _budget_for(session, period)
 
 
-@app.get("/savings-prompt", response_model=SavingsPromptOut,
-         response_model_exclude_none=True, dependencies=[ACCESS])
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/savings-prompt",
+    response_model=SavingsPromptOut,
+    response_model_exclude_none=True,
+    dependencies=[ACCESS],
+)
 async def savings_prompt(
     workspace_id: int = 1, session: AsyncSession = Depends(get_session)
 ):
@@ -538,7 +734,10 @@ async def savings_prompt(
     )
 
 
-@app.post("/savings-decision", dependencies=[ACCESS])
+@app.post(
+    "/api/v1/workspaces/{workspace_id}/savings-decision",
+    dependencies=[ACCESS],
+)
 async def savings_decision(
     body: SavingsDecisionIn,
     background_tasks: BackgroundTasks,
@@ -558,7 +757,10 @@ async def savings_decision(
     return {"status": "ok", "budget": await _budget_for(session, period)}
 
 
-@app.post("/sheets/sync", dependencies=[ACCESS])
+@app.post(
+    "/api/v1/workspaces/{workspace_id}/sheets/sync",
+    dependencies=[ACCESS],
+)
 async def sheets_sync(
     workspace_id: int = 1, session: AsyncSession = Depends(get_session)
 ):
@@ -583,11 +785,13 @@ async def sheets_sync(
     return {"status": "ok"}
 
 
-@app.get("/export.xlsx", dependencies=[ACCESS])
-@app.get("/periods/{period_id}/export.xlsx", dependencies=[ACCESS])
+@app.get(
+    "/api/v1/workspaces/{workspace_id}/periods/{period_id}/export.xlsx",
+    dependencies=[ACCESS],
+)
 async def export_xlsx(
-    period_id: int | None = None,
-    workspace_id: int = 1,
+    period_id: int,
+    workspace_id: int,
     session: AsyncSession = Depends(get_session),
 ):
     period = await _require_period(session, period_id, workspace_id)

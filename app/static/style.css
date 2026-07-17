@@ -354,6 +354,15 @@ button.accent.income { background: var(--income); }
 }
 .op-date { color: var(--muted); font-size: 0.8rem; }
 
+.edit-operation {
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 10px 4px;
+  min-height: 44px;
+}
+.edit-operation:hover, .edit-operation:active { color: var(--text); }
+
 .delete {
   background: none;
   color: var(--muted);

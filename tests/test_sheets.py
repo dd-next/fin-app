@@ -102,10 +102,10 @@ def test_workbook_matches_shared_row_functions():
 
 
 async def test_mutation_writes_expected_rows(client, fake_sheet):
-    resp = await client.post("/period", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/periods", json=sample_period())
     assert resp.status_code == 200
 
-    resp = await client.post("/operations", json={"amount": "250", "comment": "food"})
+    resp = await client.post("/api/v1/workspaces/1/operations", json={"amount": "250", "comment": "food"})
     assert resp.status_code == 200
 
     period_ws = fake_sheet.worksheets["Period"]
@@ -117,7 +117,8 @@ async def test_mutation_writes_expected_rows(client, fake_sheet):
     assert kv["remaining"] == 750.0
 
     expenses_ws = fake_sheet.worksheets["Expenses"]
-    assert expenses_ws.rows[0] == export.EXPENSE_HEADERS
+    assert expenses_ws.rows[0] == sheets.SHEETS_EXPENSE_HEADERS
+    assert len(expenses_ws.rows[0]) == 6
     body = expenses_ws.rows[1:]
     assert len(body) == 1
     assert body[0][1] == 250.0
@@ -128,15 +129,15 @@ async def test_mutation_writes_expected_rows(client, fake_sheet):
 
 
 async def test_delete_resyncs(client, fake_sheet):
-    await client.post("/period", json=sample_period())
-    resp = await client.post("/operations", json={"amount": "100"})
+    await client.post("/api/v1/workspaces/1/periods", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/operations", json={"amount": "100"})
     operation_id = resp.json()["operation"]["id"]
 
-    resp = await client.delete(f"/operations/{operation_id}")
+    resp = await client.delete(f"/api/v1/workspaces/1/operations/{operation_id}")
     assert resp.status_code == 200
 
     # sheet mirrors the DB again: no expense rows, full amount remaining
-    assert fake_sheet.worksheets["Expenses"].rows == [export.EXPENSE_HEADERS]
+    assert fake_sheet.worksheets["Expenses"].rows == [sheets.SHEETS_EXPENSE_HEADERS]
     kv = {row[0]: row[1] for row in fake_sheet.worksheets["Period"].rows}
     assert kv["remaining"] == 1000.0
 
@@ -154,9 +155,9 @@ async def test_gspread_error_swallowed(client, monkeypatch):
 
     monkeypatch.setattr(sheets, "_open_spreadsheet", explode)
 
-    resp = await client.post("/period", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/periods", json=sample_period())
     assert resp.status_code == 200
-    resp = await client.post("/operations", json={"amount": "10"})
+    resp = await client.post("/api/v1/workspaces/1/operations", json={"amount": "10"})
     assert resp.status_code == 200  # sync failed silently, API unaffected
 
 
@@ -169,8 +170,8 @@ async def test_disabled_makes_zero_google_calls(client, monkeypatch):
 
     monkeypatch.setattr(sheets, "_open_spreadsheet", forbidden)
 
-    await client.post("/period", json=sample_period())
-    resp = await client.post("/operations", json={"amount": "10"})
+    await client.post("/api/v1/workspaces/1/periods", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/operations", json={"amount": "10"})
     assert resp.status_code == 200
 
 
@@ -178,8 +179,8 @@ async def test_disabled_makes_zero_google_calls(client, monkeypatch):
 
 
 async def test_manual_sync_ok(client, fake_sheet):
-    await client.post("/period", json=sample_period())
-    resp = await client.post("/sheets/sync")
+    await client.post("/api/v1/workspaces/1/periods", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/sheets/sync")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
     assert "Period" in fake_sheet.worksheets
@@ -195,13 +196,13 @@ async def test_manual_sync_failed(client, monkeypatch):
 
     monkeypatch.setattr(sheets, "_open_spreadsheet", explode)
 
-    await client.post("/period", json=sample_period())
-    resp = await client.post("/sheets/sync")
+    await client.post("/api/v1/workspaces/1/periods", json=sample_period())
+    resp = await client.post("/api/v1/workspaces/1/sheets/sync")
     assert resp.status_code == 200
     assert resp.json() == {"status": "failed"}
 
 
 async def test_manual_sync_disabled(client, monkeypatch):
     monkeypatch.delenv("SHEETS_ENABLED", raising=False)
-    resp = await client.post("/sheets/sync")
+    resp = await client.post("/api/v1/workspaces/1/sheets/sync")
     assert resp.json() == {"status": "disabled"}
