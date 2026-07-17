@@ -89,6 +89,15 @@ class Period(Base):
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
 
+    @property
+    def status(self) -> str:
+        today = date.today()
+        if today < self.start_date:
+            return "upcoming"
+        if today > self.end_date:
+            return "ended"
+        return "current"
+
 
 class Operation(Base):
     __tablename__ = "operation"

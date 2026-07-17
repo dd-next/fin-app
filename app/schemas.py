@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Money parses as Decimal with at most 2 decimal places; malformed input → 422.
-MoneyIn = Annotated[Decimal, Field(max_digits=12, decimal_places=2)]
+MoneyIn = Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
 
 # Operations are signed by kind, not by the amount (which stays positive).
 OperationKind = Literal["expense", "income"]
@@ -25,29 +25,40 @@ class PeriodIn(BaseModel):
         return self
 
 
+class PeriodPatch(BaseModel):
+    total_amount: MoneyIn | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+
+
 class OperationIn(BaseModel):
     amount: MoneyIn
     kind: OperationKind = "expense"
     comment: str | None = None
+    occurred_on: date | None = None
 
 
 class PeriodOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    workspace_id: int
     total_amount: Decimal
     start_date: date
     end_date: date
     created_at: datetime
+    status: Literal["upcoming", "current", "ended"]
 
 
 class OperationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    period_id: int
     amount: Decimal
     kind: OperationKind
     comment: str | None
+    occurred_on: date
     created_at: datetime
 
 

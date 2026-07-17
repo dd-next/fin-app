@@ -36,10 +36,14 @@
     <section id="view-main" class="view">
 
       <header id="main-header" class="topbar hidden">
-        <span id="period-summary" class="period-summary"></span>
-        <button id="open-settings" type="button" class="ghost small">
-          Budget Settings
-        </button>
+        <div class="period-picker">
+          <select id="period-select" aria-label="Budget period"></select>
+          <span id="period-summary" class="period-summary"></span>
+        </div>
+        <div class="topbar-actions">
+          <button id="new-period" type="button" class="ghost small">New</button>
+          <button id="open-settings" type="button" class="ghost small">Edit</button>
+        </div>
       </header>
 
       <!-- No period yet -->
@@ -120,7 +124,7 @@
     <section id="view-settings" class="view hidden">
       <header class="topbar">
         <button id="settings-back" type="button" class="ghost small back">‹ Back</button>
-        <h2 class="view-title">Budget Settings</h2>
+        <h2 id="settings-title" class="view-title">Budget Settings</h2>
       </header>
       <section class="card">
         <form id="period-form" autocomplete="off">
@@ -141,7 +145,7 @@
             <button type="submit" class="accent">Save</button>
             <button id="settings-cancel" type="button" class="ghost">Cancel</button>
           </div>
-          <p class="hint">Saving a new budget replaces the current one and its operations.</p>
+          <p class="hint">Periods stay in history. Date ranges in one space cannot overlap.</p>
         </form>
       </section>
     </section>

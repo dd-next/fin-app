@@ -47,16 +47,76 @@ async def test_post_period_then_budget_summary(client):
     assert D(b["next_daily"]) == D("200.00")  # untouched today rolls forward
 
 
-async def test_post_period_replaces_existing(client):
-    await set_period(client, days=10, total="1000")
-    resp = await client.post("/operations", json={"amount": "50"})
+async def test_period_history_is_preserved_and_selectable(client):
+    today = date.today()
+    old = {
+        "total_amount": "800",
+        "start_date": (today - timedelta(days=20)).isoformat(),
+        "end_date": (today - timedelta(days=11)).isoformat(),
+    }
+    old_id = (await client.post("/periods", json=old)).json()["period"]["id"]
+    resp = await client.post(
+        f"/periods/{old_id}/operations",
+        json={"amount": "50", "occurred_on": old["end_date"]},
+    )
     assert resp.status_code == 200
 
-    await set_period(client, days=5, total="500")
-    b = (await client.get("/budget")).json()
-    assert b["days_total"] == 5
-    assert D(b["spent_total"]) == D("0")  # old expenses gone with old period
-    assert (await client.get("/operations")).json() == []
+    current = await set_period(client, days=5, total="500")
+    current_id = current["period"]["id"]
+
+    history = (await client.get("/periods")).json()
+    assert [p["period"]["id"] for p in history] == [current_id, old_id]
+    assert history[0]["period"]["status"] == "current"
+    assert history[1]["period"]["status"] == "ended"
+    assert D(history[1]["budget"]["spent_total"]) == D("50")
+
+    old_ops = (await client.get(f"/periods/{old_id}/operations")).json()
+    assert len(old_ops) == 1
+    assert D(old_ops[0]["amount"]) == D("50")
+
+
+async def test_overlapping_period_is_rejected(client):
+    await set_period(client, days=10, total="1000")
+    resp = await client.post("/periods", json=today_period(days=5, total="500"))
+    assert resp.status_code == 409
+    assert "overlap" in resp.json()["detail"].lower()
+
+
+async def test_ended_period_edit_requires_confirmation(client):
+    today = date.today()
+    payload = {
+        "total_amount": "500",
+        "start_date": (today - timedelta(days=10)).isoformat(),
+        "end_date": (today - timedelta(days=1)).isoformat(),
+    }
+    period_id = (await client.post("/periods", json=payload)).json()["period"]["id"]
+
+    resp = await client.patch(f"/periods/{period_id}", json={"total_amount": "600"})
+    assert resp.status_code == 409
+    resp = await client.patch(
+        f"/periods/{period_id}?confirm_ended=true",
+        json={"total_amount": "600"},
+    )
+    assert resp.status_code == 200
+    assert D(resp.json()["period"]["total_amount"]) == D("600")
+
+
+async def test_operation_financial_date_must_be_inside_period(client):
+    body = await set_period(client, days=10, total="1000")
+    period_id = body["period"]["id"]
+    start = date.fromisoformat(body["period"]["start_date"])
+    resp = await client.post(
+        f"/periods/{period_id}/operations",
+        json={"amount": "10", "occurred_on": start.isoformat()},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["operation"]["occurred_on"] == start.isoformat()
+
+    resp = await client.post(
+        f"/periods/{period_id}/operations",
+        json={"amount": "10", "occurred_on": (start - timedelta(days=1)).isoformat()},
+    )
+    assert resp.status_code == 422
 
 
 async def test_expense_updates_budget_and_delete_restores(client):

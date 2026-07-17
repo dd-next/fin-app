@@ -28,7 +28,9 @@ function authHeaders() {
 const el = {
   // main view
   mainHeader: $("main-header"),
+  periodSelect: $("period-select"),
   periodSummary: $("period-summary"),
+  newPeriod: $("new-period"),
   openSettings: $("open-settings"),
   emptyState: $("empty-state"),
   emptyOpenSettings: $("empty-open-settings"),
@@ -61,6 +63,7 @@ const el = {
   download: $("download"),
   // settings view
   settingsBack: $("settings-back"),
+  settingsTitle: $("settings-title"),
   settingsCancel: $("settings-cancel"),
   periodForm: $("period-form"),
   periodAmount: $("period-amount"),
@@ -83,6 +86,9 @@ let kind = "expense"; // what the form submits: 'expense' | 'income'
 let lastBudget = null; // latest budget payload (for client-side income preview)
 let lastPeriod = null; // latest period payload (prefills Budget Settings)
 let lastOperation = null; // {id, amount} of the just-added op, for Undo
+let periods = []; // [{period, budget}], newest first
+let selectedPeriodId = Number(localStorage.getItem("selectedPeriodId")) || null;
+let newPeriodMode = false;
 
 // ---- views ---------------------------------------------------------------------
 
@@ -188,7 +194,24 @@ function renderPeriod(period, budget) {
     const days = budget.days_total;
     el.periodSummary.textContent =
       `${fmt(period.total_amount)} for ${days} ${days === 1 ? "day" : "days"}`;
+    el.spend.classList.toggle("hidden", period.status !== "current");
   }
+}
+
+function renderPeriodOptions() {
+  el.periodSelect.replaceChildren(
+    ...periods.map(({ period }) => {
+      const option = document.createElement("option");
+      option.value = period.id;
+      option.textContent = `${period.start_date} — ${period.end_date} · ${period.status}`;
+      option.selected = period.id === selectedPeriodId;
+      return option;
+    })
+  );
+}
+
+function selectedQuery() {
+  return selectedPeriodId ? `?period_id=${selectedPeriodId}` : "";
 }
 
 function renderOperations(operations) {
@@ -262,16 +285,27 @@ el.undo.addEventListener("click", async () => {
 // ---- data flow --------------------------------------------------------------
 
 async function refresh() {
-  const [periodWithBudget, operations] = await Promise.all([
-    api("/period"),
-    api("/operations"),
-  ]);
+  periods = (await api("/periods")) || [];
+  if (!periods.some(({ period }) => period.id === selectedPeriodId)) {
+    const preferred = periods.find(({ period }) => period.status === "current") || periods[0];
+    selectedPeriodId = preferred ? preferred.period.id : null;
+  }
+  if (selectedPeriodId) localStorage.setItem("selectedPeriodId", selectedPeriodId);
+  else localStorage.removeItem("selectedPeriodId");
+  renderPeriodOptions();
+  const periodWithBudget = periods.find(({ period }) => period.id === selectedPeriodId) || null;
+  const operations = selectedPeriodId
+    ? await api(`/operations${selectedQuery()}`)
+    : [];
   renderBudget(periodWithBudget && periodWithBudget.budget);
   renderPeriod(
     periodWithBudget && periodWithBudget.period,
     periodWithBudget && periodWithBudget.budget
   );
   renderOperations(operations);
+  el.download.href = selectedPeriodId
+    ? `/export.xlsx?period_id=${selectedPeriodId}`
+    : "/export.xlsx";
 }
 
 // ---- entry mode toggle (Expense | Income) -------------------------------------
@@ -310,7 +344,10 @@ function updatePreview() {
   }
   previewTimer = setTimeout(async () => {
     try {
-      const b = await api(`/budget?pending=${encodeURIComponent(raw)}`);
+      const separator = selectedPeriodId ? "&" : "?";
+      const b = await api(
+        `/budget${selectedQuery()}${separator}pending=${encodeURIComponent(raw)}`
+      );
       renderPreview(b && b.preview_after);
     } catch {
       renderPreview(null);
@@ -327,7 +364,7 @@ el.operationForm.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    const body = await api("/operations", {
+    const body = await api(`/operations${selectedQuery()}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -360,9 +397,22 @@ async function deleteOperation(id) {
 
 el.openHistory.addEventListener("click", () => showView("history"));
 el.historyBack.addEventListener("click", () => showView("main"));
-el.openSettings.addEventListener("click", () => showView("settings"));
-el.emptyOpenSettings.addEventListener("click", () => showView("settings"));
-el.spentOpenSettings.addEventListener("click", () => showView("settings"));
+el.openSettings.addEventListener("click", () => {
+  newPeriodMode = false;
+  showView("settings");
+});
+el.newPeriod.addEventListener("click", () => {
+  newPeriodMode = true;
+  showView("settings");
+});
+el.emptyOpenSettings.addEventListener("click", () => {
+  newPeriodMode = true;
+  showView("settings");
+});
+el.spentOpenSettings.addEventListener("click", () => {
+  newPeriodMode = false;
+  showView("settings");
+});
 el.settingsBack.addEventListener("click", () => showView("main"));
 el.settingsCancel.addEventListener("click", () => showView("main"));
 
@@ -370,7 +420,8 @@ el.settingsCancel.addEventListener("click", () => showView("main"));
 
 function prefillSettings() {
   const iso = (d) => d.toISOString().slice(0, 10);
-  if (lastPeriod) {
+  el.settingsTitle.textContent = newPeriodMode ? "New Budget Period" : "Budget Settings";
+  if (lastPeriod && !newPeriodMode) {
     el.periodAmount.value = lastPeriod.total_amount;
     el.periodStart.value = lastPeriod.start_date;
     el.periodEnd.value = lastPeriod.end_date;
@@ -412,8 +463,18 @@ el.periodForm.addEventListener("submit", async (event) => {
     return;
   }
   try {
-    await api("/period", {
-      method: "POST",
+    let path = "/period";
+    let method = "POST";
+    if (!newPeriodMode && selectedPeriodId) {
+      path = `/periods/${selectedPeriodId}`;
+      method = "PATCH";
+      if (lastPeriod && lastPeriod.status === "ended") {
+        if (!window.confirm("This period has ended. Recalculate its history?")) return;
+        path += "?confirm_ended=true";
+      }
+    }
+    const saved = await api(path, {
+      method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         total_amount: amount,
@@ -421,6 +482,9 @@ el.periodForm.addEventListener("submit", async (event) => {
         end_date: el.periodEnd.value,
       }),
     });
+    selectedPeriodId = saved.period.id;
+    localStorage.setItem("selectedPeriodId", selectedPeriodId);
+    newPeriodMode = false;
     showUndo(null); // a new period invalidates the last-operation undo
     await refresh();
     showView("main");
@@ -434,7 +498,7 @@ el.download.addEventListener("click", async (event) => {
   if (!(tg && tg.initData)) return; // plain browser: let the link work as-is
   event.preventDefault();
   try {
-    const resp = await fetch("/export.xlsx", { headers: authHeaders() });
+    const resp = await fetch(el.download.href, { headers: authHeaders() });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const url = URL.createObjectURL(await resp.blob());
     const a = document.createElement("a");
@@ -483,13 +547,23 @@ async function decideSavings(choice) {
 el.choiceSpend.addEventListener("click", () => decideSavings("spend_today"));
 el.choiceIncrease.addEventListener("click", () => decideSavings("increase_daily"));
 
+el.periodSelect.addEventListener("change", async () => {
+  selectedPeriodId = Number(el.periodSelect.value);
+  localStorage.setItem("selectedPeriodId", selectedPeriodId);
+  showUndo(null);
+  await refresh();
+});
+
 // ---- init --------------------------------------------------------------------
 
 (function init() {
   prefillSettings();
-  maybeShowSavingsPrompt();
   refresh()
-    .then(() => {
+    .then(async () => {
+      const selected = periods.find(({ period }) => period.id === selectedPeriodId);
+      if (selected && selected.period.status === "current") {
+        await maybeShowSavingsPrompt();
+      }
       // Deep link for manual testing: /?view=history or /?view=settings
       const v = new URLSearchParams(location.search).get("view");
       if (v && views[v]) showView(v);

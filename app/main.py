@@ -10,7 +10,7 @@ from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import inspect as sa_inspect, text
@@ -26,6 +26,7 @@ from app.schemas import (
     OperationWithBudget,
     PeriodIn,
     PeriodOut,
+    PeriodPatch,
     PeriodWithBudget,
     SavingsDecisionIn,
     SavingsPromptOut,
@@ -78,16 +79,57 @@ app = FastAPI(title="FinApp", lifespan=lifespan)
 AUTH = Depends(require_telegram_auth)
 
 
-async def _active_period(session: AsyncSession) -> Period | None:
-    result = await session.execute(select(Period).order_by(Period.id.desc()).limit(1))
-    return result.scalar_one_or_none()
+async def _active_period(
+    session: AsyncSession, workspace_id: int = 1
+) -> Period | None:
+    """Current period for a workspace, or its newest period when none is live."""
+    result = await session.execute(
+        select(Period)
+        .where(Period.workspace_id == workspace_id)
+        .order_by(Period.start_date.desc(), Period.id.desc())
+    )
+    periods = list(result.scalars())
+    today = date.today()
+    return next(
+        (p for p in periods if p.start_date <= today <= p.end_date),
+        periods[0] if periods else None,
+    )
 
 
-async def _require_period(session: AsyncSession) -> Period:
-    period = await _active_period(session)
+async def _require_period(
+    session: AsyncSession, period_id: int | None = None, workspace_id: int = 1
+) -> Period:
+    period = (
+        await session.get(Period, period_id)
+        if period_id is not None
+        else await _active_period(session, workspace_id)
+    )
+    if period is not None and period.workspace_id != workspace_id:
+        period = None
     if period is None:
         raise HTTPException(status_code=404, detail="No active period")
     return period
+
+
+async def _assert_no_period_overlap(
+    session: AsyncSession,
+    workspace_id: int,
+    start_date: date,
+    end_date: date,
+    exclude_period_id: int | None = None,
+) -> None:
+    statement = select(Period.id).where(
+        Period.workspace_id == workspace_id,
+        Period.start_date <= end_date,
+        Period.end_date >= start_date,
+    )
+    if exclude_period_id is not None:
+        statement = statement.where(Period.id != exclude_period_id)
+    if (await session.execute(statement.limit(1))).scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Period dates overlap another period in this workspace",
+        )
 
 
 async def _dated_amounts(
@@ -179,17 +221,28 @@ async def health():
     return {"status": "ok"}
 
 
+async def _period_with_budget(
+    session: AsyncSession, period: Period
+) -> PeriodWithBudget:
+    return PeriodWithBudget(
+        period=PeriodOut.model_validate(period),
+        budget=await _budget_for(session, period),
+    )
+
+
 @app.post("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
+@app.post("/periods", response_model=PeriodWithBudget, dependencies=[AUTH])
 async def set_period(
     body: PeriodIn,
     background_tasks: BackgroundTasks,
+    workspace_id: int = 1,
     session: AsyncSession = Depends(get_session),
 ):
-    # Single active period for the MVP: replacing it drops the old one
-    # (and, via cascade, its expenses).
-    await session.execute(delete(Period))
+    await _assert_no_period_overlap(
+        session, workspace_id, body.start_date, body.end_date
+    )
     period = Period(
-        workspace_id=1,
+        workspace_id=workspace_id,
         total_amount=body.total_amount,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -198,33 +251,106 @@ async def set_period(
     await session.commit()
     await session.refresh(period)
     await _queue_sheets_sync(background_tasks, session, period)
-    return PeriodWithBudget(
-        period=PeriodOut.model_validate(period),
-        budget=await _budget_for(session, period),
+    return await _period_with_budget(session, period)
+
+
+@app.get("/periods", response_model=list[PeriodWithBudget], dependencies=[AUTH])
+async def list_periods(
+    workspace_id: int = 1, session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(
+        select(Period)
+        .where(Period.workspace_id == workspace_id)
+        .order_by(Period.start_date.desc(), Period.id.desc())
     )
+    return [await _period_with_budget(session, p) for p in result.scalars()]
+
+
+@app.get(
+    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[AUTH]
+)
+async def get_period_by_id(
+    period_id: int,
+    workspace_id: int = 1,
+    session: AsyncSession = Depends(get_session),
+):
+    return await _period_with_budget(
+        session, await _require_period(session, period_id, workspace_id)
+    )
+
+
+@app.patch(
+    "/periods/{period_id}", response_model=PeriodWithBudget, dependencies=[AUTH]
+)
+async def update_period(
+    period_id: int,
+    body: PeriodPatch,
+    background_tasks: BackgroundTasks,
+    workspace_id: int = 1,
+    confirm_ended: bool = False,
+    session: AsyncSession = Depends(get_session),
+):
+    period = await _require_period(session, period_id, workspace_id)
+    if period.status == "ended" and not confirm_ended:
+        raise HTTPException(
+            status_code=409,
+            detail="Editing an ended period requires confirm_ended=true",
+        )
+    start_date = body.start_date or period.start_date
+    end_date = body.end_date or period.end_date
+    if end_date < start_date:
+        raise HTTPException(status_code=422, detail="end_date must be >= start_date")
+    await _assert_no_period_overlap(
+        session,
+        workspace_id,
+        start_date,
+        end_date,
+        exclude_period_id=period.id,
+    )
+    if body.total_amount is not None:
+        period.total_amount = body.total_amount
+    period.start_date = start_date
+    period.end_date = end_date
+    await session.commit()
+    await session.refresh(period)
+    await _queue_sheets_sync(background_tasks, session, period)
+    return await _period_with_budget(session, period)
 
 
 @app.get("/period", response_model=PeriodWithBudget, dependencies=[AUTH])
-async def get_period(session: AsyncSession = Depends(get_session)):
-    period = await _require_period(session)
-    return PeriodWithBudget(
-        period=PeriodOut.model_validate(period),
-        budget=await _budget_for(session, period),
-    )
+async def get_period(
+    period_id: int | None = None,
+    workspace_id: int = 1,
+    session: AsyncSession = Depends(get_session),
+):
+    period = await _require_period(session, period_id, workspace_id)
+    return await _period_with_budget(session, period)
 
 
 @app.get("/budget", response_model=BudgetOut, response_model_exclude_none=True,
          dependencies=[AUTH])
 async def get_budget(
-    pending: Decimal | None = None, session: AsyncSession = Depends(get_session)
+    pending: Decimal | None = None,
+    period_id: int | None = None,
+    workspace_id: int = 1,
+    session: AsyncSession = Depends(get_session),
 ):
-    period = await _require_period(session)
+    period = await _require_period(session, period_id, workspace_id)
     return await _budget_for(session, period, pending)
 
 
 @app.get("/operations", response_model=list[OperationOut], dependencies=[AUTH])
-async def list_operations(session: AsyncSession = Depends(get_session)):
-    period = await _require_period(session)
+@app.get(
+    "/periods/{period_id}/operations",
+    response_model=list[OperationOut],
+    dependencies=[AUTH],
+)
+async def list_operations(
+    period_id: int | None = None,
+    workspace_id: int = 1,
+    session: AsyncSession = Depends(get_session),
+):
+    period = await _require_period(session, period_id, workspace_id)
     result = await session.execute(
         select(Operation)
         .where(Operation.period_id == period.id)
@@ -234,15 +360,28 @@ async def list_operations(session: AsyncSession = Depends(get_session)):
 
 
 @app.post("/operations", response_model=OperationWithBudget, dependencies=[AUTH])
+@app.post(
+    "/periods/{period_id}/operations",
+    response_model=OperationWithBudget,
+    dependencies=[AUTH],
+)
 async def add_operation(
     body: OperationIn,
     background_tasks: BackgroundTasks,
+    period_id: int | None = None,
+    workspace_id: int = 1,
     session: AsyncSession = Depends(get_session),
 ):
-    period = await _require_period(session)
+    period = await _require_period(session, period_id, workspace_id)
+    occurred_on = body.occurred_on or date.today()
+    if not period.start_date <= occurred_on <= period.end_date:
+        raise HTTPException(
+            status_code=422,
+            detail="occurred_on must be inside the selected period",
+        )
     operation = Operation(
         period_id=period.id, amount=body.amount, kind=body.kind,
-        comment=body.comment, occurred_on=date.today(),
+        comment=body.comment, occurred_on=occurred_on,
     )
     session.add(operation)
     await session.commit()
@@ -256,15 +395,24 @@ async def add_operation(
 
 @app.delete("/operations/{operation_id}", response_model=BudgetOut,
             dependencies=[AUTH])
+@app.delete(
+    "/periods/{period_id}/operations/{operation_id}",
+    response_model=BudgetOut,
+    dependencies=[AUTH],
+)
 async def delete_operation(
     operation_id: int,
     background_tasks: BackgroundTasks,
+    period_id: int | None = None,
+    workspace_id: int = 1,
     session: AsyncSession = Depends(get_session),
 ):
     operation = await session.get(Operation, operation_id)
-    if operation is None:
+    if operation is None or (period_id is not None and operation.period_id != period_id):
         raise HTTPException(status_code=404, detail="Operation not found")
     period = await session.get(Period, operation.period_id)
+    if period is None or period.workspace_id != workspace_id:
+        raise HTTPException(status_code=404, detail="Operation not found")
     await session.delete(operation)
     await session.commit()
     await _queue_sheets_sync(background_tasks, session, period)
@@ -349,8 +497,13 @@ async def sheets_sync(session: AsyncSession = Depends(get_session)):
 
 
 @app.get("/export.xlsx", dependencies=[AUTH])
-async def export_xlsx(session: AsyncSession = Depends(get_session)):
-    period = await _require_period(session)
+@app.get("/periods/{period_id}/export.xlsx", dependencies=[AUTH])
+async def export_xlsx(
+    period_id: int | None = None,
+    workspace_id: int = 1,
+    session: AsyncSession = Depends(get_session),
+):
+    period = await _require_period(session, period_id, workspace_id)
     rows = await _operation_snapshot(session, period)
     rebases = await _rebase_days(session, period)
     data = export.build_workbook(

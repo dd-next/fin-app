@@ -23,7 +23,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 12 — UI restructure (SPEC-3)
 - [x] Phase 13 — Manual test cases + final pass (SPEC-3)
 - [x] Phase 14 — Workspace and migration foundation (SPEC-4)
-- [ ] Phase 15 — Period history (SPEC-4)
+- [x] Phase 15 — Period history (SPEC-4)
 - [ ] Phase 16 — Web authentication (SPEC-4)
 - [ ] Phase 17 — Personal and shared workspaces (SPEC-4)
 - [ ] Phase 18 — Categories and limits (SPEC-4)
@@ -45,6 +45,16 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   after upgrade. Tests: **65 passed, 0 failed** (`python -m pytest`).
 - Decision: historical `occurred_on` is backfilled from local `created_at`;
   workspace `1` is the personal legacy-data owner until web auth claims it.
+
+### Phase 15 — Period history (SPEC-4) (2026-07-17)
+- Period creation now preserves history and returns `409` for overlapping dates
+  in one workspace; list/detail/update endpoints expose derived period status.
+- Operations and exports can target an explicit period, and financial dates are
+  validated inside that period. Ended-period edits require explicit confirmation.
+- Frontend gained period selection, New/Edit flows, historical read-only views,
+  and selected-period export. Tests: **69 passed, 0 failed**; JS syntax check passed.
+- Decision: when no live period exists, legacy unscoped routes select the newest
+  period; explicit period endpoints are authoritative for history.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

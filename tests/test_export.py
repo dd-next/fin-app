@@ -113,3 +113,34 @@ async def test_export_income_type_and_running_balance(client):
 
     kv = {row[0]: row[1] for row in wb["Period"].iter_rows(values_only=True)}
     assert D(str(kv["remaining"])) == D("850")
+
+
+async def test_export_can_target_historical_period(client):
+    today = date.today()
+    old = {
+        "total_amount": "300",
+        "start_date": (today - timedelta(days=10)).isoformat(),
+        "end_date": (today - timedelta(days=1)).isoformat(),
+    }
+    old_id = (await client.post("/periods", json=old)).json()["period"]["id"]
+    await client.post(
+        f"/periods/{old_id}/operations",
+        json={"amount": "25", "occurred_on": old["end_date"]},
+    )
+    await client.post(
+        "/periods",
+        json={
+            "total_amount": "1000",
+            "start_date": today.isoformat(),
+            "end_date": (today + timedelta(days=9)).isoformat(),
+        },
+    )
+
+    response = await client.get(f"/periods/{old_id}/export.xlsx")
+    assert response.status_code == 200
+    workbook = load_workbook(BytesIO(response.content))
+    period_values = {
+        row[0]: row[1] for row in workbook["Period"].iter_rows(values_only=True)
+    }
+    assert D(str(period_values["total_amount"])) == D("300")
+    assert D(str(period_values["spent_total"])) == D("25")
