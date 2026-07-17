@@ -72,6 +72,9 @@ const el = {
   operationCategory: $("operation-category"),
   newCategory: $("new-category"),
   categoryWarning: $("category-warning"),
+  goalRow: $("goal-row"),
+  operationGoal: $("operation-goal"),
+  newGoal: $("new-goal"),
   operationSubmit: $("operation-submit"),
   undo: $("undo"),
   openHistory: $("open-history"),
@@ -94,6 +97,9 @@ const el = {
   poolPlansCard: $("pool-plans-card"),
   poolPlanList: $("pool-plan-list"),
   settingsNewPool: $("settings-new-pool"),
+  goalPlansCard: $("goal-plans-card"),
+  goalPlanList: $("goal-plan-list"),
+  settingsNewGoal: $("settings-new-goal"),
   categoryLimitsCard: $("category-limits-card"),
   categoryLimitList: $("category-limit-list"),
   settingsNewCategory: $("settings-new-category"),
@@ -124,6 +130,8 @@ let categories = [];
 let categoryPlans = [];
 let pools = [];
 let poolPlans = [];
+let goals = [];
+let goalPlans = [];
 
 // ---- views ---------------------------------------------------------------------
 
@@ -295,7 +303,7 @@ function renderOperations(operations) {
   el.operationList.replaceChildren(
     ...items.map((op) => {
       const li = document.createElement("li");
-      const income = op.kind === "income";
+      const income = op.kind === "income" || op.kind === "transfer_from_goal";
 
       const amount = document.createElement("span");
       amount.className = "op-amount" + (income ? " income" : "");
@@ -309,6 +317,13 @@ function renderOperations(operations) {
       const category = categories.find((item) => item.id === op.category_id);
       if (category) {
         comment.textContent = op.comment ? `${category.name} · ${op.comment}` : category.name;
+      }
+      const goal = goals.find((item) => item.id === op.savings_goal_id);
+      if (goal) {
+        const action = op.kind === "transfer_to_goal" ? "Saved to" : "Withdrawn from";
+        comment.textContent = op.comment
+          ? `${action} ${goal.name} · ${op.comment}`
+          : `${action} ${goal.name}`;
       }
       const when = document.createElement("div");
       when.className = "op-date";
@@ -335,6 +350,16 @@ function renderCategories() {
   el.operationCategory.replaceChildren(...options);
   if ([...el.operationCategory.options].some((o) => o.value === selected)) {
     el.operationCategory.value = selected;
+  }
+}
+
+function renderGoals() {
+  const selected = el.operationGoal.value;
+  el.operationGoal.replaceChildren(
+    ...goals.map((goal) => new Option(`${goal.name} · ${fmt(goal.balance)}`, goal.id))
+  );
+  if ([...el.operationGoal.options].some((option) => option.value === selected)) {
+    el.operationGoal.value = selected;
   }
 }
 
@@ -427,6 +452,51 @@ function renderPoolPlans() {
   );
 }
 
+function renderGoalPlans() {
+  el.goalPlansCard.classList.toggle("hidden", !selectedPeriodId || newPeriodMode);
+  const plansByGoal = new Map(goalPlans.map((plan) => [plan.goal.id, plan]));
+  el.goalPlanList.replaceChildren(
+    ...goals.map((goal) => {
+      const plan = plansByGoal.get(goal.id);
+      const row = document.createElement("label");
+      row.className = "limit-item";
+      const text = document.createElement("span");
+      text.textContent = goal.name;
+      const meta = document.createElement("span");
+      meta.className = "limit-meta" + (plan && plan.over_plan ? " over" : "");
+      meta.textContent = `${fmt(goal.balance)} / ${fmt(goal.target_amount)} saved`;
+      text.append(document.createElement("br"), meta);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.inputMode = "decimal";
+      input.placeholder = "Planned";
+      input.value = plan ? plan.planned_amount : "";
+      input.addEventListener("change", () => saveGoalPlan(goal.id, input.value));
+      row.append(text, input);
+      return row;
+    })
+  );
+}
+
+async function saveGoalPlan(goalId, raw) {
+  if (!validAmount(raw)) {
+    toast("Planned contribution must be a positive amount");
+    renderGoalPlans();
+    return;
+  }
+  try {
+    await api(`/periods/${selectedPeriodId}/goal-plans/${goalId}${query()}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planned_amount: raw.trim() }),
+    });
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+    await refresh();
+  }
+}
+
 async function savePoolPlan(poolId, raw) {
   if (!validAmount(raw)) {
     toast("Pool allocation must be a positive amount");
@@ -447,6 +517,19 @@ async function savePoolPlan(poolId, raw) {
 }
 
 function renderCategoryPreview(raw) {
+  if (kind === "transfer_to_goal") {
+    const goalId = Number(el.operationGoal.value);
+    const plan = goalPlans.find((item) => item.goal.id === goalId);
+    const predicted = plan && validAmount(raw) ? Number(plan.contributed) + Number(raw) : null;
+    const over = plan && predicted > Number(plan.planned_amount);
+    el.categoryWarning.classList.toggle("hidden", !over);
+    if (over) {
+      el.categoryWarning.textContent =
+        `${plan.goal.name} planned contribution will be exceeded by ` +
+        fmt(predicted - Number(plan.planned_amount));
+    }
+    return;
+  }
   if (kind !== "expense") {
     el.categoryWarning.classList.add("hidden");
     return;
@@ -476,7 +559,9 @@ function renderPreview(value) {
   el.preview.classList.toggle("hidden", !show);
   if (show) {
     el.previewLabel.textContent =
-      kind === "income" ? "after this top-up:" : "after this purchase:";
+      kind === "income" ? "after this top-up:" :
+      kind === "transfer_from_goal" ? "after this withdrawal:" :
+      kind === "transfer_to_goal" ? "after saving:" : "after this purchase:";
     el.previewValue.textContent = fmt(value);
     el.previewValue.classList.toggle("negative", Number(value) < 0);
   }
@@ -516,9 +601,18 @@ async function refresh() {
   else localStorage.removeItem("selectedPeriodId");
   renderPeriodOptions();
   const periodWithBudget = periods.find(({ period }) => period.id === selectedPeriodId) || null;
-  const [loadedCategories, loadedPools, operations, loadedPlans, loadedPoolPlans] = await Promise.all([
+  const [
+    loadedCategories,
+    loadedPools,
+    loadedGoals,
+    operations,
+    loadedPlans,
+    loadedPoolPlans,
+    loadedGoalPlans,
+  ] = await Promise.all([
     api(`/categories${query()}`),
     api(`/pools${query()}`),
+    api(`/savings-goals${query()}`),
     selectedPeriodId ? api(`/operations${selectedQuery()}`) : Promise.resolve([]),
     selectedPeriodId
       ? api(`/periods/${selectedPeriodId}/category-plans${query()}`)
@@ -526,13 +620,20 @@ async function refresh() {
     selectedPeriodId
       ? api(`/periods/${selectedPeriodId}/pool-plans${query()}`)
       : Promise.resolve([]),
+    selectedPeriodId
+      ? api(`/periods/${selectedPeriodId}/goal-plans${query()}`)
+      : Promise.resolve([]),
   ]);
   categories = loadedCategories || [];
   pools = loadedPools || [];
+  goals = loadedGoals || [];
   categoryPlans = loadedPlans || [];
   poolPlans = loadedPoolPlans || [];
+  goalPlans = loadedGoalPlans || [];
   renderCategories();
+  renderGoals();
   renderPoolPlans();
+  renderGoalPlans();
   renderCategoryPlans();
   renderBudget(periodWithBudget && periodWithBudget.budget);
   renderPeriod(
@@ -554,10 +655,16 @@ function setKind(next) {
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", String(active));
   }
-  el.spend.classList.toggle("income-mode", kind === "income");
-  el.categoryRow.classList.toggle("hidden", kind === "income");
-  el.operationSubmit.textContent = kind === "income" ? "Received" : "Spent";
-  el.operationSubmit.classList.toggle("income", kind === "income");
+  const addsToPeriod = kind === "income" || kind === "transfer_from_goal";
+  const isTransfer = kind === "transfer_to_goal" || kind === "transfer_from_goal";
+  el.spend.classList.toggle("income-mode", addsToPeriod);
+  el.categoryRow.classList.toggle("hidden", kind !== "expense");
+  el.goalRow.classList.toggle("hidden", !isTransfer);
+  el.operationSubmit.textContent =
+    kind === "income" ? "Received" :
+    kind === "transfer_to_goal" ? "Saved" :
+    kind === "transfer_from_goal" ? "Withdrawn" : "Spent";
+  el.operationSubmit.classList.toggle("income", addsToPeriod);
   updatePreview();
 }
 
@@ -577,7 +684,7 @@ function updatePreview() {
     renderPreview(null);
     return;
   }
-  if (kind === "income") {
+  if (kind === "income" || kind === "transfer_from_goal") {
     renderPreview(Number(lastBudget.per_day_today) + Number(raw));
     return;
   }
@@ -592,6 +699,7 @@ function updatePreview() {
 }
 el.operationAmount.addEventListener("input", updatePreview);
 el.operationCategory.addEventListener("change", updatePreview);
+el.operationGoal.addEventListener("change", updatePreview);
 
 async function createCategoryFromPrompt() {
   const name = window.prompt("Category name");
@@ -628,6 +736,30 @@ el.settingsNewPool.addEventListener("click", async () => {
   }
 });
 
+async function createGoalFromPrompt() {
+  const name = window.prompt("Savings goal name", "Emergency fund");
+  if (!name || !name.trim()) return;
+  const target = window.prompt("Target amount", "3000");
+  if (!target || !validAmount(target)) {
+    toast("Target must be a positive amount");
+    return;
+  }
+  try {
+    const goal = await api(`/savings-goals${query()}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim(), target_amount: target.trim() }),
+    });
+    await refresh();
+    el.operationGoal.value = String(goal.id);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+el.newGoal.addEventListener("click", createGoalFromPrompt);
+el.settingsNewGoal.addEventListener("click", createGoalFromPrompt);
+
 el.operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const amount = el.operationAmount.value.trim();
@@ -646,6 +778,11 @@ el.operationForm.addEventListener("submit", async (event) => {
         category_id:
           kind === "expense" && el.operationCategory.value
             ? Number(el.operationCategory.value)
+            : null,
+        savings_goal_id:
+          (kind === "transfer_to_goal" || kind === "transfer_from_goal") &&
+          el.operationGoal.value
+            ? Number(el.operationGoal.value)
             : null,
       }),
     });
@@ -720,6 +857,7 @@ function prefillSettings() {
     "hidden", !newPeriodMode || !selectedPeriodId
   );
   renderPoolPlans();
+  renderGoalPlans();
   renderCategoryPlans();
 }
 

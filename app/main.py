@@ -26,6 +26,12 @@ from app.categories import (
     router as categories_router,
 )
 from app.pools import clone_period_plan, router as pools_router
+from app.goals import (
+    goal_balance,
+    goal_plan_warning,
+    require_goal,
+    router as goals_router,
+)
 from app.db import engine, get_session
 from app.models import Base, Operation, Period, RebaseEvent, Workspace, WorkspaceMember
 from app.schemas import (
@@ -86,6 +92,7 @@ app.include_router(auth_router)
 app.include_router(workspaces_router)
 app.include_router(categories_router)
 app.include_router(pools_router)
+app.include_router(goals_router)
 
 # Telegram Mini App gate on all data endpoints (no-op unless
 # TELEGRAM_AUTH_ENABLED). /health and the static frontend stay open.
@@ -155,7 +162,10 @@ async def _dated_amounts(
     )
     # Incomes are negative spending in the replay (see app/budget.py).
     return [
-        (occurred_on, -amount if kind == "income" else amount)
+        (
+            occurred_on,
+            -amount if kind in {"income", "transfer_from_goal"} else amount,
+        )
         for occurred_on, amount, kind in result.all()
     ]
 
@@ -422,11 +432,31 @@ async def add_operation(
         category = await require_category(
             session, body.category_id, workspace_id
         )
+    transfer_kinds = {"transfer_to_goal", "transfer_from_goal"}
+    if body.kind in transfer_kinds and body.savings_goal_id is None:
+        raise HTTPException(
+            status_code=422, detail="Savings transfers require savings_goal_id"
+        )
+    if body.kind not in transfer_kinds and body.savings_goal_id is not None:
+        raise HTTPException(
+            status_code=422, detail="Only savings transfers can reference a goal"
+        )
+    goal = None
+    if body.savings_goal_id is not None:
+        goal = await require_goal(session, body.savings_goal_id, workspace_id)
+        if (
+            body.kind == "transfer_from_goal"
+            and await goal_balance(session, goal.id) < body.amount
+        ):
+            raise HTTPException(
+                status_code=409, detail="Savings goal balance is insufficient"
+            )
     operation = Operation(
         period_id=period.id, amount=body.amount, kind=body.kind,
         comment=body.comment, occurred_on=occurred_on,
         category_id=category.id if category else None,
         created_by_user_id=member.user_id if member else None,
+        savings_goal_id=goal.id if goal else None,
     )
     session.add(operation)
     await session.commit()
@@ -438,6 +468,8 @@ async def add_operation(
         warnings=(
             await operation_limit_warnings(session, period.id, category)
             if category is not None
+            else await goal_plan_warning(session, period.id, goal)
+            if goal is not None
             else []
         ),
     )

@@ -116,6 +116,12 @@
           <div id="kind-toggle" class="segmented" role="group" aria-label="Operation type">
             <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
             <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
+            <button type="button" class="seg" data-kind="transfer_to_goal" aria-pressed="false">Save</button>
+            <button type="button" class="seg" data-kind="transfer_from_goal" aria-pressed="false">Withdraw</button>
+          </div>
+          <div id="goal-row" class="row compact-row hidden">
+            <select id="operation-goal" aria-label="Savings goal"></select>
+            <button id="new-goal" type="button" class="ghost small">+ Goal</button>
           </div>
           <div id="category-row" class="row compact-row">
             <select id="operation-category" aria-label="Category">
@@ -195,6 +201,14 @@
         </div>
         <div id="pool-plan-list" class="limit-list"></div>
         <p class="hint">Pool balances reset in each period.</p>
+      </section>
+      <section id="goal-plans-card" class="card hidden">
+        <div class="section-heading">
+          <h3>Savings goals</h3>
+          <button id="settings-new-goal" type="button" class="ghost small">+ Goal</button>
+        </div>
+        <div id="goal-plan-list" class="limit-list"></div>
+        <p class="hint">Goal balances persist across periods.</p>
       </section>
       <section id="category-limits-card" class="card hidden">
         <div class="section-heading">

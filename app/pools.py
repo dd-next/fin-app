@@ -11,6 +11,7 @@ from app.db import get_session
 from app.models import (
     Period,
     PeriodCategoryPlan,
+    PeriodGoalPlan,
     PeriodPoolPlan,
     Pool,
     WorkspaceMember,
@@ -92,6 +93,24 @@ async def clone_period_plan(
                     if source.pool_plan_id is not None
                     else None
                 ),
+            )
+        )
+
+    source_goal_plans = list(
+        (
+            await session.execute(
+                select(PeriodGoalPlan).where(
+                    PeriodGoalPlan.period_id == source_period_id
+                )
+            )
+        ).scalars()
+    )
+    for source in source_goal_plans:
+        session.add(
+            PeriodGoalPlan(
+                period_id=target_period_id,
+                goal_id=source.goal_id,
+                planned_amount=source.planned_amount,
             )
         )
 

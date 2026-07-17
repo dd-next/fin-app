@@ -10,7 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 MoneyIn = Annotated[Decimal, Field(gt=0, max_digits=12, decimal_places=2)]
 
 # Operations are signed by kind, not by the amount (which stays positive).
-OperationKind = Literal["expense", "income"]
+OperationKind = Literal[
+    "expense", "income", "transfer_to_goal", "transfer_from_goal"
+]
 
 
 class LoginIn(BaseModel):
@@ -83,6 +85,7 @@ class OperationIn(BaseModel):
     comment: str | None = None
     occurred_on: date | None = None
     category_id: int | None = None
+    savings_goal_id: int | None = None
 
 
 class PeriodOut(BaseModel):
@@ -104,6 +107,7 @@ class OperationOut(BaseModel):
     period_id: int
     category_id: int | None
     created_by_user_id: int | None
+    savings_goal_id: int | None
     amount: Decimal
     kind: OperationKind
     comment: str | None
@@ -174,8 +178,46 @@ class PoolPlanOut(BaseModel):
     over_limit: bool
 
 
+class SavingsGoalCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    target_amount: MoneyIn
+    target_date: date | None = None
+
+
+class SavingsGoalPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    target_amount: MoneyIn | None = None
+    target_date: date | None = None
+    archived: bool | None = None
+
+
+class SavingsGoalOut(BaseModel):
+    id: int
+    workspace_id: int
+    name: str
+    target_amount: Decimal
+    target_date: date | None
+    balance: Decimal
+    remaining: Decimal
+    completed: bool
+    archived_at: datetime | None
+
+
+class GoalPlanIn(BaseModel):
+    planned_amount: MoneyIn
+
+
+class GoalPlanOut(BaseModel):
+    id: int
+    goal: SavingsGoalOut
+    planned_amount: Decimal
+    contributed: Decimal
+    remaining: Decimal
+    over_plan: bool
+
+
 class LimitWarning(BaseModel):
-    scope: Literal["category", "pool"]
+    scope: Literal["category", "pool", "goal"]
     target_id: int
     name: str
     limit_amount: Decimal

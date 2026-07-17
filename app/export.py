@@ -25,7 +25,11 @@ class OperationRow(NamedTuple):
 
     @property
     def signed_amount(self) -> Decimal:
-        return -self.amount if self.kind == "income" else self.amount
+        return (
+            -self.amount
+            if self.kind in {"income", "transfer_from_goal"}
+            else self.amount
+        )
 
     @property
     def day(self) -> date:

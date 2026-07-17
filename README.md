@@ -27,6 +27,9 @@ Features:
 - **Budget pools**: group period categories into envelopes such as Home or Food,
   validate nested allocations, and optionally copy the plan into the next
   period without rolling spending forward.
+- **Savings goals**: planned contributions participate in period allocation;
+  Save/Withdraw ledger operations move money atomically and goal balances persist
+  across periods.
 
 Single-user, no auth, no categories. FastAPI + SQLite backend, vanilla-JS
 dark UI, `.xlsx` export.

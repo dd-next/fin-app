@@ -28,7 +28,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 17 — Personal and shared workspaces (SPEC-4)
 - [x] Phase 18 — Categories and limits (SPEC-4)
 - [x] Phase 19 — Pools (SPEC-4)
-- [ ] Phase 20 — Savings goals (SPEC-4)
+- [x] Phase 20 — Savings goals (SPEC-4)
 - [ ] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
 
 ## Log
@@ -100,6 +100,17 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   leaving spending at zero. Settings UI supports pool creation, allocations,
   assignments, live preview, and copy-plan choice. Tests: **79 passed, 0 failed**.
 - Decision: pools reset every period; there is no automatic balance rollover.
+
+### Phase 20 — Savings goals (SPEC-4) (2026-07-17)
+- Added persistent workspace savings goals, per-period planned contributions,
+  and `transfer_to_goal` / `transfer_from_goal` operation kinds.
+- Transfers use the existing pure ledger replay: contributions reduce the
+  period and increase the goal; withdrawals reverse both and cannot overdraw.
+- Goal plans participate in top-level allocation and clone into the next period
+  without cloning contributions. UI supports Save/Withdraw, goal creation,
+  progress, plans, and live warnings. Tests: **81 passed, 0 failed**.
+- Decision: goal balance is derived from transfer operations; no mutable balance
+  column or automatic end-of-period contribution exists.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

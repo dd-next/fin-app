@@ -14,6 +14,7 @@ from app.models import (
     Operation,
     Period,
     PeriodCategoryPlan,
+    PeriodGoalPlan,
     PeriodPoolPlan,
     Pool,
     WorkspaceMember,
@@ -180,6 +181,7 @@ async def top_level_allocated(
     *,
     exclude_category_id: int | None = None,
     exclude_pool_plan_id: int | None = None,
+    exclude_goal_plan_id: int | None = None,
 ) -> Decimal:
     pool_statement = select(PeriodPoolPlan.allocated_amount).where(
         PeriodPoolPlan.period_id == period_id
@@ -200,9 +202,17 @@ async def top_level_allocated(
             PeriodCategoryPlan.category_id != exclude_category_id
         )
     category_values = (await session.execute(category_statement)).scalars()
+    goal_statement = select(PeriodGoalPlan.planned_amount).where(
+        PeriodGoalPlan.period_id == period_id
+    )
+    if exclude_goal_plan_id is not None:
+        goal_statement = goal_statement.where(
+            PeriodGoalPlan.id != exclude_goal_plan_id
+        )
+    goal_values = (await session.execute(goal_statement)).scalars()
     return sum(pool_values, ZERO) + sum(
         (value for value in category_values if value is not None), ZERO
-    )
+    ) + sum(goal_values, ZERO)
 
 
 @router.get("/categories", response_model=list[CategoryOut])

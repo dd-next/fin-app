@@ -269,11 +269,13 @@ button.accent.income { background: var(--income); }
   padding: 8px 12px;
   background: none;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   border-radius: 8px;
 }
 .segmented .seg.active[data-kind="expense"] { background: var(--accent); color: #1a1a1a; }
 .segmented .seg.active[data-kind="income"] { background: var(--income); color: #10301a; }
+.segmented .seg.active[data-kind="transfer_to_goal"] { background: #64d2ff; color: #082b38; }
+.segmented .seg.active[data-kind="transfer_from_goal"] { background: #bf5af2; color: #250931; }
 
 /* --- Undo last operation --------------------------------------------------- */
 
