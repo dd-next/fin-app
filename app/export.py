@@ -21,10 +21,15 @@ class OperationRow(NamedTuple):
     amount: Decimal  # always positive; kind carries the sign
     comment: str | None
     kind: str = "expense"  # 'expense' | 'income'
+    occurred_on: date | None = None
 
     @property
     def signed_amount(self) -> Decimal:
         return -self.amount if self.kind == "income" else self.amount
+
+    @property
+    def day(self) -> date:
+        return self.occurred_on or self.created_at.date()
 
 
 EXPENSE_HEADERS = [
@@ -49,7 +54,7 @@ def period_rows(
     .xlsx export and the Google Sheets sync so they always agree."""
     summary = budget.compute_budget(
         total_amount, start_date, end_date,
-        [(o.created_at.date(), o.signed_amount) for o in operations],
+        [(o.day, o.signed_amount) for o in operations],
         today=today, rebase_days=rebase_days,
     )
     return [
@@ -78,7 +83,7 @@ def expense_rows(
     rebase_days = list(rebase_days)
     for o in sorted(operations, key=lambda o: o.created_at):
         balance -= o.signed_amount
-        day = o.created_at.date()
+        day = o.day
         replayed.append((day, o.signed_amount))
         at_that_point = budget.compute_budget(
             total_amount, start_date, end_date, replayed, today=day,

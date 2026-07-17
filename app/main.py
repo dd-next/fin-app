@@ -18,7 +18,7 @@ from sqlalchemy import inspect as sa_inspect, text
 from app import budget, export, sheets
 from app.telegram_auth import require_telegram_auth
 from app.db import engine, get_session
-from app.models import Base, Operation, Period, RebaseEvent
+from app.models import Base, Operation, Period, RebaseEvent, Workspace
 from app.schemas import (
     BudgetOut,
     OperationIn,
@@ -50,15 +50,24 @@ async def lifespan(app: FastAPI):
             )
             return column not in cols
 
-        if await missing("expense", "kind"):
+        tables = await conn.run_sync(lambda sync_conn: sa_inspect(sync_conn).get_table_names())
+        operation_table = "operation" if "operation" in tables else "expense"
+        if await missing(operation_table, "kind"):
             await conn.execute(text(
-                "ALTER TABLE expense ADD COLUMN kind VARCHAR(10) "
+                f"ALTER TABLE {operation_table} ADD COLUMN kind VARCHAR(10) "
                 "NOT NULL DEFAULT 'expense'"
             ))
         if await missing("period", "prompt_ack_date"):
             await conn.execute(text(
                 "ALTER TABLE period ADD COLUMN prompt_ack_date DATE"
             ))
+        # Fresh databases need a default personal workspace before a period can
+        # reference it. Existing databases are upgraded canonically by Alembic.
+        await conn.execute(text(
+            "INSERT INTO workspace (id, name, kind, timezone, created_at) "
+            "SELECT 1, 'Personal', 'personal', 'Asia/Ho_Chi_Minh', CURRENT_TIMESTAMP "
+            "WHERE NOT EXISTS (SELECT 1 FROM workspace WHERE id = 1)"
+        ))
     yield
 
 
@@ -85,14 +94,14 @@ async def _dated_amounts(
     session: AsyncSession, period: Period
 ) -> list[budget.DatedAmount]:
     result = await session.execute(
-        select(Operation.created_at, Operation.amount, Operation.kind).where(
+        select(Operation.occurred_on, Operation.amount, Operation.kind).where(
             Operation.period_id == period.id
         )
     )
     # Incomes are negative spending in the replay (see app/budget.py).
     return [
-        (created.date(), -amount if kind == "income" else amount)
-        for created, amount, kind in result.all()
+        (occurred_on, -amount if kind == "income" else amount)
+        for occurred_on, amount, kind in result.all()
     ]
 
 
@@ -138,7 +147,7 @@ async def _operation_snapshot(
     return [
         export.OperationRow(
             created_at=o.created_at, amount=o.amount, comment=o.comment,
-            kind=o.kind,
+            kind=o.kind, occurred_on=o.occurred_on,
         )
         for o in result.scalars()
     ]
@@ -180,6 +189,7 @@ async def set_period(
     # (and, via cascade, its expenses).
     await session.execute(delete(Period))
     period = Period(
+        workspace_id=1,
         total_amount=body.total_amount,
         start_date=body.start_date,
         end_date=body.end_date,
@@ -232,7 +242,7 @@ async def add_operation(
     period = await _require_period(session)
     operation = Operation(
         period_id=period.id, amount=body.amount, kind=body.kind,
-        comment=body.comment,
+        comment=body.comment, occurred_on=date.today(),
     )
     session.add(operation)
     await session.commit()

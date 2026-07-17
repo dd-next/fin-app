@@ -1,7 +1,8 @@
 # CLAUDE.md — working agreement for this repo
 
-You are building the app described in `SPEC.md`. Read `SPEC.md` first, then
-`BUILD_PLAN.md`. This file defines HOW you work.
+You are building the app described in `specs/SPEC.md` and its numbered
+addenda. Read `specs/SPEC.md` first, then `BUILD_PLAN.md`. This file defines
+HOW you work.
 
 ## Tech stack (do not deviate without recording a reason in PROGRESS.md)
 - Python 3.12, FastAPI, Pydantic v2.
@@ -16,7 +17,8 @@ You are building the app described in `SPEC.md`. Read `SPEC.md` first, then
 
 ## Conventions (hard rules)
 - The health-check endpoint is exactly `/health` — never `/healthz`.
-- Single-tenant, single-user. No auth, no accounts.
+- Workspace-scoped multi-user behavior is defined by
+  `specs/SPEC-4-family-finance.md`. Bank accounts remain out of scope.
 - Do NOT add Redis, Celery, or Prometheus. No message queues, no background
   workers. This app does not need them.
 - Money is always `Decimal`, never `float`.
@@ -39,6 +41,7 @@ You are building the app described in `SPEC.md`. Read `SPEC.md` first, then
       test_api.py
       test_export.py
     README.md
+    specs/             # all product/technical specifications
     pyproject.toml     # or requirements.txt
 
 ## Workflow rules (critical for resumability)
@@ -63,4 +66,5 @@ After the final phase, make sure `README.md` lets a new person install, run, and
 test in a handful of commands.
 
 ## Definition of done
-All acceptance criteria in `SPEC.md` section 8 are met and all tests pass.
+All acceptance criteria in `specs/SPEC.md` and its active addenda are met and
+all tests pass.

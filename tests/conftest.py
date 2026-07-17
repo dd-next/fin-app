@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import get_session
 from app.main import app
-from app.models import Base
+from app.models import Base, Workspace
 
 
 @pytest_asyncio.fixture
@@ -20,6 +20,17 @@ async def client():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with session_factory() as seed_session:
+        seed_session.add(
+            Workspace(
+                id=1,
+                name="Personal",
+                kind="personal",
+                timezone="Asia/Ho_Chi_Minh",
+            )
+        )
+        await seed_session.commit()
 
     async def override_get_session():
         async with session_factory() as session:

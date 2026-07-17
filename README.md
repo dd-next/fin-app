@@ -1,5 +1,8 @@
 # FinApp — minimalist daily-budget tracker
 
+Product specifications live in [`specs/`](specs/); the current family-finance
+expansion is defined in `specs/SPEC-4-family-finance.md`.
+
 Set an amount and a period; the app splits the money across the days and
 shows what you can spend **today**. Add an expense and today's number drops
 by exactly that amount. Money you don't spend rolls into tomorrow; blowing

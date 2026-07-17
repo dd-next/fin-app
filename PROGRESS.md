@@ -2,7 +2,8 @@
 
 The agent updates this after every phase.
 
-**To resume in a new session (any model):** read `SPEC.md`, `CLAUDE.md`,
+**To resume in a new session (any model):** read `specs/SPEC.md`,
+`specs/SPEC-4-family-finance.md`, `CLAUDE.md`,
 `BUILD_PLAN.md`, then this file, and continue from the first unchecked phase,
 following the same conventions.
 
@@ -21,9 +22,29 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] Phase 11 — Next-day savings decision screen (SPEC-3)
 - [x] Phase 12 — UI restructure (SPEC-3)
 - [x] Phase 13 — Manual test cases + final pass (SPEC-3)
+- [x] Phase 14 — Workspace and migration foundation (SPEC-4)
+- [ ] Phase 15 — Period history (SPEC-4)
+- [ ] Phase 16 — Web authentication (SPEC-4)
+- [ ] Phase 17 — Personal and shared workspaces (SPEC-4)
+- [ ] Phase 18 — Categories and limits (SPEC-4)
+- [ ] Phase 19 — Pools (SPEC-4)
+- [ ] Phase 20 — Savings goals (SPEC-4)
+- [ ] Phase 21 — API v1, frontend, export, final verification (SPEC-4)
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
+
+### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
+- Added `specs/SPEC-4-family-finance.md`, moved all active documentation links
+  to `specs/`, and recorded phases 14–21 in `BUILD_PLAN.md`.
+- Created the legacy Personal workspace, renamed the physical `expense` table
+  to `operation`, added explicit `occurred_on`, and migrated the live DB after
+  a recoverable backup at `.backups/finapp-pre-family-20260717.db`.
+- Migration test caught and prevented an SQLite FK-cascade data-loss path
+  during batch table rebuild; the live period and both operations were verified
+  after upgrade. Tests: **65 passed, 0 failed** (`python -m pytest`).
+- Decision: historical `occurred_on` is backfilled from local `created_at`;
+  workspace `1` is the personal legacy-data owner until web auth claims it.
 
 ### Phase 1 — Pure budget core + unit tests (2026-07-13)
 - Implemented `app/budget.py`: pure functions (`days_total/elapsed/remaining`,

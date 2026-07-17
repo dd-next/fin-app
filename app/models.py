@@ -1,8 +1,4 @@
-"""SQLAlchemy models: period and operation (expense or income).
-
-The operation table is still named "expense" for historical reasons; the
-`kind` column ('expense' | 'income') generalizes it. Amounts are stored
-positive; `kind` carries the sign."""
+"""SQLAlchemy models for FinApp's workspace-scoped budget ledger."""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -45,10 +41,39 @@ class Base(DeclarativeBase):
     pass
 
 
+class Workspace(Base):
+    """A personal or shared financial space.
+
+    Phase 1 creates one legacy personal workspace. Membership and users are
+    added in later phases without moving periods again.
+    """
+
+    __tablename__ = "workspace"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="personal")
+    timezone: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Asia/Ho_Chi_Minh"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=localnow, nullable=False
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    periods: Mapped[list["Period"]] = relationship(back_populates="workspace")
+
+
 class Period(Base):
     __tablename__ = "period"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="RESTRICT"),
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
     total_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -56,6 +81,7 @@ class Period(Base):
     # Last local day the next-day savings prompt was answered (either choice).
     prompt_ack_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
+    workspace: Mapped[Workspace] = relationship(back_populates="periods")
     operations: Mapped[list["Operation"]] = relationship(
         back_populates="period", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -65,7 +91,7 @@ class Period(Base):
 
 
 class Operation(Base):
-    __tablename__ = "expense"  # historical name; rows are expenses AND incomes
+    __tablename__ = "operation"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     period_id: Mapped[int] = mapped_column(
@@ -76,6 +102,9 @@ class Operation(Base):
         String(10), nullable=False, default="expense", server_default="expense"
     )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The financial/calendar day used by budget replay. It is intentionally
+    # separate from created_at so historical corrections remain deterministic.
+    occurred_on: Mapped[date] = mapped_column(Date, default=date.today, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
 
     period: Mapped[Period] = relationship(back_populates="operations")
