@@ -22,7 +22,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 9 — Ledger isolation, frozen values, and display precision
 - [x] V2 Phase 10 — Period mutation invariants
 - [x] V2 Phase 11 — Plan history and historical UI integrity
-- [ ] V2 Phase 12 — Corrective final verification
+- [x] V2 Phase 12 — Corrective final verification
 
 ## Historical phases
 
@@ -246,6 +246,23 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   no:cacheprovider -q`); focused Plan, Tracker, category, migration, frontend,
   and Phase 10 regression tests (**30 passed**), JavaScript syntax, Python
   compileall, `pip check`, and `git diff --check` passed.
+
+### V2 Phase 12 — Corrective final verification (2026-07-19)
+- Re-audited all first-release routes and invariants. Archived categories remain
+  available to owners and visible shared history without disclosing names used
+  only by private transactions; Alembic metadata now matches the deployed
+  UNIQUE constraints plus lookup indexes (`alembic check`: no new operations).
+- A twice-fresh `0001_v2`→`0005_v2` scratch flow passed real lifespan/startup,
+  `/health`, registration, account funding, a ten-day Tracker period, exact
+  `100 → 90` preview/save behavior, Plan payment, and all five SPA sections.
+- Browser checks at **480×900** and **1280×900** had no horizontal overflow,
+  every visible button was at least **44 px**, archived-category history/edit
+  behavior passed, and browser warnings/errors were empty.
+- Tests: **81 passed, 0 failed** (`.venv/bin/python -m pytest -p
+  no:cacheprovider -q`); JavaScript syntax, Python compileall, `pip check`,
+  `git diff --check`, fresh Alembic upgrade/startup, live `/health`, and README
+  install/migrate/run/test audit passed. The non-fatal Alembic table-sort warning
+  for intentional cyclic financial-history FKs remains; runtime FKs are intact.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

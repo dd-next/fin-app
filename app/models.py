@@ -50,11 +50,12 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__ = "user"
+    __table_args__ = (UniqueConstraint("normalized_username"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), nullable=False)
     normalized_username: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
+        String(64), nullable=False, index=True
     )
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -82,13 +83,14 @@ class User(Base):
 
 class AuthSession(Base):
     __tablename__ = "auth_session"
+    __table_args__ = (UniqueConstraint("token_hash"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
         ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
+        String(64), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
@@ -104,9 +106,10 @@ class AuthSession(Base):
 
 class Asset(Base):
     __tablename__ = "asset"
+    __table_args__ = (UniqueConstraint("code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    code: Mapped[str] = mapped_column(String(16), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     decimals: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -246,6 +249,7 @@ class AccountAccess(Base):
 
 class AccountInvitation(Base):
     __tablename__ = "account_invitation"
+    __table_args__ = (UniqueConstraint("token_hash"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int] = mapped_column(
@@ -256,7 +260,7 @@ class AccountInvitation(Base):
     )
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     token_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
+        String(64), nullable=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
@@ -435,6 +439,7 @@ class PlanOccurrence(Base):
     __tablename__ = "plan_occurrence"
     __table_args__ = (
         UniqueConstraint("plan_rule_id", "due_date", name="uq_plan_occurrence_rule_date"),
+        UniqueConstraint("transaction_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -447,7 +452,6 @@ class PlanOccurrence(Base):
     transaction_id: Mapped[int | None] = mapped_column(
         ForeignKey("financial_transaction.id", ondelete="RESTRICT"),
         nullable=True,
-        unique=True,
         index=True,
     )
     matched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -3,10 +3,12 @@ from pathlib import Path
 import subprocess
 import sys
 import textwrap
+import warnings
 
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import SAWarning
 
 
 def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
@@ -29,6 +31,46 @@ def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
             "budget_period", "budget_commitment", "rebase_event",
             "transaction_leg", "user", "workspace",
         }
+    engine.dispose()
+
+
+def test_fresh_v2_schema_has_no_alembic_metadata_drift(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "metadata-v2.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+
+    command.upgrade(config, "head")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Cannot correctly sort tables.*",
+            category=SAWarning,
+        )
+        command.check(config)
+
+    engine = create_engine(f"sqlite:///{database}")
+    inspector = inspect(engine)
+    unique_columns = {
+        "user": "normalized_username",
+        "asset": "code",
+        "auth_session": "token_hash",
+        "account_invitation": "token_hash",
+        "plan_occurrence": "transaction_id",
+    }
+    for table_name, column_name in unique_columns.items():
+        assert any(
+            constraint["column_names"] == [column_name]
+            for constraint in inspector.get_unique_constraints(table_name)
+        )
+        assert any(
+            index["name"] == f"ix_{table_name}_{column_name}"
+            and index["column_names"] == [column_name]
+            and not index["unique"]
+            for index in inspector.get_indexes(table_name)
+        )
     engine.dispose()
 
 

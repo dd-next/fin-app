@@ -1,13 +1,25 @@
 """Workspace-owned transaction categories."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import exists, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.access import require_workspace_category_reader, require_workspace_owner
+from app.access import (
+    require_workspace_category_reader,
+    require_workspace_owner,
+    visible_account_ids,
+)
+from app.auth import require_user
 from app.db import get_session
-from app.models import Category, Workspace, utcnow
+from app.models import (
+    Category,
+    Transaction,
+    TransactionLeg,
+    User,
+    Workspace,
+    utcnow,
+)
 from app.schemas import CategoryCreate, CategoryOut, CategoryPatch
 
 
@@ -42,12 +54,29 @@ async def list_categories(
     workspace_id: int,
     include_archived: bool = False,
     workspace: Workspace = Depends(require_workspace_category_reader),
+    user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    del workspace
     statement = select(Category).where(Category.workspace_id == workspace_id)
     if not include_archived:
         statement = statement.where(Category.archived_at.is_(None))
+    elif workspace.owner_user_id != user.id:
+        account_ids = await visible_account_ids(session, user.id)
+        used_by_visible_transaction = exists(
+            select(Transaction.id)
+            .join(
+                TransactionLeg,
+                TransactionLeg.transaction_id == Transaction.id,
+            )
+            .where(
+                Transaction.workspace_id == workspace_id,
+                Transaction.category_id == Category.id,
+                TransactionLeg.account_id.in_(account_ids),
+            )
+        )
+        statement = statement.where(
+            or_(Category.archived_at.is_(None), used_by_visible_transaction)
+        )
     return list((await session.execute(statement.order_by(Category.name))).scalars())
 
 
