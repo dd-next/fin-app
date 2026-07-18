@@ -155,13 +155,71 @@ async def attach_transaction_to_tracker(
     supplied_base_amount: Decimal | None = None,
     *,
     explicit_period: BudgetPeriod | None = None,
+    actor_user_id: int | None = None,
+    confirm_ended_period: bool = False,
+    is_new_transaction: bool = False,
 ) -> BudgetPeriod | None:
     """Attach a daily-budget transaction and freeze its period valuation."""
     if transaction.type not in {"expense", "income"} and explicit_period is None:
         return None
+    source_period = (
+        await session.get(BudgetPeriod, transaction.budget_period_id)
+        if transaction.budget_period_id is not None
+        else None
+    )
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
+    today = workspace_today(workspace)
+    shared_actor = (
+        actor_user_id is not None and actor_user_id != workspace.owner_user_id
+    )
+    if (
+        shared_actor
+        and is_new_transaction
+        and transaction.local_date < today
+        and not confirm_ended_period
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Historical transaction requires explicit confirmation",
+        )
     period = explicit_period or await period_for_date(
         session, transaction.workspace_id, transaction.local_date
     )
+    if (
+        shared_actor
+        and period is not None
+        and budget_period_status(period, today) == "ended"
+    ):
+        period = None
+    if period is not None and explicit_period is not None and not (
+        period.start_date <= transaction.local_date <= period.end_date
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Transaction date is outside the linked budget period",
+        )
+    if period is not None and period.closed_at is not None and is_new_transaction:
+        raise HTTPException(
+            status_code=409,
+            detail="Closed period does not accept new transactions",
+        )
+    affected_periods = {
+        item.id: item for item in (source_period, period) if item is not None
+    }.values()
+    if any(
+        budget_period_status(item, today) == "ended"
+        for item in affected_periods
+    ) and not confirm_ended_period:
+        detail = (
+            "Historical transaction requires explicit confirmation"
+            if shared_actor
+            else "Ended period correction requires explicit confirmation"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=detail,
+        )
     if period is None:
         if transaction.type in {"expense", "income"}:
             transaction.budget_period_id = None
@@ -180,6 +238,10 @@ async def sync_plan_fulfillment(
     occurrence: PlanOccurrence,
     transaction: Transaction,
     supplied_base_amount: Decimal | None = None,
+    *,
+    actor_user_id: int | None = None,
+    confirm_ended_period: bool = False,
+    is_new_transaction: bool = False,
 ) -> None:
     commitments = list(
         (
@@ -200,11 +262,19 @@ async def sync_plan_fulfillment(
             transaction,
             supplied_base_amount,
             explicit_period=period,
+            actor_user_id=actor_user_id,
+            confirm_ended_period=confirm_ended_period,
+            is_new_transaction=is_new_transaction,
         )
         commitment.status = "fulfilled"
     else:
         await attach_transaction_to_tracker(
-            session, transaction, supplied_base_amount
+            session,
+            transaction,
+            supplied_base_amount,
+            actor_user_id=actor_user_id,
+            confirm_ended_period=confirm_ended_period,
+            is_new_transaction=is_new_transaction,
         )
 
 

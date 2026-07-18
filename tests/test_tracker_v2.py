@@ -241,6 +241,7 @@ async def test_tracker_carry_preview_rebase_history_and_ended_confirmation(clien
             "account_id": account["id"],
             "amount": "50",
             "local_date": historical_start.isoformat(),
+            "confirm_ended_period": True,
         },
     )
     assert old_expense.status_code == 201, old_expense.text

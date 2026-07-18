@@ -138,11 +138,29 @@ async def test_role_capabilities_and_owner_access_management(client):
         f"/api/v1/transactions/{income.json()['id']}",
         json={"amount": "12", "note": "Corrected by editor"},
     )
+    assert edited_income.status_code == 409, edited_income.text
+    assert edited_income.json()["detail"] == (
+        "Shared transaction correction requires explicit confirmation"
+    )
+    edited_income = await client.patch(
+        f"/api/v1/transactions/{income.json()['id']}",
+        json={
+            "amount": "12",
+            "note": "Corrected by editor",
+            "confirm_ended_period": True,
+        },
+    )
     assert edited_income.status_code == 200, edited_income.text
     assert edited_income.json()["note"] == "Corrected by editor"
-    assert (
-        await client.post(f"/api/v1/transactions/{income.json()['id']}/void")
-    ).status_code == 200
+    unconfirmed_void = await client.post(
+        f"/api/v1/transactions/{income.json()['id']}/void"
+    )
+    assert unconfirmed_void.status_code == 409
+    confirmed_void = await client.post(
+        f"/api/v1/transactions/{income.json()['id']}/void",
+        json={"confirm_ended_period": True},
+    )
+    assert confirmed_void.status_code == 200
     assert (
         await client.patch(f"/api/v1/accounts/{editor_a['id']}", json={"name": "Editor renamed"})
     ).status_code == 200

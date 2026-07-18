@@ -558,7 +558,12 @@ async def execute_occurrence(
     occurrence.transaction_id = transaction.id
     occurrence.matched_at = utcnow()
     await sync_plan_fulfillment(
-        session, occurrence, transaction, body.base_amount
+        session,
+        occurrence,
+        transaction,
+        body.base_amount,
+        confirm_ended_period=body.confirm_ended_period,
+        is_new_transaction=True,
     )
     await session.commit()
     await session.refresh(occurrence)
@@ -637,6 +642,8 @@ async def link_occurrence_transaction(
     rule: PlanRule,
     transaction: Transaction,
     supplied_base_amount: Decimal | None = None,
+    *,
+    confirm_ended_period: bool = False,
 ) -> PlanOccurrenceOut:
     require_open_occurrence(occurrence)
     if (
@@ -678,7 +685,11 @@ async def link_occurrence_transaction(
     occurrence.transaction_id = transaction.id
     occurrence.matched_at = utcnow()
     await sync_plan_fulfillment(
-        session, occurrence, transaction, supplied_base_amount
+        session,
+        occurrence,
+        transaction,
+        supplied_base_amount,
+        confirm_ended_period=confirm_ended_period,
     )
     await session.commit()
     await session.refresh(occurrence)
@@ -708,13 +719,17 @@ async def link_transaction_to_occurrence(
     workspace: Workspace = Depends(require_workspace_owner),
     session: AsyncSession = Depends(get_session),
 ):
-    del workspace
     occurrence, rule = await owned_occurrence(session, workspace_id, occurrence_id)
     transaction = await session.get(Transaction, body.transaction_id)
     if transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return await link_occurrence_transaction(
-        session, occurrence, rule, transaction, body.base_amount
+        session,
+        occurrence,
+        rule,
+        transaction,
+        body.base_amount,
+        confirm_ended_period=body.confirm_ended_period,
     )
 
 
@@ -740,5 +755,10 @@ async def link_plan_from_transaction(
     ):
         raise HTTPException(status_code=404, detail="Plan occurrence not found")
     return await link_occurrence_transaction(
-        session, occurrence, rule, transaction, body.base_amount
+        session,
+        occurrence,
+        rule,
+        transaction,
+        body.base_amount,
+        confirm_ended_period=body.confirm_ended_period,
     )

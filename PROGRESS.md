@@ -20,7 +20,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 7 — Final integration and verification
 - [x] V2 Phase 8 — Corrective release audit and documentation authority
 - [x] V2 Phase 9 — Ledger isolation, frozen values, and display precision
-- [ ] V2 Phase 10 — Period mutation invariants
+- [x] V2 Phase 10 — Period mutation invariants
 - [ ] V2 Phase 11 — Plan history and historical UI integrity
 - [ ] V2 Phase 12 — Corrective final verification
 
@@ -214,6 +214,24 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   `git diff --check` passed.
 - Decision: rates remain financial-history snapshots. Display quantization uses
   `ROUND_HALF_UP`; a positive rate that rounds to zero is rejected with `422`.
+
+### V2 Phase 10 — Period mutation invariants (2026-07-19)
+- Centralized source/destination period guards for manual transactions, exchange
+  fees, and Plan execution/linking. Natural-ended history requires explicit
+  confirmation; explicitly closed periods reject every newly created fact.
+- Preserved existing account permissions and private Tracker redaction while
+  making no-op PATCHes harmless and confirmed corrections/links deterministic.
+- Rejected period range edits that would orphan transactions, commitment dates,
+  or persisted Tracker decisions, and guarded historical commitment mutations.
+  Shared backdates use generic confirmation without exposing private period
+  boundaries; Plan UI retries only after user confirmation.
+- Tests: **74 passed, 0 failed** (`env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1
+  .venv/bin/python -m pytest -p no:cacheprovider -q`); focused transaction,
+  Tracker, Plan, sharing, and ledger tests (**32 passed**), JavaScript syntax,
+  Python compileall, `pip check`, and `git diff --check` passed.
+- Decision: closing blocks new transactions but not an explicitly confirmed
+  correction or Plan link to an already-existing transaction; expanding a
+  period does not synthesize new commitments.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

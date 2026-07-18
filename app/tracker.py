@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,7 @@ from app.models import (
 from app.plan import materialize_workspace
 from app.schemas import (
     AssetOut,
+    BudgetCommitmentCancelIn,
     BudgetCommitmentCreate,
     BudgetCommitmentOut,
     BudgetCommitmentPatch,
@@ -348,6 +349,74 @@ async def ensure_no_overlap(
         raise HTTPException(status_code=409, detail="Budget periods cannot overlap")
 
 
+async def ensure_period_range_contains_history(
+    session: AsyncSession,
+    period: BudgetPeriod,
+    start_date: date,
+    end_date: date,
+) -> None:
+    transaction_id = (
+        await session.execute(
+            select(Transaction.id)
+            .where(
+                Transaction.budget_period_id == period.id,
+                or_(
+                    Transaction.local_date < start_date,
+                    Transaction.local_date > end_date,
+                ),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if transaction_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Budget period dates cannot exclude attached transactions",
+        )
+
+    commitment_id = (
+        await session.execute(
+            select(BudgetCommitment.id)
+            .join(
+                PlanOccurrence,
+                PlanOccurrence.id == BudgetCommitment.plan_occurrence_id,
+            )
+            .where(
+                BudgetCommitment.budget_period_id == period.id,
+                or_(
+                    PlanOccurrence.due_date < start_date,
+                    PlanOccurrence.due_date > end_date,
+                ),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if commitment_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Budget period dates cannot exclude commitment occurrences",
+        )
+
+    rebase_id = (
+        await session.execute(
+            select(RebaseEvent.id)
+            .where(
+                RebaseEvent.budget_period_id == period.id,
+                or_(RebaseEvent.day < start_date, RebaseEvent.day > end_date),
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if rebase_id is not None or (
+        period.prompt_ack_date is not None
+        and not (start_date <= period.prompt_ack_date <= end_date)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Budget period dates cannot exclude persisted Tracker decisions",
+        )
+
+
 @router.post(
     "/workspaces/{workspace_id}/budget-periods/preview",
     response_model=PeriodProposalOut,
@@ -466,6 +535,7 @@ async def create_budget_period(
                     item,
                     linked,
                     body.transaction_base_amounts.get(linked.id),
+                    confirm_ended_period=True,
                 )
                 commitment_transactions.add(linked.id)
 
@@ -491,6 +561,7 @@ async def create_budget_period(
                 item,
                 body.transaction_base_amounts.get(item.id),
                 explicit_period=period,
+                confirm_ended_period=True,
             )
         except HTTPException as exc:
             if exc.status_code == 422:
@@ -570,14 +641,25 @@ async def patch_budget_period(
     session: AsyncSession = Depends(get_session),
 ):
     period = await require_period(session, workspace_id, period_id)
-    require_ended_confirmation(workspace, period, body.confirm_ended_period)
-    if period.closed_at is not None:
-        raise HTTPException(status_code=409, detail="Closed period cannot be edited")
     start = body.start_date or period.start_date
     end = body.end_date or period.end_date
     if end < start:
         raise HTTPException(status_code=422, detail="end_date must not precede start_date")
+    has_change = (
+        start != period.start_date
+        or end != period.end_date
+        or (
+            body.funding_amount is not None
+            and body.funding_amount != period.funding_amount
+        )
+    )
+    if not has_change:
+        return await tracker_summary(session, workspace, period)
+    require_ended_confirmation(workspace, period, body.confirm_ended_period)
+    if period.closed_at is not None:
+        raise HTTPException(status_code=409, detail="Closed period cannot be edited")
     await ensure_no_overlap(session, workspace_id, start, end, exclude_id=period.id)
+    await ensure_period_range_contains_history(session, period, start, end)
     period.start_date, period.end_date = start, end
     if body.funding_amount is not None:
         base_asset = await session.get(Asset, period.base_asset_id)
@@ -620,6 +702,12 @@ async def create_budget_commitment(
     session: AsyncSession = Depends(get_session),
 ):
     period = await require_period(session, workspace_id, period_id)
+    if period.closed_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Closed period does not accept new commitments",
+        )
+    require_ended_confirmation(workspace, period, body.confirm_ended_period)
     occurrence = await session.get(PlanOccurrence, body.plan_occurrence_id)
     rule = await session.get(PlanRule, occurrence.plan_rule_id) if occurrence else None
     if (
@@ -668,7 +756,11 @@ async def create_budget_commitment(
         transaction = await session.get(Transaction, occurrence.transaction_id)
         if transaction is not None and transaction.status == "posted":
             await sync_plan_fulfillment(
-                session, occurrence, transaction, body.planned_amount
+                session,
+                occurrence,
+                transaction,
+                body.planned_amount,
+                confirm_ended_period=body.confirm_ended_period,
             )
     await session.commit()
     return await tracker_summary(session, workspace, period)
@@ -693,16 +785,31 @@ async def patch_budget_commitment(
     )
     if commitment is None or period is None or period.workspace_id != workspace_id:
         raise HTTPException(status_code=404, detail="Budget commitment not found")
-    if commitment.status == "fulfilled" and body.status is not None:
-        raise HTTPException(status_code=409, detail="Fulfilled commitment status is automatic")
-    if body.name is not None:
-        commitment.name = " ".join(body.name.strip().split())
+    name = (
+        " ".join(body.name.strip().split())
+        if body.name is not None
+        else commitment.name
+    )
+    if not name:
+        raise HTTPException(status_code=422, detail="Commitment name is required")
+    planned_amount = commitment.planned_amount
     if body.planned_amount is not None:
         base_asset = await session.get(Asset, period.base_asset_id)
         assert base_asset is not None
-        commitment.planned_amount = validate_amount(body.planned_amount, base_asset)
-    if body.status is not None:
-        commitment.status = body.status
+        planned_amount = validate_amount(body.planned_amount, base_asset)
+    status = body.status or commitment.status
+    if (
+        name == commitment.name
+        and planned_amount == commitment.planned_amount
+        and status == commitment.status
+    ):
+        return await tracker_summary(session, workspace, period)
+    if commitment.status == "fulfilled" and body.status is not None:
+        raise HTTPException(status_code=409, detail="Fulfilled commitment status is automatic")
+    require_ended_confirmation(workspace, period, body.confirm_ended_period)
+    commitment.name = name
+    commitment.planned_amount = planned_amount
+    commitment.status = status
     await session.commit()
     return await tracker_summary(session, workspace, period)
 
@@ -714,6 +821,7 @@ async def patch_budget_commitment(
 async def cancel_budget_commitment(
     workspace_id: int,
     commitment_id: int,
+    body: BudgetCommitmentCancelIn | None = None,
     workspace: Workspace = Depends(require_workspace_owner),
     session: AsyncSession = Depends(get_session),
 ):
@@ -727,6 +835,13 @@ async def cancel_budget_commitment(
         raise HTTPException(status_code=404, detail="Budget commitment not found")
     if commitment.status == "fulfilled":
         raise HTTPException(status_code=409, detail="Fulfilled commitment cannot be cancelled")
+    if commitment.status == "cancelled":
+        return await tracker_summary(session, workspace, period)
+    require_ended_confirmation(
+        workspace,
+        period,
+        body.confirm_ended_period if body is not None else False,
+    )
     commitment.status = "cancelled"
     await session.commit()
     return await tracker_summary(session, workspace, period)

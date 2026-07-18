@@ -150,7 +150,14 @@ async def _create_single(
     )
     session.add(transaction)
     await session.flush()
-    await attach_transaction_to_tracker(session, transaction, body.base_amount)
+    await attach_transaction_to_tracker(
+        session,
+        transaction,
+        body.base_amount,
+        actor_user_id=user.id,
+        confirm_ended_period=body.confirm_ended_period,
+        is_new_transaction=True,
+    )
     await session.commit()
     await session.refresh(transaction)
     return transaction
@@ -339,7 +346,12 @@ async def create_exchange(
         session.add(fee)
         await session.flush()
         await attach_transaction_to_tracker(
-            session, fee, body.fee.base_amount
+            session,
+            fee,
+            body.fee.base_amount,
+            actor_user_id=user.id,
+            confirm_ended_period=body.confirm_ended_period,
+            is_new_transaction=True,
         )
     await session.commit()
     await session.refresh(transaction)
@@ -568,17 +580,13 @@ async def patch_transaction(
         if transaction.budget_period_id is not None
         else None
     )
-    if (
-        existing_period is not None
-        and budget_period_status(existing_period, workspace_today(workspace)) == "ended"
-        and not body.confirm_ended_period
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="Ended period correction requires explicit confirmation",
-        )
     legs = await _transaction_legs(session, transaction.id)
     original_financial_state = _financial_state(transaction, legs)
+    original_metadata = (
+        transaction.category_id,
+        transaction.counterparty,
+        transaction.note,
+    )
     original_base_amount = transaction.base_amount
     exchange_rate_inputs: tuple[Account, Decimal, Account, Decimal] | None = None
     if "note" in body.model_fields_set:
@@ -706,6 +714,35 @@ async def patch_transaction(
             and body.base_amount != original_base_amount
         )
     )
+    has_persisted_change = has_financial_change or original_metadata != (
+        transaction.category_id,
+        transaction.counterparty,
+        transaction.note,
+    )
+    if (
+        has_persisted_change
+        and user.id != workspace.owner_user_id
+        and not body.confirm_ended_period
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Shared transaction correction requires explicit confirmation",
+        )
+    if (
+        has_persisted_change
+        and existing_period is not None
+        and budget_period_status(existing_period, workspace_today(workspace)) == "ended"
+        and not body.confirm_ended_period
+    ):
+        detail = (
+            "Shared transaction correction requires explicit confirmation"
+            if user.id != workspace.owner_user_id
+            else "Ended period correction requires explicit confirmation"
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=detail,
+        )
     if exchange_rate_inputs is not None and has_financial_change:
         await _replace_rates(session, transaction, *exchange_rate_inputs)
     await session.flush()
@@ -718,7 +755,12 @@ async def patch_transaction(
     ).scalar_one_or_none()
     if linked_occurrence is not None and has_financial_change:
         await sync_plan_fulfillment(
-            session, linked_occurrence, transaction, body.base_amount
+            session,
+            linked_occurrence,
+            transaction,
+            body.base_amount,
+            actor_user_id=user.id,
+            confirm_ended_period=body.confirm_ended_period,
         )
     elif (
         linked_occurrence is None
@@ -726,7 +768,11 @@ async def patch_transaction(
         and has_financial_change
     ):
         await attach_transaction_to_tracker(
-            session, transaction, body.base_amount
+            session,
+            transaction,
+            body.base_amount,
+            actor_user_id=user.id,
+            confirm_ended_period=body.confirm_ended_period,
         )
     elif transaction.type not in {"expense", "income"} and linked_occurrence is None:
         transaction.budget_period_id = None
@@ -790,20 +836,45 @@ async def void_transaction(
         raise HTTPException(status_code=409, detail="Transaction is already voided")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
-    period = (
-        await session.get(BudgetPeriod, transaction.budget_period_id)
-        if transaction.budget_period_id is not None
-        else None
+    affected_periods = list(
+        (
+            await session.execute(
+                select(BudgetPeriod)
+                .join(
+                    Transaction,
+                    Transaction.budget_period_id == BudgetPeriod.id,
+                )
+                .where(
+                    or_(
+                        Transaction.id == transaction.id,
+                        Transaction.parent_transaction_id == transaction.id,
+                    )
+                )
+            )
+        ).scalars().unique()
     )
     if (
-        period is not None
-        and budget_period_status(period, workspace_today(workspace)) == "ended"
+        user.id != workspace.owner_user_id
         and not (body and body.confirm_ended_period)
     ):
         raise HTTPException(
             status_code=409,
-            detail="Ended period correction requires explicit confirmation",
+            detail="Shared transaction correction requires explicit confirmation",
         )
+    if any(
+        budget_period_status(period, workspace_today(workspace)) == "ended"
+        for period in affected_periods
+    ):
+        if not (body and body.confirm_ended_period):
+            detail = (
+                "Shared transaction correction requires explicit confirmation"
+                if user.id != workspace.owner_user_id
+                else "Ended period correction requires explicit confirmation"
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=detail,
+            )
     now = utcnow()
     transaction.status = "voided"
     transaction.voided_at = now

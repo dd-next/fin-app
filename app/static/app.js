@@ -873,6 +873,20 @@ async function apiWithBaseAmount(path, method, body) {
   }
 }
 
+async function apiWithEndedPeriodConfirmation(path, method, body) {
+  try {
+    return await apiWithBaseAmount(path, method, body);
+  } catch (error) {
+    if (
+      error.status !== 409
+      || !String(error.message).includes("explicit confirmation")
+      || !window.confirm("This changes an ended Tracker period. Continue and recompute its history?")
+    ) throw error;
+    body.confirm_ended_period = true;
+    return apiWithBaseAmount(path, method, body);
+  }
+}
+
 async function updateQuickPreview() {
   clearTimeout(state.quickPreviewTimer);
   const amount = $("quick-expense-amount").value.trim();
@@ -1062,7 +1076,11 @@ async function completePlanOccurrence(event) {
   }
   const action = occurrence.rule.kind === "income" ? "receive" : "pay";
   try {
-    const result = await apiWithBaseAmount(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/${action}`, "POST", body);
+    const result = await apiWithEndedPeriodConfirmation(
+      `/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/${action}`,
+      "POST",
+      body,
+    );
     $("plan-action-dialog").close();
     toast(action === "receive" ? "Income received" : "Plan item paid");
     await refreshAll();
@@ -1113,7 +1131,7 @@ async function linkPlanTransaction(event) {
     return;
   }
   try {
-    const result = await apiWithBaseAmount(
+    const result = await apiWithEndedPeriodConfirmation(
       `/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrenceId}/link-transaction`,
       "POST",
       { transaction_id: Number(transactionId) },
@@ -1385,8 +1403,8 @@ async function saveTransaction(event) {
     } catch (error) {
       if (
         error.status !== 409
-        || !String(error.message).includes("Ended period correction")
-        || !window.confirm("This changes a transaction in an ended period. Continue and recompute its history?")
+        || !String(error.message).includes("explicit confirmation")
+        || !window.confirm("This transaction correction requires confirmation. Continue?")
       ) throw error;
       body.confirm_ended_period = true;
       await apiWithBaseAmount(route, transactionId ? "PATCH" : "POST", body);
@@ -1418,8 +1436,8 @@ async function voidTransaction(transaction) {
     } catch (error) {
       if (
         error.status !== 409
-        || !String(error.message).includes("Ended period correction")
-        || !window.confirm("This transaction belongs to an ended period. Void it and recompute history?")
+        || !String(error.message).includes("explicit confirmation")
+        || !window.confirm("Voiding this shared or historical transaction requires confirmation. Continue?")
       ) throw error;
       await api(`/api/v1/transactions/${transaction.id}/void`, {
         method: "POST",

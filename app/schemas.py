@@ -218,6 +218,7 @@ class TransactionCommon(BaseModel):
     occurred_at: datetime | None = None
     local_date: date | None = None
     base_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
 
 class SingleTransactionIn(TransactionCommon):
@@ -435,16 +436,19 @@ class PlanExecuteIn(BaseModel):
     counterparty: str | None = Field(default=None, max_length=160)
     note: str | None = Field(default=None, max_length=2000)
     base_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
 
 class PlanLinkTransactionIn(BaseModel):
     transaction_id: int
     base_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
 
 class TransactionLinkPlanIn(BaseModel):
     occurrence_id: int
     base_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
 
 BudgetPeriodStatus = Literal["upcoming", "current", "ended"]
@@ -516,12 +520,18 @@ class BudgetPeriodOut(BaseModel):
 class BudgetCommitmentCreate(BaseModel):
     plan_occurrence_id: int
     planned_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
 
 class BudgetCommitmentPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     planned_amount: PositiveAmount | None = None
     status: Literal["reserved", "cancelled"] | None = None
+    confirm_ended_period: bool = False
+
+
+class BudgetCommitmentCancelIn(BaseModel):
+    confirm_ended_period: bool = False
 
 
 class TrackerSummaryOut(BaseModel):
