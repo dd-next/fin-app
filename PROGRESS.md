@@ -11,7 +11,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 ## FinApp v2
 
 - [x] V2 Phase 0 — Specification authority
-- [ ] V2 Phase 1 — Clean identity, workspace, assets, and categories
+- [x] V2 Phase 1 — Clean identity, workspace, assets, and categories
 - [ ] V2 Phase 2 — Accounts and ledger
 - [ ] V2 Phase 3 — Account sharing and permissions
 - [ ] V2 Phase 4 — Accounts and Transactions frontend
@@ -57,6 +57,20 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   Sheets, Telegram, XLSX, crypto sync, or full Analytics.
 - Tests: **85 passed, 0 failed** (`.venv/bin/python -m pytest -q`); JavaScript
   syntax check passed (`node --check app/static/app.js`).
+
+### V2 Phase 1 — Clean identity, workspace, assets, and categories (2026-07-18)
+- Preserved the complete pre-v2 SQLite as
+  `.backups/finapp-pre-v2-20260718-115110.db` (SHA-256
+  `d4a45ed038b2750ddf592ff661b6670cee066e9669a1919ccc44377463830ea1`), then
+  created a clean `0001_v2` database. No legacy rows were migrated.
+- Replaced optional legacy authentication with open registration, always-on
+  opaque cookie sessions, a private personal workspace, eight seeded assets,
+  and owner-only workspace/category APIs.
+- Removed pools, goals, category plans, export, Sheets, Telegram, bootstrap
+  management, old migrations/tests, and their unused dependencies. Added a
+  small authenticated SPA shell so the checkpoint remains runnable.
+- Tests: **31 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real
+  `alembic upgrade head`, JavaScript syntax, and `pip check` passed.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

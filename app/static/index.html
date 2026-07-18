@@ -3,225 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>FinApp — daily budget</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <!-- Telegram Mini App bridge; harmless no-op in a normal browser -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>FinApp v2</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-
-  <div id="login-screen" class="login-screen hidden">
-    <section class="card login-card">
-      <h1 id="login-title">FinApp</h1>
-      <p id="login-subtitle" class="muted">Sign in to your budget</p>
-      <form id="login-form" autocomplete="on">
-        <label id="display-name-field" class="hidden">Display name
-          <input id="login-display-name" name="display_name" autocomplete="name">
-        </label>
-        <label>Username
-          <input id="login-username" name="username" autocomplete="username" required>
-        </label>
-        <label>Password
-          <input id="login-password" name="password" type="password"
-                 autocomplete="current-password" minlength="10" required>
-        </label>
-        <button type="submit" class="accent">Sign in</button>
-        <p id="login-error" class="error hidden"></p>
+  <main class="shell">
+    <section id="auth-card" class="card auth-card">
+      <p class="eyebrow">FinApp v2</p>
+      <h1>Your money, in one place.</h1>
+      <form id="auth-form">
+        <label>Username<input id="username" autocomplete="username" required minlength="3"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required minlength="10"></label>
+        <label id="display-field" class="hidden">Display name<input id="display-name" autocomplete="name"></label>
+        <div class="actions">
+          <button id="submit-auth" type="submit">Log in</button>
+          <button id="toggle-auth" type="button" class="secondary">Create account</button>
+        </div>
+        <p id="auth-error" class="error" role="alert"></p>
       </form>
     </section>
-  </div>
 
-  <!-- Next-day savings decision: shown full-screen before the main screen -->
-  <div id="savings-prompt" class="savings hidden" role="dialog" aria-modal="true">
-    <div class="savings-inner">
-      <h1 class="savings-title">Nice!</h1>
-      <p class="savings-sub">
-        Yesterday you saved <strong id="saved-amount"></strong>.
-        Decide what to do with it.
-      </p>
-      <button id="choice-spend" type="button" class="choice">
-        <span class="choice-title">Spend it all today</span>
-        <span id="choice-spend-caption" class="choice-caption"></span>
-      </button>
-      <button id="choice-increase" type="button" class="choice">
-        <span class="choice-title">Increase the daily budget</span>
-        <span id="choice-increase-caption" class="choice-caption"></span>
-      </button>
-    </div>
-  </div>
-
-  <main class="app">
-
-    <nav id="workspace-bar" class="workspace-bar hidden">
-      <select id="workspace-select" aria-label="Financial space"></select>
-      <button id="create-workspace" type="button" class="ghost small">+ Shared</button>
-      <button id="invite-member" type="button" class="ghost small hidden">Invite</button>
-      <button id="workspace-logout" type="button" class="ghost small">Log out</button>
-    </nav>
-
-    <!-- ================= Main view ================= -->
-    <section id="view-main" class="view">
-
-      <header id="main-header" class="topbar hidden">
-        <div class="period-picker">
-          <select id="period-select" aria-label="Budget period"></select>
-          <span id="period-summary" class="period-summary"></span>
-        </div>
-        <div class="topbar-actions">
-          <button id="new-period" type="button" class="ghost small">New</button>
-          <button id="open-settings" type="button" class="ghost small">Edit</button>
-          <button id="logout" type="button" class="ghost small hidden">Log out</button>
-        </div>
+    <section id="app-shell" class="hidden">
+      <header>
+        <div><p class="eyebrow">FinApp v2</p><h1 id="workspace-name">Finances</h1></div>
+        <button id="logout" class="secondary">Log out</button>
       </header>
-
-      <!-- No period yet -->
-      <section id="empty-state" class="card center hidden">
-        <h1 class="muted">Set a budget to start</h1>
-        <button id="empty-open-settings" type="button" class="accent">
-          Budget Settings
-        </button>
-      </section>
-
-      <!-- Today's allowance -->
-      <section id="today" class="hidden">
-        <div id="today-numbers">
-          <p class="label">You can spend today</p>
-          <p id="per-day" class="allowance">0</p>
-          <p id="over-note" class="over-note hidden">Now spending the overall budget</p>
-          <div id="rebase" class="rebase hidden">
-            <p id="next-daily" class="rebase-value"></p>
-            <p class="rebase-caption">new daily budget · was <span id="was-daily"></span></p>
-          </div>
-          <p id="preview" class="preview hidden">
-            <span id="preview-label">after this purchase:</span> <span id="preview-value"></span>
-          </p>
-          <p class="meta">
-            <span id="remaining"></span> left · <span id="days-left"></span>
-          </p>
-        </div>
-        <!-- Whole budget gone: big red "Spent" instead of numbers -->
-        <div id="spent-state" class="hidden">
-          <p class="spent-big">Spent</p>
-          <p class="over-note">The whole budget is spent</p>
-          <button id="spent-open-settings" type="button" class="linklike">
-            Change amount and dates
-          </button>
-        </div>
-      </section>
-
-      <!-- Add operation (expense or income) -->
-      <section id="spend" class="card hidden">
-        <form id="operation-form" autocomplete="off">
-          <div id="kind-toggle" class="segmented" role="group" aria-label="Operation type">
-            <button type="button" class="seg active" data-kind="expense" aria-pressed="true">Expense</button>
-            <button type="button" class="seg" data-kind="income" aria-pressed="false">Income</button>
-            <button type="button" class="seg" data-kind="transfer_to_goal" aria-pressed="false">Save</button>
-            <button type="button" class="seg" data-kind="transfer_from_goal" aria-pressed="false">Withdraw</button>
-          </div>
-          <div id="goal-row" class="row compact-row hidden">
-            <select id="operation-goal" aria-label="Savings goal"></select>
-            <button id="new-goal" type="button" class="ghost small">+ Goal</button>
-          </div>
-          <div id="category-row" class="row compact-row">
-            <select id="operation-category" aria-label="Category">
-              <option value="">Uncategorized</option>
-            </select>
-            <button id="new-category" type="button" class="ghost small">+ Category</button>
-          </div>
-          <div class="row">
-            <input id="operation-amount" type="text" inputmode="decimal"
-                   placeholder="0.00" aria-label="Amount" required>
-            <button id="operation-submit" type="submit" class="accent">Spent</button>
-          </div>
-          <label id="clone-plan-field" class="checkbox-label hidden">
-            <input id="clone-plan" type="checkbox" checked>
-            Copy category limits and pool allocations from the selected period
-          </label>
-          <input id="operation-comment" type="text" maxlength="200"
-                 placeholder="Comment (optional)" aria-label="Comment">
-          <p id="category-warning" class="limit-warning hidden"></p>
-        </form>
-        <button id="undo" type="button" class="undo hidden"></button>
-      </section>
-
-      <button id="open-history" type="button" class="ghost big hidden">
-        Expenses History
-      </button>
-
-    </section>
-
-    <!-- ================= Expenses History view ================= -->
-    <section id="view-history" class="view hidden">
-      <header class="topbar">
-        <button id="history-back" type="button" class="ghost small back">‹ Back</button>
-        <h2 class="view-title">Expenses History</h2>
-      </header>
-      <ul id="operation-list"></ul>
-      <p id="history-empty" class="muted center hidden">No operations yet.</p>
-      <p class="footer">
-        <a id="download" class="ghost big linkbutton" href="/export.xlsx" download>
-          Export .xlsx
-        </a>
-      </p>
-    </section>
-
-    <!-- ================= Budget Settings view ================= -->
-    <section id="view-settings" class="view hidden">
-      <header class="topbar">
-        <button id="settings-back" type="button" class="ghost small back">‹ Back</button>
-        <h2 id="settings-title" class="view-title">Budget Settings</h2>
-      </header>
+      <nav aria-label="Primary">
+        <button class="active">Accounts</button><button disabled>Transactions</button>
+        <button disabled>Tracker</button><button disabled>Plan</button><button disabled>Analytics</button>
+      </nav>
       <section class="card">
-        <form id="period-form" autocomplete="off">
-          <label>Amount
-            <input id="period-amount" type="text" inputmode="decimal"
-                   placeholder="30000" required>
-          </label>
-          <p id="per-day-hint" class="hint tall hidden"></p>
-          <div class="row">
-            <label>From
-              <input id="period-start" type="date" required>
-            </label>
-            <label>To
-              <input id="period-end" type="date" required>
-            </label>
-          </div>
-          <div class="row">
-            <button type="submit" class="accent">Save</button>
-            <button id="settings-cancel" type="button" class="ghost">Cancel</button>
-          </div>
-          <p class="hint">Periods stay in history. Date ranges in one space cannot overlap.</p>
-        </form>
-      </section>
-      <section id="pool-plans-card" class="card hidden">
-        <div class="section-heading">
-          <h3>Pools</h3>
-          <button id="settings-new-pool" type="button" class="ghost small">+ Pool</button>
-        </div>
-        <div id="pool-plan-list" class="limit-list"></div>
-        <p class="hint">Pool balances reset in each period.</p>
-      </section>
-      <section id="goal-plans-card" class="card hidden">
-        <div class="section-heading">
-          <h3>Savings goals</h3>
-          <button id="settings-new-goal" type="button" class="ghost small">+ Goal</button>
-        </div>
-        <div id="goal-plan-list" class="limit-list"></div>
-        <p class="hint">Goal balances persist across periods.</p>
-      </section>
-      <section id="category-limits-card" class="card hidden">
-        <div class="section-heading">
-          <h3>Category limits</h3>
-          <button id="settings-new-category" type="button" class="ghost small">+ Category</button>
-        </div>
-        <div id="category-limit-list" class="limit-list"></div>
-        <p class="hint">Limits are optional. Real expenses are never blocked.</p>
+        <p class="muted">Foundation ready</p>
+        <h2 id="welcome">Welcome</h2>
+        <p>Accounts and transactions arrive in the next phase.</p>
+        <div id="asset-list" class="chips"></div>
       </section>
     </section>
-
   </main>
-  <div id="toast" class="toast hidden"></div>
-  <script src="/static/app.js"></script>
+  <script src="/app.js" defer></script>
 </body>
 </html>

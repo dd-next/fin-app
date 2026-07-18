@@ -1,56 +1,45 @@
-"""SQLAlchemy models for FinApp's workspace-scoped budget ledger."""
+"""SQLAlchemy models for the FinApp v2 foundation."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
-    Date,
     DateTime,
     ForeignKey,
+    Integer,
     Numeric,
     String,
-    Text,
     TypeDecorator,
     UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-class Money(TypeDecorator):
-    """Exact Decimal storage. Numeric(12,2) on real databases; TEXT on SQLite
-    (whose NUMERIC affinity is floating point and would lose exactness)."""
+def utcnow() -> datetime:
+    """Naive UTC for SQLite's DateTime adapter."""
+    return datetime.now(UTC).replace(tzinfo=None)
 
-    impl = Numeric(12, 2)
+
+class ExactDecimal(TypeDecorator):
+    """Exact Decimal storage: TEXT on SQLite, Numeric(38,18) elsewhere."""
+
+    impl = Numeric(38, 18)
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
         if dialect.name == "sqlite":
-            return dialect.type_descriptor(String(32))
-        return dialect.type_descriptor(Numeric(12, 2))
+            return dialect.type_descriptor(String(80))
+        return dialect.type_descriptor(Numeric(38, 18))
 
     def process_bind_param(self, value, dialect):
         if value is None:
             return None
-        return str(Decimal(value)) if dialect.name == "sqlite" else value
+        decimal = Decimal(value)
+        return str(decimal) if dialect.name == "sqlite" else decimal
 
     def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        return Decimal(str(value))
-
-
-def localnow() -> datetime:
-    # Local (not UTC) on purpose: the budget math works in local calendar
-    # days (`date.today()`), so "the day the expense was entered" must be
-    # the local day too, or dates disagree around midnight.
-    return datetime.now()
-
-
-def utcnow() -> datetime:
-    # SQLAlchemy's current SQLite DateTime adapter is naive; keep a naive UTC
-    # value while avoiding deprecated datetime.utcnow().
-    return datetime.now(UTC).replace(tzinfo=None)
+        return None if value is None else Decimal(str(value))
 
 
 class Base(DeclarativeBase):
@@ -67,6 +56,9 @@ class User(Base):
     )
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    timezone: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Asia/Ho_Chi_Minh"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
@@ -78,8 +70,8 @@ class User(Base):
     sessions: Mapped[list["AuthSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    memberships: Mapped[list["WorkspaceMember"]] = relationship(
-        back_populates="user", cascade="all, delete-orphan"
+    workspaces: Mapped[list["Workspace"]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
     )
 
 
@@ -105,87 +97,39 @@ class AuthSession(Base):
     user: Mapped[User] = relationship(back_populates="sessions")
 
 
+class Asset(Base):
+    __tablename__ = "asset"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    decimals: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
 class Workspace(Base):
-    """A personal or shared financial space.
-
-    Phase 1 creates one legacy personal workspace. Membership and users are
-    added in later phases without moving periods again.
-    """
-
     __tablename__ = "workspace"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    kind: Mapped[str] = mapped_column(String(20), nullable=False, default="personal")
-    timezone: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="Asia/Ho_Chi_Minh"
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, unique=True
     )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    base_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
+    )
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=localnow, nullable=False
+        DateTime, nullable=False, default=utcnow
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
-    periods: Mapped[list["Period"]] = relationship(back_populates="workspace")
-    members: Mapped[list["WorkspaceMember"]] = relationship(
-        back_populates="workspace", cascade="all, delete-orphan"
-    )
-    invites: Mapped[list["WorkspaceInvite"]] = relationship(
-        back_populates="workspace", cascade="all, delete-orphan"
-    )
+    owner: Mapped[User] = relationship(back_populates="workspaces")
+    base_asset: Mapped[Asset] = relationship()
     categories: Mapped[list["Category"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
-    pools: Mapped[list["Pool"]] = relationship(
-        back_populates="workspace", cascade="all, delete-orphan"
-    )
-    savings_goals: Mapped[list["SavingsGoal"]] = relationship(
-        back_populates="workspace", cascade="all, delete-orphan"
-    )
-
-
-class WorkspaceMember(Base):
-    __tablename__ = "workspace_member"
-    __table_args__ = (
-        UniqueConstraint("workspace_id", "user_id", name="uq_workspace_member"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="editor")
-    joined_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-
-    workspace: Mapped[Workspace] = relationship(back_populates="members")
-    user: Mapped[User] = relationship(back_populates="memberships")
-
-
-class WorkspaceInvite(Base):
-    __tablename__ = "workspace_invite"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    token_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False, unique=True, index=True
-    )
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="editor")
-    created_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id", ondelete="CASCADE"), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    workspace: Mapped[Workspace] = relationship(back_populates="invites")
 
 
 class Category(Base):
@@ -202,259 +146,12 @@ class Category(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
-    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="expense")
+    icon: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     workspace: Mapped[Workspace] = relationship(back_populates="categories")
-    plans: Mapped[list["PeriodCategoryPlan"]] = relationship(
-        back_populates="category", cascade="all, delete-orphan"
-    )
-
-
-class Pool(Base):
-    __tablename__ = "pool"
-    __table_args__ = (
-        UniqueConstraint("workspace_id", "normalized_name", name="uq_pool_workspace_name"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    workspace: Mapped[Workspace] = relationship(back_populates="pools")
-    plans: Mapped[list["PeriodPoolPlan"]] = relationship(
-        back_populates="pool", cascade="all, delete-orphan"
-    )
-
-
-class SavingsGoal(Base):
-    __tablename__ = "savings_goal"
-    __table_args__ = (
-        UniqueConstraint(
-            "workspace_id", "normalized_name", name="uq_savings_goal_workspace_name"
-        ),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    name: Mapped[str] = mapped_column(String(100), nullable=False)
-    normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    target_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    workspace: Mapped[Workspace] = relationship(back_populates="savings_goals")
-    plans: Mapped[list["PeriodGoalPlan"]] = relationship(
-        back_populates="goal", cascade="all, delete-orphan"
-    )
-
-
-class Period(Base):
-    __tablename__ = "period"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    workspace_id: Mapped[int] = mapped_column(
-        ForeignKey("workspace.id", ondelete="RESTRICT"),
-        nullable=False,
-        default=1,
-        server_default="1",
-    )
-    total_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
-    # Last local day the next-day savings prompt was answered (either choice).
-    prompt_ack_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-
-    workspace: Mapped[Workspace] = relationship(back_populates="periods")
-    operations: Mapped[list["Operation"]] = relationship(
-        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
-    )
-    rebase_events: Mapped[list["RebaseEvent"]] = relationship(
-        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
-    )
-    category_plans: Mapped[list["PeriodCategoryPlan"]] = relationship(
-        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
-    )
-    pool_plans: Mapped[list["PeriodPoolPlan"]] = relationship(
-        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
-    )
-    goal_plans: Mapped[list["PeriodGoalPlan"]] = relationship(
-        back_populates="period", cascade="all, delete-orphan", passive_deletes=True
-    )
-
-    @property
-    def status(self) -> str:
-        today = date.today()
-        if today < self.start_date:
-            return "upcoming"
-        if today > self.end_date:
-            return "ended"
-        return "current"
-
-
-class Operation(Base):
-    __tablename__ = "operation"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("period.id", ondelete="CASCADE"), nullable=False
-    )
-    amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    category_id: Mapped[int | None] = mapped_column(
-        ForeignKey("category.id", ondelete="RESTRICT"), nullable=True, index=True
-    )
-    created_by_user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    savings_goal_id: Mapped[int | None] = mapped_column(
-        ForeignKey("savings_goal.id", ondelete="RESTRICT"), nullable=True, index=True
-    )
-    kind: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="expense", server_default="expense"
-    )
-    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # The financial/calendar day used by budget replay. It is intentionally
-    # separate from created_at so historical corrections remain deterministic.
-    occurred_on: Mapped[date] = mapped_column(Date, default=date.today, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
-
-    period: Mapped[Period] = relationship(back_populates="operations")
-    category: Mapped[Category | None] = relationship()
-    savings_goal: Mapped[SavingsGoal | None] = relationship()
-
-    @property
-    def signed_amount(self) -> Decimal:
-        """How much this operation takes from the pool: incomes are negative
-        spending, which is exactly how the budget replay consumes them."""
-        return (
-            -self.amount
-            if self.kind in {"income", "transfer_from_goal"}
-            else self.amount
-        )
-
-
-class RebaseEvent(Base):
-    """A user-chosen "increase the daily budget" day: the replay re-spreads
-    the remaining money evenly from this day on and resets the carry-over.
-    Stored as a record so the numbers stay a pure function of the DB."""
-
-    __tablename__ = "rebase_event"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("period.id", ondelete="CASCADE"), nullable=False
-    )
-    day: Mapped[date] = mapped_column(Date, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=localnow, nullable=False)
-
-    period: Mapped[Period] = relationship(back_populates="rebase_events")
-
-
-class PeriodCategoryPlan(Base):
-    __tablename__ = "period_category_plan"
-    __table_args__ = (
-        UniqueConstraint("period_id", "category_id", name="uq_period_category_plan"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("period.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    category_id: Mapped[int] = mapped_column(
-        ForeignKey("category.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    limit_amount: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
-    pool_plan_id: Mapped[int | None] = mapped_column(
-        ForeignKey("period_pool_plan.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
-
-    period: Mapped[Period] = relationship(back_populates="category_plans")
-    category: Mapped[Category] = relationship(back_populates="plans")
-    pool_plan: Mapped["PeriodPoolPlan | None"] = relationship(
-        back_populates="category_plans"
-    )
-
-
-class PeriodPoolPlan(Base):
-    __tablename__ = "period_pool_plan"
-    __table_args__ = (
-        UniqueConstraint("period_id", "pool_id", name="uq_period_pool_plan"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("period.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    pool_id: Mapped[int] = mapped_column(
-        ForeignKey("pool.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    allocated_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
-
-    period: Mapped[Period] = relationship(back_populates="pool_plans")
-    pool: Mapped[Pool] = relationship(back_populates="plans")
-    category_plans: Mapped[list[PeriodCategoryPlan]] = relationship(
-        back_populates="pool_plan"
-    )
-
-
-class PeriodGoalPlan(Base):
-    __tablename__ = "period_goal_plan"
-    __table_args__ = (
-        UniqueConstraint("period_id", "goal_id", name="uq_period_goal_plan"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    period_id: Mapped[int] = mapped_column(
-        ForeignKey("period.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    goal_id: Mapped[int] = mapped_column(
-        ForeignKey("savings_goal.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    planned_amount: Mapped[Decimal] = mapped_column(Money, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=utcnow, onupdate=utcnow
-    )
-
-    period: Mapped[Period] = relationship(back_populates="goal_plans")
-    goal: Mapped[SavingsGoal] = relationship(back_populates="plans")

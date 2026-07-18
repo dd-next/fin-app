@@ -1,130 +1,57 @@
-"""Local web authentication with Argon2id passwords and opaque sessions."""
+"""Always-on web authentication for FinApp v2."""
 
 from datetime import timedelta
 import hashlib
-import hmac
 import os
 import secrets
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response
-from sqlalchemy import func, select
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.models import AuthSession, User, Workspace, WorkspaceMember, utcnow
-from app.schemas import BootstrapIn, LoginIn, UserOut
-from app import telegram_auth
+from app.models import AuthSession, Asset, User, Workspace, utcnow
+from app.schemas import AuthContextOut, LoginIn, RegisterIn, UserOut, WorkspaceOut
 
 
 COOKIE_NAME = "finapp_session"
 SESSION_DAYS = 30
 _hasher = PasswordHasher()
-
-
-def web_auth_enabled() -> bool:
-    return os.environ.get("WEB_AUTH_ENABLED", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def normalize_username(username: str) -> str:
     return username.strip().casefold()
 
 
-def hash_password(password: str) -> str:
-    return _hasher.hash(password)
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
-def verify_password(password_hash: str, password: str) -> bool:
+def _validate_timezone(value: str) -> str:
+    try:
+        ZoneInfo(value)
+    except ZoneInfoNotFoundError:
+        raise HTTPException(status_code=422, detail="Unknown timezone")
+    return value
+
+
+def _verify_password(password_hash: str, password: str) -> bool:
     try:
         return _hasher.verify(password_hash, password)
     except (VerifyMismatchError, InvalidHashError):
         return False
 
 
-def _token_hash(token: str) -> str:
-    return hashlib.sha256(token.encode()).hexdigest()
-
-
-async def create_user(
-    session: AsyncSession,
-    username: str,
-    password: str,
-    display_name: str | None,
-    *,
-    claim_legacy_workspace: bool = False,
-) -> User:
-    username = username.strip()
-    user = User(
-        username=username,
-        normalized_username=normalize_username(username),
-        display_name=(display_name or username).strip(),
-        password_hash=hash_password(password),
-        is_active=True,
-    )
-    session.add(user)
-    try:
-        await session.flush()
-        if claim_legacy_workspace:
-            workspace = await session.get(Workspace, 1)
-            if workspace is None:
-                workspace = Workspace(
-                    id=1,
-                    name="Personal",
-                    kind="personal",
-                    timezone="Asia/Ho_Chi_Minh",
-                )
-                session.add(workspace)
-                await session.flush()
-        else:
-            workspace = Workspace(
-                name=f"{user.display_name}'s Personal",
-                kind="personal",
-                timezone="Asia/Ho_Chi_Minh",
-            )
-            session.add(workspace)
-            await session.flush()
-        session.add(
-            WorkspaceMember(
-                workspace_id=workspace.id,
-                user_id=user.id,
-                role="owner",
-            )
-        )
-        await session.commit()
-    except IntegrityError:
-        await session.rollback()
-        raise HTTPException(status_code=409, detail="Username already exists")
-    await session.refresh(user)
-    return user
-
-
-async def create_session(session: AsyncSession, user: User) -> str:
-    raw = secrets.token_urlsafe(32)
-    now = utcnow()
-    session.add(
-        AuthSession(
-            user_id=user.id,
-            token_hash=_token_hash(raw),
-            created_at=now,
-            last_seen_at=now,
-            expires_at=now + timedelta(days=SESSION_DAYS),
-        )
-    )
-    await session.commit()
-    return raw
-
-
-def set_session_cookie(response: Response, raw_token: str) -> None:
-    secure = os.environ.get("COOKIE_SECURE", "").strip().lower() in {
-        "1", "true", "yes", "on"
-    }
+def _set_cookie(response: Response, token: str) -> None:
+    secure = os.environ.get("COOKIE_SECURE", "").lower() in {"1", "true", "yes", "on"}
     response.set_cookie(
         COOKIE_NAME,
-        raw_token,
+        token,
         max_age=SESSION_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=secure,
@@ -133,15 +60,32 @@ def set_session_cookie(response: Response, raw_token: str) -> None:
     )
 
 
-async def _session_user(session: AsyncSession, raw_token: str | None) -> User | None:
-    if not raw_token:
-        return None
-    result = await session.execute(
-        select(AuthSession, User)
-        .join(User, User.id == AuthSession.user_id)
-        .where(AuthSession.token_hash == _token_hash(raw_token))
+async def _new_session(session: AsyncSession, user: User) -> str:
+    raw = secrets.token_urlsafe(32)
+    now = utcnow()
+    session.add(
+        AuthSession(
+            user_id=user.id,
+            token_hash=_token_hash(raw),
+            created_at=now,
+            expires_at=now + timedelta(days=SESSION_DAYS),
+            last_seen_at=now,
+        )
     )
-    row = result.first()
+    await session.commit()
+    return raw
+
+
+async def _session_user(session: AsyncSession, raw: str | None) -> User | None:
+    if not raw:
+        return None
+    row = (
+        await session.execute(
+            select(AuthSession, User)
+            .join(User, User.id == AuthSession.user_id)
+            .where(AuthSession.token_hash == _token_hash(raw))
+        )
+    ).first()
     if row is None:
         return None
     auth_session, user = row
@@ -151,71 +95,92 @@ async def _session_user(session: AsyncSession, raw_token: str | None) -> User | 
         or not user.is_active
     ):
         return None
+    auth_session.last_seen_at = utcnow()
+    await session.commit()
     return user
 
 
-async def require_web_user(
-    raw_token: str | None = Cookie(None, alias=COOKIE_NAME),
+async def require_user(
+    raw: str | None = Cookie(None, alias=COOKIE_NAME),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    user = await _session_user(session, raw_token)
+    user = await _session_user(session, raw)
     if user is None:
         raise HTTPException(status_code=401, detail="Authentication required")
     return user
 
 
-async def require_auth(
-    raw_token: str | None = Cookie(None, alias=COOKIE_NAME),
-    authorization: str | None = Header(None),
-    session: AsyncSession = Depends(get_session),
-) -> User | None:
-    """Data gate: web session first, legacy Telegram gate second, local no-op."""
-    if web_auth_enabled():
-        user = await _session_user(session, raw_token)
-        if user is None:
-            raise HTTPException(status_code=401, detail="Authentication required")
-        return user
-    if telegram_auth.enabled():
-        await telegram_auth.require_telegram_auth(authorization)
-    return None
+async def primary_workspace(session: AsyncSession, user_id: int) -> Workspace:
+    workspace = (
+        await session.execute(
+            select(Workspace).where(
+                Workspace.owner_user_id == user_id,
+                Workspace.archived_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if workspace is None:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
 
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+async def _context(session: AsyncSession, user: User) -> AuthContextOut:
+    workspace = await primary_workspace(session, user.id)
+    await session.refresh(workspace, attribute_names=["base_asset"])
+    return AuthContextOut(
+        user=UserOut.model_validate(user),
+        workspace=WorkspaceOut(
+            id=workspace.id,
+            owner_user_id=workspace.owner_user_id,
+            name=workspace.name,
+            timezone=workspace.timezone,
+            base_asset=workspace.base_asset,
+            created_at=workspace.created_at,
+        ),
+    )
 
 
-@router.get("/config")
-async def auth_config():
-    return {"enabled": web_auth_enabled()}
-
-
-@router.post("/bootstrap", response_model=UserOut)
-async def bootstrap(
-    body: BootstrapIn,
+@router.post("/register", response_model=AuthContextOut, status_code=201)
+async def register(
+    body: RegisterIn,
     response: Response,
-    x_bootstrap_token: str | None = Header(None),
     session: AsyncSession = Depends(get_session),
 ):
-    count = (await session.execute(select(func.count(User.id)))).scalar_one()
-    if count:
-        raise HTTPException(status_code=409, detail="Owner is already bootstrapped")
-    expected = os.environ.get("BOOTSTRAP_TOKEN")
-    if web_auth_enabled() and (
-        not expected or not x_bootstrap_token or not hmac.compare_digest(expected, x_bootstrap_token)
-    ):
-        raise HTTPException(status_code=403, detail="Valid bootstrap token required")
-    user = await create_user(
-        session,
-        body.username,
-        body.password,
-        body.display_name,
-        claim_legacy_workspace=True,
+    timezone = _validate_timezone(body.timezone)
+    asset = (
+        await session.execute(select(Asset).where(Asset.code == body.base_asset_code))
+    ).scalar_one_or_none()
+    if asset is None or not asset.is_active:
+        raise HTTPException(status_code=422, detail="Unknown base asset")
+    username = body.username.strip()
+    user = User(
+        username=username,
+        normalized_username=normalize_username(username),
+        display_name=(body.display_name or username).strip(),
+        password_hash=_hasher.hash(body.password),
+        timezone=timezone,
+        is_active=True,
     )
-    raw = await create_session(session, user)
-    set_session_cookie(response, raw)
-    return UserOut.model_validate(user)
+    session.add(user)
+    try:
+        await session.flush()
+        workspace = Workspace(
+            owner_user_id=user.id,
+            name=f"{user.display_name}'s Finances",
+            base_asset_id=asset.id,
+            timezone=timezone,
+        )
+        session.add(workspace)
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail="Username already exists")
+    token = await _new_session(session, user)
+    _set_cookie(response, token)
+    return await _context(session, user)
 
 
-@router.post("/login", response_model=UserOut)
+@router.post("/login", response_model=AuthContextOut)
 async def login(
     body: LoginIn,
     response: Response,
@@ -228,25 +193,23 @@ async def login(
             )
         )
     ).scalar_one_or_none()
-    if user is None or not user.is_active or not verify_password(user.password_hash, body.password):
+    if user is None or not user.is_active or not _verify_password(user.password_hash, body.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
-    raw = await create_session(session, user)
-    set_session_cookie(response, raw)
-    return UserOut.model_validate(user)
+    token = await _new_session(session, user)
+    _set_cookie(response, token)
+    return await _context(session, user)
 
 
 @router.post("/logout", status_code=204)
 async def logout(
     response: Response,
-    raw_token: str | None = Cookie(None, alias=COOKIE_NAME),
+    raw: str | None = Cookie(None, alias=COOKIE_NAME),
     session: AsyncSession = Depends(get_session),
 ):
-    if raw_token:
+    if raw:
         auth_session = (
             await session.execute(
-                select(AuthSession).where(
-                    AuthSession.token_hash == _token_hash(raw_token)
-                )
+                select(AuthSession).where(AuthSession.token_hash == _token_hash(raw))
             )
         ).scalar_one_or_none()
         if auth_session is not None:
@@ -255,6 +218,9 @@ async def logout(
     response.delete_cookie(COOKIE_NAME, path="/")
 
 
-@router.get("/me", response_model=UserOut)
-async def me(user: User = Depends(require_web_user)):
-    return UserOut.model_validate(user)
+@router.get("/me", response_model=AuthContextOut)
+async def me(
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await _context(session, user)
