@@ -1,15 +1,17 @@
 """SQLAlchemy models for the FinApp v2 foundation."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
     Numeric,
     String,
+    Text,
     TypeDecorator,
     UniqueConstraint,
 )
@@ -130,6 +132,12 @@ class Workspace(Base):
     categories: Mapped[list["Category"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    accounts: Mapped[list["Account"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
+    transactions: Mapped[list["Transaction"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
 
 
 class Category(Base):
@@ -155,3 +163,147 @@ class Category(Base):
     archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     workspace: Mapped[Workspace] = relationship(back_populates="categories")
+
+
+class Account(Base):
+    __tablename__ = "account"
+    __table_args__ = (
+        UniqueConstraint(
+            "workspace_id", "normalized_name", name="uq_account_workspace_name"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    storage_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(24), nullable=False)
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    institution: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    include_in_available: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="accounts")
+    owner: Mapped[User] = relationship()
+    asset: Mapped[Asset] = relationship()
+    legs: Mapped[list["TransactionLeg"]] = relationship(back_populates="account")
+
+
+class Transaction(Base):
+    __tablename__ = "financial_transaction"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    type: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    parent_transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    counterparty: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    local_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    source: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="manual"
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="posted", index=True
+    )
+    external_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    base_amount: Mapped[Decimal | None] = mapped_column(ExactDecimal, nullable=True)
+    base_rate: Mapped[Decimal | None] = mapped_column(ExactDecimal, nullable=True)
+    rate_source: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(back_populates="transactions")
+    creator: Mapped[User] = relationship()
+    category: Mapped[Category | None] = relationship()
+    parent: Mapped["Transaction | None"] = relationship(remote_side="Transaction.id")
+    legs: Mapped[list["TransactionLeg"]] = relationship(
+        back_populates="transaction", cascade="all, delete-orphan"
+    )
+    rates: Mapped[list["ExchangeRate"]] = relationship(
+        back_populates="source_transaction", cascade="all, delete-orphan"
+    )
+
+
+class TransactionLeg(Base):
+    __tablename__ = "transaction_leg"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("account.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+
+    transaction: Mapped[Transaction] = relationship(back_populates="legs")
+    account: Mapped[Account | None] = relationship(back_populates="legs")
+    asset: Mapped[Asset] = relationship()
+
+
+class ExchangeRate(Base):
+    __tablename__ = "exchange_rate"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_transaction_id",
+            "base_asset_id",
+            "quote_asset_id",
+            name="uq_exchange_rate_transaction_pair",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    base_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    quote_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    rate: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    source_transaction: Mapped[Transaction] = relationship(back_populates="rates")

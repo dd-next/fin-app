@@ -7,10 +7,12 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.assets import router as assets_router, seed_default_assets
+from app.accounts import router as accounts_router
 from app.auth import router as auth_router
 from app.categories import router as categories_router
 from app.db import SessionLocal
 from app.workspaces import router as workspaces_router
+from app.transactions import router as transactions_router
 
 
 @asynccontextmanager
@@ -26,6 +28,8 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")
 app.include_router(assets_router, prefix="/api/v1")
 app.include_router(categories_router, prefix="/api/v1")
+app.include_router(accounts_router, prefix="/api/v1")
+app.include_router(transactions_router, prefix="/api/v1")
 
 
 @app.get("/health")

@@ -12,7 +12,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 - [x] V2 Phase 0 — Specification authority
 - [x] V2 Phase 1 — Clean identity, workspace, assets, and categories
-- [ ] V2 Phase 2 — Accounts and ledger
+- [x] V2 Phase 2 — Accounts and ledger
 - [ ] V2 Phase 3 — Account sharing and permissions
 - [ ] V2 Phase 4 — Accounts and Transactions frontend
 - [ ] V2 Phase 5 — Plan rules and occurrences
@@ -71,6 +71,20 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   small authenticated SPA shell so the checkpoint remains runnable.
 - Tests: **31 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real
   `alembic upgrade head`, JavaScript syntax, and `pip check` passed.
+
+### V2 Phase 2 — Accounts and ledger (2026-07-18)
+- Added the `0002_v2` account/transaction/leg/rate schema with exact
+  `Decimal(38,18)` semantics and asset-specific scale validation. Account
+  balances, Net worth, Available, and Unvalued are derived from posted legs.
+- Implemented opening and reconcile adjustments, expense, income, neutral
+  same-asset transfer, cross-asset exchange, atomic fee child transactions,
+  unassigned operations, later assignment, corrections, filters/cursors, and
+  void without public hard deletion.
+- Exchange inputs store both actual amounts and create direct/inverse rates;
+  live totals use the latest posted direct rate, while void removes movements,
+  child fees, and derived rates from all totals.
+- Tests: **39 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real upgrade
+  to `0002_v2`, Python compileall, JavaScript syntax, and diff checks passed.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links
