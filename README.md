@@ -9,8 +9,10 @@ The current checkpoint provides open web registration, secure cookie sessions,
 multi-asset accounts, an exact double-entry-style movement ledger, derived
 exchange rates, account-level sharing with four roles, and a responsive SPA.
 Plan supports recurring rules, occurrence actions, explicit transaction links,
-and plan-vs-actual. Tracker is the next implementation phase; Analytics
-intentionally remains a `Coming soon` placeholder for the first release.
+and plan-vs-actual. Tracker provides confirmed income-based periods, frozen
+multi-asset valuation, required commitments, exact daily-budget replay, live
+expense preview, history, and next-day carry decisions. Analytics intentionally
+remains a `Coming soon` placeholder for the first release.
 
 ## Install and run
 

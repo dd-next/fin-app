@@ -16,7 +16,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 3 — Account sharing and permissions
 - [x] V2 Phase 4 — Accounts and Transactions frontend
 - [x] V2 Phase 5 — Plan rules and occurrences
-- [ ] V2 Phase 6 — Tracker periods and commitments
+- [x] V2 Phase 6 — Tracker periods and commitments
 - [ ] V2 Phase 7 — Final integration and verification
 
 ## Historical phases
@@ -137,6 +137,32 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   syntax, Python compileall, migration to `0004_v2`, and diff checks passed.
 - Decision: an expected-income completion is recorded now; the proposed Tracker
   period it triggers is intentionally introduced in V2 Phase 6 with periods.
+
+### V2 Phase 6 — Tracker periods and commitments (2026-07-18)
+- Added permanent, non-overlapping budget periods, commitment snapshots, and
+  persisted voluntary rebase events in migration `0005_v2`. Receiving planned
+  income now returns a suggested period through the day before the next income;
+  a missing next income requires the user to choose the end date and confirm.
+- Generalized the pure replay math to each base asset's quantum. Tracker freezes
+  cross-asset values, excludes opening income, replaces reserved commitments
+  with their actual base amount, excludes that same fact from ordinary spend,
+  and deterministically recomputes after correction or void.
+- Built current/history Tracker UI with today allowance, remaining money,
+  commitments plan-vs-actual, quick expense/live preview, income proposal,
+  savings carry decision, close/history controls, and explicit confirmation for
+  ended-period corrections. Shared users receive none of the private period,
+  Plan-link, or frozen-valuation metadata even when their expense is associated
+  with the owner's period internally.
+- Scratch-browser E2E covered income → proposal → confirmed period, a fulfilled
+  rent commitment, opening-income exclusion, existing daily spend, live preview,
+  and quick expense. Browser console was clean; 480×900 and 1280×900 had no
+  horizontal overflow and used their intended phone/desktop layouts.
+- Tests: **59 passed, 0 failed** (`.venv/bin/python -m pytest -q`); clean and
+  local migration to `0005_v2`, JavaScript syntax, Python compileall, `pip check`,
+  and diff checks passed.
+- Decision: commitments snapshot required/explicitly-required expense rules and
+  reserve transfers. Planned values use frozen base equivalents; fulfilled
+  values are controlled only by their linked posted transaction.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

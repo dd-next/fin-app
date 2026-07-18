@@ -22,6 +22,7 @@ from app.ledger import (
 from app.models import (
     Account,
     Asset,
+    BudgetPeriod,
     ExchangeRate,
     PlanOccurrence,
     Transaction,
@@ -40,6 +41,14 @@ from app.schemas import (
     TransactionPageOut,
     TransactionPatch,
     TransferIn,
+    VoidTransactionIn,
+)
+from app.tracker_service import (
+    attach_transaction_to_tracker,
+    budget_period_status,
+    reopen_plan_commitment,
+    sync_plan_fulfillment,
+    workspace_today,
 )
 
 
@@ -139,6 +148,8 @@ async def _create_single(
         )
     )
     session.add(transaction)
+    await session.flush()
+    await attach_transaction_to_tracker(session, transaction, body.base_amount)
     await session.commit()
     await session.refresh(transaction)
     return transaction
@@ -150,8 +161,17 @@ async def create_expense(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    transaction = await _create_single(session, user, "expense", body)
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
     return await transaction_out(
-        session, await _create_single(session, user, "expense", body)
+        session,
+        transaction,
+        visible_account_ids=(
+            None
+            if workspace.owner_user_id == user.id
+            else await visible_account_ids(session, user.id)
+        ),
     )
 
 
@@ -161,8 +181,17 @@ async def create_income(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    transaction = await _create_single(session, user, "income", body)
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
     return await transaction_out(
-        session, await _create_single(session, user, "income", body)
+        session,
+        transaction,
+        visible_account_ids=(
+            None
+            if workspace.owner_user_id == user.id
+            else await visible_account_ids(session, user.id)
+        ),
     )
 
 
@@ -307,6 +336,10 @@ async def create_exchange(
             )
         )
         session.add(fee)
+        await session.flush()
+        await attach_transaction_to_tracker(
+            session, fee, body.fee.base_amount
+        )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -517,6 +550,20 @@ async def patch_transaction(
         raise HTTPException(status_code=409, detail="Voided transaction cannot be edited")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
+    existing_period = (
+        await session.get(BudgetPeriod, transaction.budget_period_id)
+        if transaction.budget_period_id is not None
+        else None
+    )
+    if (
+        existing_period is not None
+        and budget_period_status(existing_period, workspace_today(workspace)) == "ended"
+        and not body.confirm_ended_period
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Ended period correction requires explicit confirmation",
+        )
     legs = await _transaction_legs(session, transaction.id)
     if "note" in body.model_fields_set:
         transaction.note = body.note
@@ -636,9 +683,27 @@ async def patch_transaction(
         positive.account_id, positive.asset_id, positive.amount = target.id, target.asset_id, to_amount
         if transaction.type == "exchange":
             await _replace_rates(session, transaction, source, from_amount, target, to_amount)
-    transaction.base_amount = None
-    transaction.base_rate = None
-    transaction.rate_source = None
+    await session.flush()
+    linked_occurrence = (
+        await session.execute(
+            select(PlanOccurrence).where(
+                PlanOccurrence.transaction_id == transaction.id
+            )
+        )
+    ).scalar_one_or_none()
+    if linked_occurrence is not None:
+        await sync_plan_fulfillment(
+            session, linked_occurrence, transaction, body.base_amount
+        )
+    elif transaction.type in {"expense", "income"}:
+        await attach_transaction_to_tracker(
+            session, transaction, body.base_amount
+        )
+    else:
+        transaction.budget_period_id = None
+        transaction.base_amount = None
+        transaction.base_rate = None
+        transaction.rate_source = None
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -685,6 +750,7 @@ async def assign_account(
 @router.post("/transactions/{transaction_id}/void", response_model=TransactionOut)
 async def void_transaction(
     transaction_id: int,
+    body: VoidTransactionIn | None = None,
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -693,6 +759,22 @@ async def void_transaction(
     )
     if transaction.status == "voided":
         raise HTTPException(status_code=409, detail="Transaction is already voided")
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
+    period = (
+        await session.get(BudgetPeriod, transaction.budget_period_id)
+        if transaction.budget_period_id is not None
+        else None
+    )
+    if (
+        period is not None
+        and budget_period_status(period, workspace_today(workspace)) == "ended"
+        and not (body and body.confirm_ended_period)
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Ended period correction requires explicit confirmation",
+        )
     now = utcnow()
     transaction.status = "voided"
     transaction.voided_at = now
@@ -712,14 +794,13 @@ async def void_transaction(
         )
     ).scalar_one_or_none()
     if linked_occurrence is not None:
-        workspace = await session.get(Workspace, transaction.workspace_id)
-        assert workspace is not None
         today = datetime.now(UTC).astimezone(ZoneInfo(workspace.timezone)).date()
         linked_occurrence.status = (
             "overdue" if linked_occurrence.due_date < today else "planned"
         )
         linked_occurrence.transaction_id = None
         linked_occurrence.matched_at = None
+        await reopen_plan_commitment(session, linked_occurrence)
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(

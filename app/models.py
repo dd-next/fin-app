@@ -144,6 +144,11 @@ class Workspace(Base):
     plan_rules: Mapped[list["PlanRule"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    budget_periods: Mapped[list["BudgetPeriod"]] = relationship(
+        back_populates="workspace",
+        cascade="all, delete-orphan",
+        foreign_keys="BudgetPeriod.workspace_id",
+    )
 
 
 class Category(Base):
@@ -279,6 +284,11 @@ class Transaction(Base):
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("category.id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    budget_period_id: Mapped[int | None] = mapped_column(
+        ForeignKey("budget_period.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     parent_transaction_id: Mapped[int | None] = mapped_column(
         ForeignKey("financial_transaction.id", ondelete="RESTRICT"),
         nullable=True,
@@ -315,6 +325,9 @@ class Transaction(Base):
     )
     rates: Mapped[list["ExchangeRate"]] = relationship(
         back_populates="source_transaction", cascade="all, delete-orphan"
+    )
+    budget_period: Mapped["BudgetPeriod | None"] = relationship(
+        back_populates="transactions", foreign_keys=[budget_period_id]
     )
 
 
@@ -442,3 +455,113 @@ class PlanOccurrence(Base):
 
     plan_rule: Mapped[PlanRule] = relationship(back_populates="occurrences")
     transaction: Mapped[Transaction | None] = relationship()
+    commitments: Mapped[list["BudgetCommitment"]] = relationship(
+        back_populates="plan_occurrence"
+    )
+
+
+class BudgetPeriod(Base):
+    __tablename__ = "budget_period"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    base_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
+    )
+    funding_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    opening_transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )
+    opening_plan_occurrence_id: Mapped[int | None] = mapped_column(
+        ForeignKey("plan_occurrence.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+    )
+    prompt_ack_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped[Workspace] = relationship(
+        back_populates="budget_periods", foreign_keys=[workspace_id]
+    )
+    creator: Mapped[User] = relationship(foreign_keys=[created_by_user_id])
+    base_asset: Mapped[Asset] = relationship(foreign_keys=[base_asset_id])
+    opening_transaction: Mapped[Transaction | None] = relationship(
+        foreign_keys=[opening_transaction_id]
+    )
+    opening_plan_occurrence: Mapped[PlanOccurrence | None] = relationship(
+        foreign_keys=[opening_plan_occurrence_id]
+    )
+    transactions: Mapped[list[Transaction]] = relationship(
+        back_populates="budget_period", foreign_keys="Transaction.budget_period_id"
+    )
+    commitments: Mapped[list["BudgetCommitment"]] = relationship(
+        back_populates="budget_period", cascade="all, delete-orphan"
+    )
+    rebase_events: Mapped[list["RebaseEvent"]] = relationship(
+        back_populates="budget_period", cascade="all, delete-orphan"
+    )
+
+
+class BudgetCommitment(Base):
+    __tablename__ = "budget_commitment"
+    __table_args__ = (
+        UniqueConstraint(
+            "budget_period_id",
+            "plan_occurrence_id",
+            name="uq_budget_commitment_period_occurrence",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    budget_period_id: Mapped[int] = mapped_column(
+        ForeignKey("budget_period.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    plan_occurrence_id: Mapped[int] = mapped_column(
+        ForeignKey("plan_occurrence.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    type: Mapped[str] = mapped_column(String(24), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    planned_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="reserved", index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    budget_period: Mapped[BudgetPeriod] = relationship(back_populates="commitments")
+    plan_occurrence: Mapped[PlanOccurrence] = relationship(back_populates="commitments")
+
+
+class RebaseEvent(Base):
+    __tablename__ = "rebase_event"
+    __table_args__ = (
+        UniqueConstraint("budget_period_id", "day", name="uq_rebase_event_period_day"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    budget_period_id: Mapped[int] = mapped_column(
+        ForeignKey("budget_period.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    day: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+
+    budget_period: Mapped[BudgetPeriod] = relationship(back_populates="rebase_events")

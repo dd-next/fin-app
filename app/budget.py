@@ -4,7 +4,8 @@ No database, no framework imports. Functions take plain values / Decimals
 and return Decimals, so this module can be unit-tested in isolation.
 
 All money values are Decimal — never float. Displayed per-day / allowance
-values are rounded to 2 decimals; stored amounts stay exact.
+values are rounded to the caller-provided base-asset quantum; stored amounts
+stay exact. The default remains 0.01 for backwards compatibility.
 
 The reference behavior:
 
@@ -42,6 +43,14 @@ def round2(value: Decimal) -> Decimal:
     return value.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
 
 
+def round_to_quantum(value: Decimal, quantum: Decimal = TWO_PLACES) -> Decimal:
+    """Round a display value to the precision of the period base asset."""
+    quantum = Decimal(quantum)
+    if not quantum.is_finite() or quantum <= 0:
+        raise ValueError("quantum must be a positive finite Decimal")
+    return Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP)
+
+
 def days_total(start_date: date, end_date: date) -> int:
     """Number of days in the period, inclusive of both endpoints."""
     return (end_date - start_date).days + 1
@@ -60,14 +69,20 @@ def days_remaining(start_date: date, end_date: date, today: date) -> int:
     return max(total - elapsed, 1)
 
 
-def per_day(remaining: Decimal, days_left: int) -> Decimal:
-    """Money spread evenly over days_left, rounded to 2 decimals."""
-    return round2(remaining / days_left)
+def per_day(
+    remaining: Decimal, days_left: int, quantum: Decimal = TWO_PLACES
+) -> Decimal:
+    """Money spread evenly over days_left at base-asset precision."""
+    return round_to_quantum(remaining / days_left, quantum)
 
 
-def preview_after(available_today: Decimal, pending: Decimal) -> Decimal:
+def preview_after(
+    available_today: Decimal,
+    pending: Decimal,
+    quantum: Decimal = TWO_PLACES,
+) -> Decimal:
     """Live preview of today's number if a pending (unsaved) expense lands."""
-    return round2(available_today - pending)
+    return round_to_quantum(available_today - pending, quantum)
 
 
 @dataclass(frozen=True)
@@ -95,6 +110,7 @@ def compute_budget(
     expenses: Iterable[DatedAmount],
     today: date | None = None,
     rebase_days: Iterable[date] = (),
+    quantum: Decimal = TWO_PLACES,
 ) -> BudgetSummary:
     """Derive the full budget summary from the period and its dated expenses.
 
@@ -166,9 +182,9 @@ def compute_budget(
         days_remaining=left,
         spent_total=spent,
         remaining_money=remaining,
-        daily_base=round2(daily),
-        budget_today=round2(budget_today),
+        daily_base=round_to_quantum(daily, quantum),
+        budget_today=round_to_quantum(budget_today, quantum),
         spent_today=spent_today,
-        per_day_today=round2(available),
-        next_daily=round2(next_daily),
+        per_day_today=round_to_quantum(available, quantum),
+        next_daily=round_to_quantum(next_daily, quantum),
     )

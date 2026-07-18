@@ -192,6 +192,7 @@ class TransactionOut(BaseModel):
     created_by_user_id: int
     type: Literal["expense", "income", "transfer", "exchange", "adjustment"]
     category_id: int | None
+    budget_period_id: int | None
     parent_transaction_id: int | None
     counterparty: str | None
     note: str | None
@@ -216,6 +217,7 @@ class TransactionCommon(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
     occurred_at: datetime | None = None
     local_date: date | None = None
+    base_amount: PositiveAmount | None = None
 
 
 class SingleTransactionIn(TransactionCommon):
@@ -240,6 +242,7 @@ class FeeIn(BaseModel):
     amount: PositiveAmount
     category_id: int | None = None
     note: str | None = Field(default=None, max_length=2000)
+    base_amount: PositiveAmount | None = None
 
 
 class ExchangeIn(TransactionCommon):
@@ -273,6 +276,8 @@ class TransactionPatch(BaseModel):
     to_account_id: int | None = None
     from_amount: PositiveAmount | None = None
     to_amount: PositiveAmount | None = None
+    base_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
 
     @field_validator("asset_code")
     @classmethod
@@ -383,6 +388,29 @@ class PlanRuleOut(BaseModel):
     updated_at: datetime
 
 
+class CommitmentProposalOut(BaseModel):
+    plan_occurrence_id: int
+    type: Literal["required_expense", "reserve_transfer"]
+    name: str
+    due_date: date
+    planned_amount: Decimal | None
+    source_amount: Decimal
+    source_asset: AssetOut
+    needs_base_amount: bool = False
+
+
+class PeriodProposalOut(BaseModel):
+    opening_transaction_id: int | None
+    opening_plan_occurrence_id: int | None
+    start_date: date
+    end_date: date | None
+    base_asset: AssetOut
+    funding_amount: Decimal | None
+    needs_end_date: bool
+    needs_funding_amount: bool
+    commitments: list[CommitmentProposalOut] = Field(default_factory=list)
+
+
 class PlanOccurrenceOut(BaseModel):
     id: int
     plan_rule_id: int
@@ -394,6 +422,7 @@ class PlanOccurrenceOut(BaseModel):
     matched_at: datetime | None
     created_at: datetime
     rule: PlanRuleOut
+    period_proposal: PeriodProposalOut | None = None
 
 
 class PlanExecuteIn(BaseModel):
@@ -405,11 +434,124 @@ class PlanExecuteIn(BaseModel):
     occurred_at: datetime | None = None
     counterparty: str | None = Field(default=None, max_length=160)
     note: str | None = Field(default=None, max_length=2000)
+    base_amount: PositiveAmount | None = None
 
 
 class PlanLinkTransactionIn(BaseModel):
     transaction_id: int
+    base_amount: PositiveAmount | None = None
 
 
 class TransactionLinkPlanIn(BaseModel):
     occurrence_id: int
+    base_amount: PositiveAmount | None = None
+
+
+BudgetPeriodStatus = Literal["upcoming", "current", "ended"]
+CommitmentStatus = Literal["reserved", "fulfilled", "cancelled"]
+
+
+class BudgetPeriodPreviewIn(BaseModel):
+    opening_transaction_id: int | None = None
+    opening_plan_occurrence_id: int | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    base_asset_code: str | None = Field(default=None, min_length=2, max_length=16)
+    funding_amount: PositiveAmount | None = None
+    commitment_base_amounts: dict[int, PositiveAmount] = Field(default_factory=dict)
+    transaction_base_amounts: dict[int, PositiveAmount] = Field(default_factory=dict)
+
+    @field_validator("base_asset_code")
+    @classmethod
+    def normalize_period_asset_code(cls, value: str | None) -> str | None:
+        return value.strip().upper() if value is not None else None
+
+
+class BudgetPeriodCreate(BudgetPeriodPreviewIn):
+    confirmed: Literal[True]
+
+
+class BudgetPeriodPatch(BaseModel):
+    start_date: date | None = None
+    end_date: date | None = None
+    funding_amount: PositiveAmount | None = None
+    confirm_ended_period: bool = False
+
+
+class BudgetCommitmentOut(BaseModel):
+    id: int
+    budget_period_id: int
+    plan_occurrence_id: int
+    type: Literal["required_expense", "reserve_transfer"]
+    name: str
+    due_date: date
+    planned_amount: Decimal
+    actual_amount: Decimal | None
+    effective_amount: Decimal
+    status: CommitmentStatus
+    transaction_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BudgetPeriodOut(BaseModel):
+    id: int
+    workspace_id: int
+    created_by_user_id: int
+    start_date: date
+    end_date: date
+    status: BudgetPeriodStatus
+    base_asset: AssetOut
+    funding_amount: Decimal
+    opening_transaction_id: int | None
+    opening_plan_occurrence_id: int | None
+    prompt_ack_date: date | None
+    commitments_total: Decimal
+    daily_pool: Decimal
+    commitments: list[BudgetCommitmentOut]
+    created_at: datetime
+    closed_at: datetime | None
+
+
+class BudgetCommitmentCreate(BaseModel):
+    plan_occurrence_id: int
+    planned_amount: PositiveAmount | None = None
+
+
+class BudgetCommitmentPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    planned_amount: PositiveAmount | None = None
+    status: Literal["reserved", "cancelled"] | None = None
+
+
+class TrackerSummaryOut(BaseModel):
+    period: BudgetPeriodOut
+    days_total: int
+    days_remaining: int
+    spent_total: Decimal
+    remaining_money: Decimal
+    daily_base: Decimal
+    budget_today: Decimal
+    spent_today: Decimal
+    available_today: Decimal
+    next_daily: Decimal
+
+
+class TrackerPreviewOut(TrackerSummaryOut):
+    pending_amount: Decimal
+    available_after: Decimal
+
+
+class SavingsPromptOut(BaseModel):
+    required: bool
+    day: date
+    carry_amount: Decimal
+    acknowledged: bool
+
+
+class SavingsDecisionIn(BaseModel):
+    choice: Literal["keep", "redistribute"]
+
+
+class VoidTransactionIn(BaseModel):
+    confirm_ended_period: bool = False

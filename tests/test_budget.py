@@ -277,3 +277,26 @@ def test_decimal_exactness_no_float_drift():
     assert s.per_day_today == D("0.70")
     assert isinstance(s.remaining_money, Decimal)
     assert per_day(D("10"), 3) == D("3.33")
+
+
+def test_base_asset_quantum_controls_tracker_display_precision():
+    vnd = compute_budget(
+        D("100"),
+        date(2026, 7, 1),
+        date(2026, 7, 3),
+        [],
+        today=date(2026, 7, 1),
+        quantum=D("1"),
+    )
+    btc = compute_budget(
+        D("0.00000010"),
+        date(2026, 7, 1),
+        date(2026, 7, 3),
+        [],
+        today=date(2026, 7, 1),
+        quantum=D("0.00000001"),
+    )
+    assert vnd.daily_base == D("33")
+    assert vnd.per_day_today == D("33")
+    assert btc.daily_base == D("0.00000003")
+    assert preview_after(D("100"), D("40.4"), D("1")) == D("60")
