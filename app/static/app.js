@@ -155,7 +155,7 @@ function showAuth() {
 async function categoriesFor(workspaceId) {
   if (state.categories.has(workspaceId)) return state.categories.get(workspaceId);
   try {
-    const categories = await api(`/api/v1/workspaces/${workspaceId}/categories`);
+    const categories = await api(`/api/v1/workspaces/${workspaceId}/categories?include_archived=true`);
     state.categories.set(workspaceId, categories);
     return categories;
   } catch (error) {
@@ -341,7 +341,10 @@ function renderFilterOptions() {
   );
   const unique = [...new Map(categories.map((category) => [category.id, category])).values()];
   if ($("filter-category")) {
-    selectOptions($("filter-category"), unique.map((category) => ({ value: category.id, label: category.name })), { placeholder: "All categories" });
+    selectOptions($("filter-category"), unique.map((category) => ({
+      value: category.id,
+      label: `${category.name}${category.archived_at ? " (archived)" : ""}`,
+    })), { placeholder: "All categories" });
   }
 }
 
@@ -557,7 +560,7 @@ async function openCategories() {
 
 async function renderCategoryManager() {
   const workspaceId = state.context.workspace.id;
-  const categories = await categoriesFor(workspaceId);
+  const categories = (await categoriesFor(workspaceId)).filter((category) => !category.archived_at);
   const nodes = categories.map((category) => {
     const row = document.createElement("div");
     row.className = "category-row";
@@ -781,7 +784,9 @@ function renderTracker() {
 async function updateQuickExpenseCategories() {
   const account = accountById($("quick-expense-account").value);
   const workspaceId = account?.workspace_id || state.context.workspace.id;
-  const categories = (state.categories.get(workspaceId) || []).filter((item) => ["expense", "both"].includes(item.kind));
+  const categories = (state.categories.get(workspaceId) || []).filter((item) => (
+    !item.archived_at && ["expense", "both"].includes(item.kind)
+  ));
   selectOptions($("quick-expense-category"), categories.map((item) => ({ value: item.id, label: item.name })), { placeholder: "Uncategorized" });
 }
 
@@ -970,11 +975,17 @@ async function updatePlanRuleFields(rule = null) {
     placeholder: "Choose when receiving",
     selected: rule?.default_to_account_id ?? $("plan-rule-to-account").value,
   });
+  const selectedCategoryId = Number(rule?.category_id ?? $("plan-rule-category").value);
   const categories = (await categoriesFor(state.context.workspace.id)).filter((category) => {
     const expected = kind === "income" ? "income" : "expense";
-    return category.kind === "both" || category.kind === expected;
+    const selected = category.id === selectedCategoryId;
+    return selected || (!category.archived_at && (category.kind === "both" || category.kind === expected));
   });
-  selectOptions($("plan-rule-category"), categories.map((category) => ({ value: category.id, label: category.name })), {
+  selectOptions($("plan-rule-category"), categories.map((category) => ({
+    value: category.id,
+    label: `${category.name}${category.archived_at ? " (archived)" : ""}`,
+    disabled: Boolean(category.archived_at),
+  })), {
     placeholder: "Uncategorized",
     selected: rule?.category_id ?? $("plan-rule-category").value,
   });
@@ -1031,7 +1042,7 @@ async function savePlanRule(event) {
 }
 
 async function archivePlanRule(rule) {
-  if (!window.confirm(`Archive ${rule.name}? Open occurrences will be removed.`)) return;
+  if (!window.confirm(`Archive ${rule.name}? Uncommitted open items will be skipped; Tracker history stays available.`)) return;
   try {
     await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
     toast("Plan rule archived");
@@ -1147,7 +1158,7 @@ function transactionTitle(transaction) {
   const category = [...state.categories.values()].flat().find((item) => item.id === transaction.category_id);
   if (transaction.note) return transaction.note;
   if (transaction.counterparty) return transaction.counterparty;
-  if (category) return category.name;
+  if (category) return `${category.name}${category.archived_at ? " (archived)" : ""}`;
   return transaction.type[0].toUpperCase() + transaction.type.slice(1);
 }
 
@@ -1272,8 +1283,15 @@ async function updateTransactionCategories(selected = null) {
   const type = $("transaction-type").value;
   const account = accountById($("transaction-account").value);
   const workspaceId = account ? account.workspace_id : state.context.workspace.id;
-  const categories = (await categoriesFor(workspaceId)).filter((category) => category.kind === "both" || category.kind === type);
-  selectOptions($("transaction-category"), categories.map((category) => ({ value: category.id, label: category.name })), { placeholder: "Uncategorized", selected });
+  const categories = (await categoriesFor(workspaceId)).filter((category) => (
+    category.id === Number(selected)
+    || (!category.archived_at && (category.kind === "both" || category.kind === type))
+  ));
+  selectOptions($("transaction-category"), categories.map((category) => ({
+    value: category.id,
+    label: `${category.name}${category.archived_at ? " (archived)" : ""}`,
+    disabled: Boolean(category.archived_at),
+  })), { placeholder: "Uncategorized", selected });
 }
 
 async function updateTransactionFields({ preserve = true } = {}) {
@@ -1517,7 +1535,7 @@ $("empty-add-transaction").addEventListener("click", () => openTransactionForm()
 $("transaction-type").addEventListener("change", () => updateTransactionFields({ preserve: false }));
 $("transaction-account").addEventListener("change", async () => {
   $("single-asset-field").classList.toggle("hidden", Boolean($("transaction-account").value) || $("transaction-type").value === "adjustment");
-  await updateTransactionCategories();
+  await updateTransactionCategories($("transaction-category").value || null);
 });
 $("transaction-has-fee").addEventListener("change", () => $("fee-details").classList.toggle("hidden", !$("transaction-has-fee").checked));
 $("transaction-form").addEventListener("submit", saveTransaction);

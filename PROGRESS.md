@@ -21,7 +21,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 8 — Corrective release audit and documentation authority
 - [x] V2 Phase 9 — Ledger isolation, frozen values, and display precision
 - [x] V2 Phase 10 — Period mutation invariants
-- [ ] V2 Phase 11 — Plan history and historical UI integrity
+- [x] V2 Phase 11 — Plan history and historical UI integrity
 - [ ] V2 Phase 12 — Corrective final verification
 
 ## Historical phases
@@ -232,6 +232,20 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Decision: closing blocks new transactions but not an explicitly confirmed
   correction or Plan link to an already-existing transaction; expanding a
   period does not synthesize new commitments.
+
+### V2 Phase 11 — Plan history and historical UI integrity (2026-07-19)
+- Protected every Plan occurrence referenced by a BudgetCommitment, including
+  cancelled commitments, while regenerating only unprotected open occurrences
+  after schedule edits and skipping only unprotected items on archive.
+- Kept archived category names in transaction history, filters, and existing
+  Transaction/Plan edit forms, while excluding them from every new-item choice;
+  existing historical links remain editable but cannot be newly assigned.
+- Isolated migration tests from ambient `DATABASE_URL` and exercised the real
+  FastAPI lifespan plus `/health` against a freshly migrated scratch database.
+- Tests: **79 passed, 0 failed** (`.venv/bin/python -m pytest -p
+  no:cacheprovider -q`); focused Plan, Tracker, category, migration, frontend,
+  and Phase 10 regression tests (**30 passed**), JavaScript syntax, Python
+  compileall, `pip check`, and `git diff --check` passed.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

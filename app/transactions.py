@@ -601,10 +601,15 @@ async def patch_transaction(
     elif body.local_date is not None:
         transaction.local_date = body.local_date
     if "category_id" in body.model_fields_set:
-        category = await require_category(
-            session, body.category_id, workspace.id, transaction.type
-        )
-        transaction.category_id = category.id if category else None
+        # Keeping the transaction's historical category is a no-op. In
+        # particular, an archived category must remain editable as metadata,
+        # while assigning that archived category to another transaction stays
+        # invalid.
+        if body.category_id != transaction.category_id:
+            category = await require_category(
+                session, body.category_id, workspace.id, transaction.type
+            )
+            transaction.category_id = category.id if category else None
 
     if transaction.type in {"expense", "income", "adjustment"}:
         leg = legs[0]

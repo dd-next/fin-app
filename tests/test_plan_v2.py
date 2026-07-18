@@ -67,6 +67,122 @@ async def test_occurrences_materialize_idempotently_and_rule_edits_replace_open_
     assert {item["status"] for item in archived_occurrences} == {"skipped"}
 
 
+async def test_rule_edits_preserve_snapshotted_occurrences_and_archive_fulfillment(client):
+    context = await register(client)
+    workspace_id = context["workspace"]["id"]
+    main = await create_account(client, "Main USD", "USD", "1000")
+    first = date.today()
+    rule = (
+        await create_rule(
+            client,
+            workspace_id,
+            name="Weekly essentials",
+            amount="100",
+            recurrence="weekly",
+            first_due_date=first.isoformat(),
+            default_from_account_id=main["id"],
+        )
+    ).json()
+    occurrences_route = f"/api/v1/workspaces/{workspace_id}/plan-occurrences"
+    original = {
+        item["id"]: item
+        for item in (await client.get(occurrences_route)).json()
+        if item["plan_rule_id"] == rule["id"]
+    }
+
+    period = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/budget-periods",
+        json={
+            "start_date": first.isoformat(),
+            "end_date": (first + timedelta(days=9)).isoformat(),
+            "funding_amount": "1000",
+            "confirmed": True,
+        },
+    )
+    assert period.status_code == 201, period.text
+    commitments = period.json()["period"]["commitments"]
+    assert len(commitments) == 2
+    reserved, cancelled = commitments
+    cancelled_response = await client.delete(
+        f"/api/v1/workspaces/{workspace_id}/budget-commitments/{cancelled['id']}"
+    )
+    assert cancelled_response.status_code == 200, cancelled_response.text
+
+    protected_ids = {
+        reserved["plan_occurrence_id"],
+        cancelled["plan_occurrence_id"],
+    }
+    snapshots = {
+        occurrence_id: (
+            original[occurrence_id]["due_date"],
+            original[occurrence_id]["planned_amount"],
+        )
+        for occurrence_id in protected_ids
+    }
+    patched = await client.patch(
+        f"/api/v1/workspaces/{workspace_id}/plan-rules/{rule['id']}",
+        json={
+            "recurrence": "monthly",
+            "first_due_date": (first + timedelta(days=2)).isoformat(),
+            "amount": "125",
+        },
+    )
+    assert patched.status_code == 200, patched.text
+
+    first_read = [
+        item
+        for item in (await client.get(occurrences_route)).json()
+        if item["plan_rule_id"] == rule["id"]
+    ]
+    after_by_id = {item["id"]: item for item in first_read}
+    for occurrence_id, (due_date, planned_amount) in snapshots.items():
+        assert after_by_id[occurrence_id]["due_date"] == due_date
+        assert after_by_id[occurrence_id]["planned_amount"] == planned_amount
+    regenerated = [item for item in first_read if item["id"] not in protected_ids]
+    assert regenerated
+    assert {Decimal(item["planned_amount"]) for item in regenerated} == {
+        Decimal("125")
+    }
+    second_read = [
+        item
+        for item in (await client.get(occurrences_route)).json()
+        if item["plan_rule_id"] == rule["id"]
+    ]
+    assert [item["id"] for item in second_read] == [item["id"] for item in first_read]
+
+    archived = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-rules/{rule['id']}/archive"
+    )
+    assert archived.status_code == 200, archived.text
+    archived_by_id = {
+        item["id"]: item
+        for item in (await client.get(occurrences_route)).json()
+        if item["plan_rule_id"] == rule["id"]
+    }
+    assert all(
+        archived_by_id[occurrence_id]["status"] in {"planned", "overdue"}
+        for occurrence_id in protected_ids
+    )
+    assert {archived_by_id[item["id"]]["status"] for item in regenerated} == {
+        "skipped"
+    }
+
+    fulfilled = await client.post(
+        f"{occurrences_route}/{reserved['plan_occurrence_id']}/pay",
+        json={},
+    )
+    assert fulfilled.status_code == 200, fulfilled.text
+    tracker = (
+        await client.get(f"/api/v1/workspaces/{workspace_id}/tracker/today")
+    ).json()
+    statuses = {
+        item["plan_occurrence_id"]: item["status"]
+        for item in tracker["period"]["commitments"]
+    }
+    assert statuses[reserved["plan_occurrence_id"]] == "fulfilled"
+    assert statuses[cancelled["plan_occurrence_id"]] == "cancelled"
+
+
 async def test_receive_pay_transfer_skip_link_and_void_reopens_plan(client):
     context = await register(client)
     workspace_id = context["workspace"]["id"]

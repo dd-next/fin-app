@@ -5,7 +5,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import require_workspace_owner
@@ -20,6 +20,7 @@ from app.ledger import (
 from app.models import (
     Account,
     Asset,
+    BudgetCommitment,
     PlanOccurrence,
     PlanRule,
     Transaction,
@@ -146,12 +147,19 @@ async def validate_rule_fields(
     category_id: int | None,
     from_account_id: int | None,
     to_account_id: int | None,
+    allow_archived_category: bool = False,
 ) -> tuple[Account | None, Account | None]:
     if kind == "reserve_transfer" and category_id is not None:
         raise HTTPException(status_code=422, detail="Reserve transfers cannot have a category")
     if kind != "reserve_transfer":
         transaction_type = "income" if kind == "income" else "expense"
-        await require_category(session, category_id, workspace_id, transaction_type)
+        await require_category(
+            session,
+            category_id,
+            workspace_id,
+            transaction_type,
+            allow_archived=allow_archived_category,
+        )
     source = await require_plan_account(
         session, from_account_id, workspace_id, asset.id, label="source"
     )
@@ -175,6 +183,18 @@ async def materialize_rule(
     reset_schedule: bool = False,
     update_amount: bool = False,
 ) -> None:
+    protected_occurrence_ids = set(
+        (
+            await session.execute(
+                select(BudgetCommitment.plan_occurrence_id)
+                .join(
+                    PlanOccurrence,
+                    PlanOccurrence.id == BudgetCommitment.plan_occurrence_id,
+                )
+                .where(PlanOccurrence.plan_rule_id == rule.id)
+            )
+        ).scalars()
+    )
     if not rule.is_active:
         open_items = list(
             (
@@ -188,16 +208,25 @@ async def materialize_rule(
         )
         now = utcnow()
         for item in open_items:
+            if item.id in protected_occurrence_ids:
+                continue
             item.status = "skipped"
             item.matched_at = now
         return
     if reset_schedule:
-        await session.execute(
-            delete(PlanOccurrence).where(
-                PlanOccurrence.plan_rule_id == rule.id,
-                PlanOccurrence.status.in_(OPEN_STATUSES),
-            )
+        reset_items = list(
+            (
+                await session.execute(
+                    select(PlanOccurrence).where(
+                        PlanOccurrence.plan_rule_id == rule.id,
+                        PlanOccurrence.status.in_(OPEN_STATUSES),
+                    )
+                )
+            ).scalars()
         )
+        for item in reset_items:
+            if item.id not in protected_occurrence_ids:
+                await session.delete(item)
         await session.flush()
     today = workspace_today(workspace)
     existing = {
@@ -210,7 +239,10 @@ async def materialize_rule(
     }
     if update_amount:
         for item in existing.values():
-            if item.status in OPEN_STATUSES:
+            if (
+                item.status in OPEN_STATUSES
+                and item.id not in protected_occurrence_ids
+            ):
                 item.planned_amount = rule.amount
     for due_date in occurrence_dates(
         rule.first_due_date, rule.recurrence, horizon_date(today)
@@ -341,6 +373,9 @@ async def patch_plan_rule(
         category_id=category_id,
         from_account_id=from_account_id,
         to_account_id=to_account_id,
+        allow_archived_category=(
+            category_id is not None and category_id == rule.category_id
+        ),
     )
     old_recurrence, old_first = rule.recurrence, rule.first_due_date
     old_amount = rule.amount

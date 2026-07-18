@@ -126,6 +126,8 @@ async def require_category(
     category_id: int | None,
     workspace_id: int,
     transaction_type: str,
+    *,
+    allow_archived: bool = False,
 ) -> Category | None:
     if category_id is None:
         return None
@@ -133,7 +135,7 @@ async def require_category(
     if (
         category is None
         or category.workspace_id != workspace_id
-        or category.archived_at is not None
+        or (category.archived_at is not None and not allow_archived)
     ):
         raise HTTPException(status_code=422, detail="Invalid category")
     allowed = {

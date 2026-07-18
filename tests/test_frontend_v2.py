@@ -83,6 +83,15 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert not re.search(r"[А-Яа-яЁё]", javascript)
 
 
+def test_spa_keeps_archived_categories_for_history_but_not_new_choices():
+    javascript = (STATIC / "app.js").read_text()
+    assert "/categories?include_archived=true" in javascript
+    assert 'category.archived_at ? " (archived)" : ""' in javascript
+    assert ".filter((category) => !category.archived_at)" in javascript
+    assert '!item.archived_at && ["expense", "both"].includes(item.kind)' in javascript
+    assert "disabled: Boolean(category.archived_at)" in javascript
+
+
 def test_responsive_styles_keep_mobile_controls_tappable():
     css = (STATIC / "style.css").read_text()
     assert "min-height: 44px" in css
