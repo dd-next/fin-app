@@ -1,5 +1,8 @@
 # SPEC-4 — Family finance expansion
 
+> Historical specification for the completed family-finance branch. The active
+> specification on `finapp-v2` is `specs/FinnApp-v2.md`.
+
 This addendum supersedes the single-user/single-period limitations in
 `SPEC.md`. Existing daily-budget replay semantics remain unchanged.
 

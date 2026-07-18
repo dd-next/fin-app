@@ -1,5 +1,8 @@
 # SPEC-2 — Google Sheets sync + Telegram Mini App
 
+> Historical specification. Google Sheets and Telegram are outside the first
+> FinApp v2 release; see `specs/FinnApp-v2.md`.
+
 Addendum to `SPEC.md`. All conventions in `CLAUDE.md` still apply. Do these
 phases only after the MVP (phases 1–5) is green.
 

@@ -1,37 +1,58 @@
-# FinApp v2 — все счета, планирование и ежедневный трекер
+# FinApp v2 — основная спецификация
 
-## 1. Идея продукта
+Статус: **активная и обязательная для ветки `finapp-v2`**.
 
-FinApp — приложение для управления всеми деньгами пользователя в одном месте.
+Этот документ заменяет продуктовые ограничения `SPEC.md` и его addenda. Старые
+спецификации остаются историей реализованных версий. При любом конфликте этот
+документ имеет приоритет.
 
-Основные разделы:
+## 1. Идея и граница первого релиза
+
+FinApp v2 — web-приложение для управления всеми счетами пользователя,
+операциями, ожидаемыми доходами и расходами, а также ежедневным бюджетом.
+
+Основная навигация:
 
 ```text
-Счета → где находятся деньги и сколько их сейчас
-Транзакции → что происходило с деньгами
-Трекер → сколько можно потратить в текущем периоде
-План → какие доходы и расходы ожидаются
-Аналитика → сколько пришло, ушло и осталось
+Accounts     → где находятся деньги
+Transactions → что происходило с деньгами
+Tracker      → сколько можно потратить в текущем периоде
+Plan         → какие доходы и расходы ожидаются
+Analytics    → заглушка будущих отчётов
 ```
 
-Приложение должно поддерживать:
+В первый релиз входят:
 
-- фиатные и криптовалютные счета;
-- наличные, карты, банки, кошельки и биржи;
-- личные и общие счета;
-- ручные и импортированные операции;
-- историю всех бюджетных периодов;
-- плановые доходы, обязательные расходы и подписки;
-- общий баланс и доступную для трат сумму;
-- несколько пользователей с разными правами.
+- открытая регистрация и личное финансовое пространство;
+- фиатные и криптовалютные активы;
+- наличные, банковские, карточные, электронные, биржевые и криптосчета;
+- расходы, доходы, переводы, обмены и корректировки;
+- непривязанные к счёту операции;
+- общий капитал и доступная для трат сумма;
+- расшаривание отдельных счетов с разными правами;
+- категории;
+- ожидаемые доходы, обязательные расходы, подписки и переводы в резерв;
+- история всех периодов и существующая механика ежедневного бюджета.
+
+Не входят в первый релиз:
+
+- crypto/blockchain sync и биржевые API;
+- внешние провайдеры курсов;
+- банковские API;
+- полноценная аналитика;
+- XLSX и Google Sheets;
+- Telegram Mini App;
+- savings goals как отдельная сущность;
+- category limits и budget pools.
 
 Базовый принцип:
 
-> Балансы, расходы и аналитика рассчитываются из единого журнала операций. Они не хранятся как вручную редактируемые итоговые числа.
+> Балансы и финансовые итоги рассчитываются из единого журнала движений. Они
+> не хранятся как вручную редактируемые агрегаты.
 
 ---
 
-# 2. Пользователи и совместный доступ
+# 2. Пользователь и финансовое пространство
 
 ## User
 
@@ -39,83 +60,57 @@ FinApp — приложение для управления всеми день�
 User
 - id
 - username
-- password_hash
+- normalized_username
 - display_name
+- password_hash
 - timezone
+- is_active
 - created_at
+- updated_at
 ```
+
+Регистрация открытая. После регистрации пользователь получает личный
+`Workspace` и становится его владельцем.
+
+## AuthSession
+
+```text
+AuthSession
+- id
+- user_id
+- token_hash
+- created_at
+- expires_at
+- last_seen_at
+- revoked_at
+```
+
+Сессия хранится на сервере, а клиент получает opaque HttpOnly cookie.
 
 ## Workspace
 
-`Workspace` — финансовое пространство одного пользователя, пары или семьи.
+`Workspace` — личный финансовый контур пользователя. План, Трекер, категории и
+периоды принадлежат ему.
 
 ```text
 Workspace
 - id
+- owner_user_id
 - name
 - base_asset_id
-- owner_user_id
+- timezone
 - created_at
+- archived_at
 ```
 
-`base_asset_id` определяет валюту, в которой показывается общий итог, например USD или VND.
-
-## WorkspaceMember
-
-```text
-WorkspaceMember
-- id
-- workspace_id
-- user_id
-- role
-- joined_at
-```
-
-Роли:
-
-```text
-owner       — всё, включая приглашения и права
-editor      — просмотр и полное редактирование финансовых данных
-contributor — просмотр и добавление трат, без изменения чужих операций
-viewer      — только просмотр
-```
-
-## Invitation
-
-```text
-Invitation
-- id
-- workspace_id
-- invited_by_user_id
-- invitee_email
-- role
-- token
-- expires_at
-- accepted_at
-```
-
-## AccountAccess
-
-По умолчанию участник видит счета рабочего пространства. Отдельный счёт можно ограничить или расшарить конкретному пользователю.
-
-```text
-AccountAccess
-- id
-- account_id
-- user_id
-- role
-- created_at
-```
-
-Права на счёт используют те же уровни: `owner`, `editor`, `contributor`, `viewer`.
+В первом релизе shared workspace не нужен. Совместный доступ предоставляется к
+отдельным счетам.
 
 ---
 
-# 3. Активы и счета
+# 3. Активы и точность
 
 ## Asset
-
-`Asset` описывает, в чём выражена сумма.
 
 ```text
 Asset
@@ -124,6 +119,7 @@ Asset
 - name
 - kind
 - decimals
+- is_active
 ```
 
 `kind`:
@@ -133,17 +129,29 @@ fiat
 crypto
 ```
 
-Примеры:
+Стартовый справочник:
 
 ```text
-VND  — fiat  — 0 decimals
-USD  — fiat  — 2 decimals
-USDT — crypto — 6 decimals
-BTC  — crypto — 8 decimals
-ETH  — crypto — 18 decimals
+VND  — fiat   — 0
+USD  — fiat   — 2
+RUB  — fiat   — 2
+EUR  — fiat   — 2
+USDT — crypto — 6
+BTC  — crypto — 8
+ETH  — crypto — 18
+TRX  — crypto — 6
 ```
 
-Все суммы хранятся как `Decimal`. Точность определяется активом.
+Правила:
+
+- суммы и курсы всегда `Decimal`, никогда `float`;
+- хранилище поддерживает до 38 цифр и до 18 знаков после запятой;
+- входная сумма не может иметь больше знаков, чем `Asset.decimals`;
+- отображение и округление используют точность конкретного актива.
+
+---
+
+# 4. Счета
 
 ## Account
 
@@ -159,9 +167,10 @@ Account
 - purpose
 - asset_id
 - institution
-- include_in_total
-- is_archived
+- include_in_available
 - created_at
+- updated_at
+- archived_at
 ```
 
 `storage_type`:
@@ -194,42 +203,81 @@ investment
 - Trust Wallet TRX;
 - Emergency Fund USD.
 
-`include_in_total = false` исключает счёт из доступной суммы сверху экрана. Это подходит для подушки, накоплений или денег, которые пользователь не хочет учитывать как доступные для трат.
-
-При этом приложение может отдельно показывать:
+Баланс:
 
 ```text
-Общий капитал       — все активные счета
-Доступно            — только счета с include_in_total = true
+account_balance = sum(posted TransactionLeg.amount for account)
 ```
 
-Баланс счёта не редактируется напрямую:
+Начальная сумма создаётся как `adjustment`. Сверка баланса также создаёт
+корректирующую операцию; прямого изменения balance нет.
+
+Два итога:
 
 ```text
-account_balance = сумма всех TransactionLeg по счёту
+Net worth → все активные видимые счета с известной оценкой
+Available → только счета с include_in_available = true
 ```
 
-Начальный баланс создаётся технической операцией `adjustment`.
-
-## ExchangeRate
-
-Нужен для пересчёта разных активов в базовую валюту рабочего пространства.
-
-```text
-ExchangeRate
-- id
-- base_asset_id
-- quote_asset_id
-- rate
-- source
-- captured_at
-```
-
-Если актуального курса нет, приложение показывает баланс самого счёта, но помечает, что он не вошёл в общий пересчитанный итог.
+Резервный счёт остаётся частью капитала, но может не входить в Available.
 
 ---
 
-# 4. Единый журнал операций
+# 5. Расшаривание счёта
+
+## AccountAccess
+
+```text
+AccountAccess
+- id
+- account_id
+- user_id
+- role
+- created_at
+```
+
+Роли:
+
+```text
+owner       — все операции, настройки счёта и управление доступом
+editor      — просмотр, операции и редактирование счёта
+contributor — просмотр и добавление расходов
+viewer      — только просмотр
+```
+
+## AccountInvitation
+
+```text
+AccountInvitation
+- id
+- account_id
+- created_by_user_id
+- role
+- token_hash
+- created_at
+- expires_at
+- accepted_at
+- accepted_by_user_id
+```
+
+Процесс:
+
+1. Владелец выбирает роль и создаёт одноразовую ссылку.
+2. Получатель входит или регистрируется.
+3. Принятие ссылки создаёт `AccountAccess`.
+4. Повторно использовать или принять просроченную ссылку нельзя.
+
+Приглашённый пользователь видит только расшаренный счёт и связанные с ним
+движения. План, Трекер, другие счета и агрегаты владельца не раскрываются.
+
+Для multi-account операции права проверяются на каждом счёте. Если пользователь
+видит только часть операции, недоступные движения скрываются, а ответ содержит
+`has_hidden_legs = true`. Изменить или отменить такую операцию нельзя без прав
+редактирования на все её счета.
+
+---
+
+# 6. Единый журнал операций
 
 ## Transaction
 
@@ -252,8 +300,12 @@ Transaction
 - source
 - status
 - external_id
+- base_amount
+- base_rate
+- rate_source
 - created_at
 - updated_at
+- voided_at
 ```
 
 `type`:
@@ -270,22 +322,22 @@ adjustment
 
 ```text
 manual
-imported
 planned
 ```
 
 `status`:
 
 ```text
-posted      — операция учтена
-unassigned  — операция пока не привязана к счёту
-pending     — внешняя операция ещё не подтверждена
-voided      — операция отменена, но сохранена в истории
+posted
+unassigned
+voided
 ```
 
-## TransactionLeg
+`base_amount` — зафиксированный эквивалент в базовом активе периода. Он нужен
+только когда операция влияет на Трекер. Последующее изменение текущего курса не
+переписывает историю периода.
 
-`TransactionLeg` показывает изменение конкретного счёта.
+## TransactionLeg
 
 ```text
 TransactionLeg
@@ -299,18 +351,19 @@ TransactionLeg
 Сумма знаковая:
 
 ```text
-+100 — деньги пришли
--100 — деньги ушли
++100 → деньги пришли
+-100 → деньги ушли
 ```
 
-`account_id` может быть пустым. Такая операция:
+`account_id` может быть пустым у расхода или дохода. Такая операция:
 
-- видна в Транзакциях и Трекере;
-- влияет на бюджет периода и аналитику;
+- видна владельцу в Transactions и Tracker;
+- влияет на бюджет, если связана с периодом;
 - не влияет на баланс конкретного счёта;
-- позже может быть привязана к счёту пользователем.
+- позже может быть привязана к счёту с тем же активом.
 
-`asset_id` обязателен всегда, поэтому сумма непривязанной операции остаётся однозначной.
+Публичный API не удаляет posted-транзакции физически. Отмена переводит их в
+`voided`, после чего все производные суммы пересчитываются.
 
 ## Category
 
@@ -319,34 +372,34 @@ Category
 - id
 - workspace_id
 - name
+- normalized_name
 - kind
 - icon
 - color
-- is_archived
+- created_at
+- archived_at
 ```
 
-`kind`:
-
-```text
-expense
-income
-both
-```
-
-Категорию, комментарий, дату, счёт и связь с планом можно изменить после создания операции.
+`kind`: `expense`, `income` или `both`. Использованная категория архивируется,
+а не удаляется.
 
 ---
 
-# 5. Примеры операций
+# 7. Реальные операции
 
-## Покупка
+## Расход
 
 ```text
-Transaction: expense, category = restaurants
+Transaction: expense
 Cash VND: -500,000
 ```
 
-Баланс счёта и общий капитал уменьшаются.
+## Доход
+
+```text
+Transaction: income
+Vietcombank VND: +21,033,600
+```
 
 ## Внутренний перевод
 
@@ -356,29 +409,35 @@ Vietcombank VND: -5,000,000
 Cash VND:        +5,000,000
 ```
 
-Общий капитал не меняется, операция не считается расходом.
+Перевод не считается расходом и не меняет общий капитал.
 
-## Обмен USDT на VND
+## Обмен активов
 
 ```text
 Transaction: exchange
-Bybit USDT:      -100
-Vietcombank VND: +2,600,000
+Bybit USDT:      -800
+Vietcombank VND: +21,033,600
 ```
 
-Фактический курс определяется из двух движений. Комиссия оформляется отдельным расходом, связанным через `parent_transaction_id`.
+Фактический курс:
+
+```text
+1 USDT = 26,292 VND
+```
+
+Пользователь вводит обе реальные суммы. Backend рассчитывает и сохраняет курс.
+
+## Комиссия
+
+Комиссия создаётся отдельным `expense`, связанным с обменом через
+`parent_transaction_id`. Поэтому обмен не является расходом, а комиссия является.
 
 ## Перевод другому человеку
 
-Если получатель не является управляемым счётом пользователя, это расход:
+Если второй счёт не принадлежит тому же финансовому контуру, операция является
+расходом с `counterparty`, а не внутренним transfer.
 
-```text
-Transaction: expense
-Bank RUB: -10,000
-counterparty: Mother
-```
-
-## Перевод в подушку
+## Перевод в резерв
 
 ```text
 Transaction: transfer
@@ -386,93 +445,68 @@ Main USD:           -200
 Emergency Fund USD: +200
 ```
 
-Общий капитал не меняется. Доступная сумма уменьшается, если Emergency Fund исключён из неё.
+Капитал не меняется. Available уменьшается, если резервный счёт исключён.
 
 ---
 
-# 6. Раздел «Счета»
+# 8. Курсы и оценка капитала
 
-Экран показывает:
-
-- общий капитал в базовой валюте;
-- доступную сумму без исключённых счетов;
-- счета по группам: наличные, банки, крипто, накопления;
-- баланс каждого счёта в его активе;
-- последнюю дату обновления подключённого счёта.
-
-Основные действия:
-
-- создать счёт;
-- изменить название, тип и назначение;
-- исключить или вернуть счёт в доступную сумму;
-- скорректировать баланс через `adjustment`;
-- открыть историю счёта;
-- настроить синхронизацию;
-- расшарить счёт;
-- архивировать счёт.
-
----
-
-# 7. Раздел «Транзакции»
-
-Здесь отображается единая история всех операций.
-
-Фильтры:
+## ExchangeRate
 
 ```text
-счёт
-период дат
-тип операции
-категория
-источник
-статус
-автор
+ExchangeRate
+- id
+- source_transaction_id
+- base_asset_id
+- quote_asset_id
+- rate
+- captured_at
 ```
 
-Действия:
+Правила первого релиза:
 
-- добавить расход, доход, перевод, обмен или корректировку;
-- изменить операцию;
-- отменить операцию без физического удаления истории;
-- привязать непривязанную операцию к счёту;
-- изменить категорию и комментарий импортированной операции;
-- связать фактическую операцию с пунктом Плана.
+- курс создаётся только из posted-операции `exchange`;
+- сохраняются прямое и обратное направление пары;
+- текущий итог использует последний прямой или обратный курс к выбранному
+  базовому активу;
+- цепочки через третий актив не строятся;
+- void или исправление обмена исключает или заменяет его курс;
+- актив без курса показывается отдельной строкой `Unvalued` и не входит в
+  пересчитанный итог.
+
+Если расход или доход в другой валюте должен попасть в Трекер:
+
+1. Backend использует последний известный курс пары.
+2. Если его нет, UI просит эквивалент в базовом активе периода.
+3. Получившийся `base_amount` фиксируется на транзакции.
 
 ---
 
-# 8. Раздел «План»
+# 9. План
 
-План хранит будущие доходы и расходы. Он не меняет реальные балансы, пока не появилась фактическая операция.
+План хранит будущие события и не меняет реальные балансы до появления
+фактической транзакции.
 
 ## PlanRule
-
-`PlanRule` — разовое или повторяющееся правило.
 
 ```text
 PlanRule
 - id
 - workspace_id
 - created_by_user_id
-- direction
 - kind
 - name
 - amount
 - asset_id
 - recurrence
 - first_due_date
-- due_day
 - category_id
-- default_account_id
+- default_from_account_id
+- default_to_account_id
 - is_required
 - is_active
 - created_at
-```
-
-`direction`:
-
-```text
-income
-expense
+- updated_at
 ```
 
 `kind`:
@@ -481,10 +515,8 @@ expense
 income
 required_expense
 subscription
-rent
-communication
-savings
-other
+reserve_transfer
+other_expense
 ```
 
 `recurrence`:
@@ -496,9 +528,10 @@ monthly
 yearly
 ```
 
-## PlanOccurrence
+`first_due_date` является якорем повторения. Для отсутствующего числа в коротком
+месяце используется последний день месяца.
 
-`PlanOccurrence` — конкретное ожидаемое событие на дату.
+## PlanOccurrence
 
 ```text
 PlanOccurrence
@@ -509,37 +542,35 @@ PlanOccurrence
 - status
 - transaction_id
 - matched_at
+- created_at
 ```
 
 `status`:
 
 ```text
 planned
-paid
-received
+completed
 skipped
 overdue
 ```
 
-Когда доход получен или расход оплачен, создаётся или привязывается обычная `Transaction`.
+События материализуются идемпотентно на 12 месяцев вперёд при создании,
+изменении или чтении правила. Уникальность: `plan_rule_id + due_date`.
 
-Для первой версии сопоставление подтверждает пользователь. Позже приложение может предлагать совпадение по сумме, дате, счёту и категории, но не должно автоматически считать подписку оплаченной только по тексту комментария.
+Факт всегда подтверждается пользователем:
 
-План показывает:
+- `pay` или `receive` создаёт обычную транзакцию;
+- `link` связывает уже существующую транзакцию;
+- `skip` пропускает occurrence;
+- одно событие нельзя выполнить дважды.
 
-- ожидаемые пополнения;
-- обязательные расходы;
-- подписки;
-- аренду и связь;
-- отчисления в накопления;
-- просроченные события;
-- план и факт по каждому событию.
+После получения планового дохода приложение предлагает новый период от даты
+получения до дня перед следующим ожидаемым доходом. Если следующего дохода нет,
+пользователь обязан выбрать end date. Создание требует подтверждения.
 
 ---
 
-# 9. Раздел «Трекер» и бюджетные периоды
-
-Трекер сохраняет текущую механику FinApp: доступная сумма делится на оставшиеся дни периода, а траты уменьшают сегодняшний остаток.
+# 10. Трекер и периоды
 
 ## BudgetPeriod
 
@@ -552,52 +583,39 @@ BudgetPeriod
 - end_date
 - base_asset_id
 - funding_amount
+- opening_transaction_id
 - opening_plan_occurrence_id
-- timezone
-- status
+- prompt_ack_date
 - created_at
 - closed_at
 ```
 
-`status`:
+Статус `upcoming`, `current` или `ended` рассчитывается по датам и timezone.
+Периоды одного workspace не пересекаются и сохраняются навсегда.
 
-```text
-upcoming
-current
-ended
-```
-
-Все периоды сохраняются. Завершённый период можно открыть, проверить и исправить с явным подтверждением.
-
-Период может быть создан вручную или при получении ожидаемого дохода:
-
-1. В Плане есть ожидаемое пополнение и следующие обязательные траты.
-2. Пользователь отмечает пополнение как полученное или связывает его с импортированной операцией.
-3. Приложение предлагает период от даты пополнения до даты следующего ожидаемого дохода.
-4. Пользователь подтверждает сумму периода и обязательные резервы.
-5. Трекер рассчитывает ежедневный лимит.
+`opening_transaction_id` не участвует в replay второй раз: её сумма уже
+представлена в `funding_amount`.
 
 ## BudgetCommitment
-
-`BudgetCommitment` резервирует часть денег периода под обязательный расход или накопление.
 
 ```text
 BudgetCommitment
 - id
 - budget_period_id
-- type
 - plan_occurrence_id
-- goal_id
+- type
 - name
 - planned_amount
 - status
+- created_at
+- updated_at
 ```
 
 `type`:
 
 ```text
 required_expense
-savings
+reserve_transfer
 ```
 
 `status`:
@@ -608,174 +626,109 @@ fulfilled
 cancelled
 ```
 
-Отдельная сущность полезна, потому что фиксирует, какая часть денег периода уже предназначена для обязательств. Сам ежедневный пул отдельной записью хранить не нужно — он рассчитывается:
+Эффективная сумма обязательства:
 
 ```text
-daily_pool =
-funding_amount
-− активные обязательные резервы
-− запланированные накопления
+reserved  → planned_amount
+fulfilled → фактический base_amount связанной транзакции
+cancelled → 0
 ```
 
-Оплата уже зарезервированной аренды не уменьшает ежедневный пул второй раз. Фактическая транзакция связывается с соответствующим `BudgetCommitment` через `PlanOccurrence`.
-
-Трекер показывает:
-
-- даты периода;
-- сумму периода;
-- обязательные резервы;
-- доступный ежедневный пул;
-- сколько можно потратить сегодня;
-- сколько потрачено сегодня;
-- остаток до конца периода;
-- прогноз ежедневного лимита после новой траты;
-- список операций периода.
-
----
-
-# 10. Накопления
-
-## Goal
+Формула стартового ежедневного пула:
 
 ```text
-Goal
+daily_pool = funding_amount - sum(effective commitments)
+```
+
+Связанная фактическая транзакция исключается из обычных daily expenses. Поэтому
+равная плану аренда не уменьшает дневной бюджет второй раз; отклонение от плана
+увеличивает или уменьшает доступный пул на точную разницу.
+
+## RebaseEvent
+
+```text
+RebaseEvent
 - id
-- workspace_id
-- owner_user_id
-- name
-- target_amount
-- target_asset_id
-- target_date
-- linked_account_id
-- is_protected
-- status
+- budget_period_id
+- day
+- reason
 - created_at
 ```
 
-Для первой версии одна цель связана с одним резервным или виртуальным счётом.
+`app/budget.py` остаётся чистым модулем и сохраняет существующую механику:
 
-Пополнение цели — внутренний перевод, а не расход. Если связанный счёт исключён из доступной суммы, деньги перестают учитываться как доступные для повседневных трат.
+- сумма делится на календарные дни включительно;
+- трата сегодня уменьшает сегодняшний остаток 1:1;
+- неиспользованный остаток переносится;
+- перерасход пересчитывает базу следующих дней;
+- отрицательные значения не обрезаются в API;
+- live preview показывает результат ещё не сохранённой траты;
+- next-day prompt позволяет оставить перенос на сегодня или распределить его;
+- edit/void всегда вызывает полный детерминированный replay.
 
----
-
-# 11. Синхронизация криптосчетов
-
-Синхронизация добавляется после появления стабильного журнала операций.
-
-## IntegrationConnection
-
-```text
-IntegrationConnection
-- id
-- account_id
-- provider
-- network
-- public_address
-- encrypted_readonly_credentials
-- sync_interval_minutes
-- last_synced_at
-- next_sync_at
-- status
-- created_at
-```
-
-## ImportedOperation
-
-```text
-ImportedOperation
-- id
-- integration_connection_id
-- external_id
-- raw_data
-- detected_type
-- confirmation_status
-- transaction_id
-- detected_at
-```
-
-`confirmation_status`:
-
-```text
-pending
-confirmed
-failed
-```
-
-Процесс:
-
-1. Пользователь добавляет публичный адрес кошелька.
-2. Планировщик, например раз в 5 минут, запрашивает новые операции.
-3. Новая внешняя операция сохраняется один раз по `connection + external_id`.
-4. Подтверждённая операция создаёт `Transaction` и движения по счёту.
-5. Пользователь может изменить категорию, комментарий и связь с Планом.
-6. Неоднозначные операции попадают в список «Нужно разобрать».
-
-Правила безопасности:
-
-- никогда не запрашивать seed phrase или private key;
-- для бирж принимать только read-only credentials;
-- повторный импорт не создаёт дубликаты;
-- сетевую комиссию учитывать отдельно;
-- неподтверждённую blockchain-операцию не включать в финальный баланс;
-- для периодического запуска достаточно cron, отдельная очередь задач не нужна.
+Точность отображения Трекера соответствует `base_asset_id` периода.
 
 ---
 
-# 12. Раздел «Аналитика»
+# 11. Права и видимость
 
-На первом этапе раздел остаётся заглушкой. Детальную аналитику нужно проектировать после стабилизации счетов, операций, планов и периодов.
+Матрица действий со счётом:
 
-Будущие отчёты:
+```text
+Action                         owner editor contributor viewer
+View account and its legs       yes    yes      yes       yes
+Add expense                     yes    yes      yes       no
+Add income                      yes    yes      no        no
+Transfer or exchange            yes    yes*     no        no
+Edit or void transaction        yes    yes*     no        no
+Edit account metadata           yes    yes      no        no
+Reconcile/archive account       yes    no       no        no
+Manage access                   yes    no       no        no
+```
 
-- доходы и расходы за неделю, месяц или произвольный период;
-- расходы по категориям и счетам;
-- денежный поток;
-- изменение общего капитала;
-- план против факта;
-- прогресс накоплений;
-- фильтры по пользователю и общему пространству.
+`yes*` требует edit-доступ на каждый счёт операции.
 
-Внутренние переводы не считаются доходом или расходом. Для исторической аналитики используется курс на дату операции.
+Дополнительно:
+
+- unassigned-транзакцию видят её создатель и владелец workspace;
+- contributor обязан выбрать расшаренный счёт и может создать только expense;
+- категории workspace доступны shared-пользователю для выбора, но изменять их
+  может только владелец workspace;
+- shared-расход автоматически связывается с текущим периодом владельца, если
+  дата входит в него, но сам Трекер приглашённому не показывается.
 
 ---
 
-# 13. API
+# 12. HTTP API
 
-Все новые маршруты используют префикс:
+Префикс: `/api/v1`. JSON везде. `/health` остаётся публичным.
 
-```text
-/api/v1
-```
-
-## Авторизация и доступ
+## Auth и workspace
 
 ```text
-POST   /api/v1/auth/register
-POST   /api/v1/auth/login
-POST   /api/v1/auth/logout
-GET    /api/v1/auth/me
+POST  /api/v1/auth/register
+POST  /api/v1/auth/login
+POST  /api/v1/auth/logout
+GET   /api/v1/auth/me
 
-POST   /api/v1/workspaces
-GET    /api/v1/workspaces
-GET    /api/v1/workspaces/{id}
-PATCH  /api/v1/workspaces/{id}
-
-POST   /api/v1/workspaces/{id}/invitations
-GET    /api/v1/workspaces/{id}/members
-PATCH  /api/v1/workspaces/{id}/members/{user_id}
-DELETE /api/v1/workspaces/{id}/members/{user_id}
-POST   /api/v1/invitations/{token}/accept
+GET   /api/v1/workspaces
+GET   /api/v1/workspaces/{id}
+PATCH /api/v1/workspaces/{id}
 ```
 
-## Активы и курсы
+## Assets и категории
 
 ```text
-GET  /api/v1/assets
-GET  /api/v1/exchange-rates
-POST /api/v1/exchange-rates
+GET   /api/v1/assets
+POST  /api/v1/assets
+
+GET   /api/v1/workspaces/{workspace_id}/categories
+POST  /api/v1/workspaces/{workspace_id}/categories
+PATCH /api/v1/workspaces/{workspace_id}/categories/{id}
+POST  /api/v1/workspaces/{workspace_id}/categories/{id}/archive
 ```
 
-## Счета
+## Accounts и доступ
 
 ```text
 POST   /api/v1/accounts
@@ -787,21 +740,24 @@ POST   /api/v1/accounts/{id}/reconcile
 POST   /api/v1/accounts/{id}/archive
 
 GET    /api/v1/accounts/{id}/access
-POST   /api/v1/accounts/{id}/access
+POST   /api/v1/accounts/{id}/invitations
+POST   /api/v1/account-invitations/{token}/accept
 PATCH  /api/v1/accounts/{id}/access/{user_id}
 DELETE /api/v1/accounts/{id}/access/{user_id}
 ```
 
-`GET /accounts/summary` возвращает общий капитал, доступную сумму и разбивку по активам.
+`GET /accounts` возвращает owned и shared-счета текущего пользователя.
+`GET /accounts/summary` агрегирует только видимые счета и отдельно возвращает
+`unvalued` по активам.
 
-## Транзакции
+## Transactions
 
 ```text
-POST  /api/v1/transactions/expense
-POST  /api/v1/transactions/income
-POST  /api/v1/transactions/transfer
-POST  /api/v1/transactions/exchange
-POST  /api/v1/transactions/adjustment
+POST /api/v1/transactions/expense
+POST /api/v1/transactions/income
+POST /api/v1/transactions/transfer
+POST /api/v1/transactions/exchange
+POST /api/v1/transactions/adjustment
 
 GET   /api/v1/transactions
 GET   /api/v1/transactions/{id}
@@ -809,11 +765,14 @@ PATCH /api/v1/transactions/{id}
 POST  /api/v1/transactions/{id}/void
 POST  /api/v1/transactions/{id}/assign-account
 POST  /api/v1/transactions/{id}/link-plan
+
+GET /api/v1/exchange-rates
 ```
 
-Фильтры `GET /transactions`:
+Фильтры списка:
 
 ```text
+workspace_id
 account_id
 date_from
 date_to
@@ -822,201 +781,141 @@ category_id
 source
 status
 created_by_user_id
+cursor
+limit
 ```
 
-Frontend передаёт понятные поля операции. Backend сам формирует необходимые `TransactionLeg`.
+Frontend отправляет команды предметной области, а не собирает legs вручную.
 
-## Категории
+## Plan
 
 ```text
-POST  /api/v1/categories
-GET   /api/v1/categories
-PATCH /api/v1/categories/{id}
-POST  /api/v1/categories/{id}/archive
+POST  /api/v1/workspaces/{workspace_id}/plan-rules
+GET   /api/v1/workspaces/{workspace_id}/plan-rules
+PATCH /api/v1/workspaces/{workspace_id}/plan-rules/{id}
+POST  /api/v1/workspaces/{workspace_id}/plan-rules/{id}/archive
+
+GET  /api/v1/workspaces/{workspace_id}/plan-occurrences
+POST /api/v1/workspaces/{workspace_id}/plan-occurrences/{id}/pay
+POST /api/v1/workspaces/{workspace_id}/plan-occurrences/{id}/receive
+POST /api/v1/workspaces/{workspace_id}/plan-occurrences/{id}/skip
+POST /api/v1/workspaces/{workspace_id}/plan-occurrences/{id}/link-transaction
 ```
 
-## План
+## Tracker
 
 ```text
-POST   /api/v1/plan-rules
-GET    /api/v1/plan-rules
-PATCH  /api/v1/plan-rules/{id}
-POST   /api/v1/plan-rules/{id}/archive
+POST  /api/v1/workspaces/{workspace_id}/budget-periods/preview
+POST  /api/v1/workspaces/{workspace_id}/budget-periods
+GET   /api/v1/workspaces/{workspace_id}/budget-periods
+GET   /api/v1/workspaces/{workspace_id}/budget-periods/current
+GET   /api/v1/workspaces/{workspace_id}/budget-periods/{id}
+PATCH /api/v1/workspaces/{workspace_id}/budget-periods/{id}
+POST  /api/v1/workspaces/{workspace_id}/budget-periods/{id}/close
 
-GET  /api/v1/plan-occurrences
-POST /api/v1/plan-occurrences/{id}/pay
-POST /api/v1/plan-occurrences/{id}/receive
-POST /api/v1/plan-occurrences/{id}/skip
-POST /api/v1/plan-occurrences/{id}/link-transaction
+POST   /api/v1/workspaces/{workspace_id}/budget-periods/{id}/commitments
+PATCH  /api/v1/workspaces/{workspace_id}/budget-commitments/{id}
+DELETE /api/v1/workspaces/{workspace_id}/budget-commitments/{id}
+
+GET  /api/v1/workspaces/{workspace_id}/tracker/today
+GET  /api/v1/workspaces/{workspace_id}/tracker/preview?pending={amount}
+GET  /api/v1/workspaces/{workspace_id}/tracker/savings-prompt
+POST /api/v1/workspaces/{workspace_id}/tracker/savings-decision
 ```
 
-## Трекер и периоды
-
-```text
-POST  /api/v1/budget-periods/preview
-POST  /api/v1/budget-periods
-GET   /api/v1/budget-periods
-GET   /api/v1/budget-periods/current
-GET   /api/v1/budget-periods/{id}
-PATCH /api/v1/budget-periods/{id}
-POST  /api/v1/budget-periods/{id}/close
-
-POST   /api/v1/budget-periods/{id}/commitments
-PATCH  /api/v1/budget-commitments/{id}
-DELETE /api/v1/budget-commitments/{id}
-
-GET /api/v1/tracker/today
-GET /api/v1/tracker/preview?pending={amount}
-```
-
-## Цели
-
-```text
-POST  /api/v1/goals
-GET   /api/v1/goals
-PATCH /api/v1/goals/{id}
-POST  /api/v1/goals/{id}/fund
-POST  /api/v1/goals/{id}/withdraw
-```
-
-## Интеграции
-
-```text
-POST   /api/v1/integrations
-GET    /api/v1/integrations
-PATCH  /api/v1/integrations/{id}
-DELETE /api/v1/integrations/{id}
-POST   /api/v1/integrations/{id}/sync
-
-GET  /api/v1/imported-operations
-POST /api/v1/imported-operations/{id}/classify
-POST /api/v1/imported-operations/{id}/ignore
-```
-
-## Аналитика — после стабилизации модели
-
-```text
-GET /api/v1/analytics/cash-flow
-GET /api/v1/analytics/spending
-GET /api/v1/analytics/net-worth
-GET /api/v1/analytics/plan-vs-actual
-```
+Mutation responses возвращают обновлённые производные итоги. Ошибки доступа:
+`401` без сессии, `403` при известном объекте без нужного действия, `404` для
+недоступных чужих объектов, чтобы не раскрывать их существование.
 
 ---
 
-# 14. Навигация
+# 13. Frontend
 
-Основные разделы:
+Одна responsive SPA без build step. UI полностью English.
 
-## Счета
+## Accounts
 
-Общий капитал, доступная сумма, список счетов и быстрые действия со счетами.
+- Net worth и Available;
+- unvalued assets;
+- группировка Cash, Banks, Crypto, Savings;
+- создание, редактирование, reconcile, archive;
+- история счёта и sharing.
 
-## Транзакции
+## Transactions
 
-Вся история, фильтры, редактирование и разбор импортированных операций.
+- общий список и фильтры;
+- формы expense, income, transfer, exchange, adjustment;
+- category, account, date, comment, counterparty;
+- edit, void, assign account и link to Plan;
+- понятное отображение redacted legs.
 
-## Трекер
+## Tracker
 
-Текущий период, сумма на сегодня, быстрый ввод траты и история периодов.
+- текущий и исторические периоды;
+- today allowance, spent, remaining, commitments;
+- quick expense и live preview;
+- proposal после income;
+- next-day savings decision;
+- ended-period correction confirmation.
 
-## План
+## Plan
 
-Ожидаемые доходы, обязательные расходы, подписки, накопления и запуск нового периода после пополнения.
+- upcoming income;
+- required expenses;
+- subscriptions;
+- reserve transfers;
+- overdue;
+- plan-vs-actual и действия pay/receive/skip/link.
 
-## Аналитика
+## Analytics
 
-Сначала заглушка, затем отчёты после согласования модели данных.
+Только стабильная заглушка `Coming soon`. API аналитики в первый релиз не входит.
 
-Настройки, профиль, пользователи и права находятся в отдельном меню, а не в основной навигации.
-
----
-
-# 15. Порядок развития
-
-## Этап 1. Пользователи и финансовое пространство
-
-- пользователи и авторизация;
-- личные и общие workspace;
-- роли и приглашения;
-- категории и базовые активы.
-
-## Этап 2. Счета и журнал операций
-
-- счета;
-- движения по счетам;
-- расходы, доходы, переводы, обмены и корректировки;
-- общий и доступный баланс;
-- непривязанные операции;
-- разделы Счета и Транзакции.
-
-## Этап 3. Совместный доступ
-
-- доступ к отдельным счетам;
-- права owner, editor, contributor и viewer;
-- отображение автора операции;
-- проверка доступа во всех API.
-
-## Этап 4. План и Трекер
-
-- ожидаемые доходы и расходы;
-- подписки;
-- обязательные резервы;
-- запуск периода после дохода;
-- сохранение истории периодов;
-- ежедневный бюджет без двойного списания обязательных расходов.
-
-## Этап 5. Криптосинхронизация
-
-- публичные адреса;
-- периодическая синхронизация;
-- защита от дубликатов;
-- подтверждения и комиссии;
-- разбор и классификация операций.
-
-## Этап 6. Аналитика
-
-- согласование метрик;
-- фильтры;
-- cash flow;
-- net worth;
-- план против факта;
-- накопления.
+Settings, profile и logout находятся в отдельном меню. Основные tap targets не
+меньше 44px. Обязательны phone и desktop layouts.
 
 ---
 
-# 16. Главные правила системы
+# 14. Главные инварианты
 
-1. Баланс счёта всегда рассчитывается из движений.
-2. Изменение баланса оформляется операцией, а не прямой записью нового числа.
-3. Внутренний перевод не считается расходом или доходом.
-4. Перевод другому человеку считается расходом.
-5. Перевод в накопления не считается расходом.
-6. Исключённый счёт не входит в доступную сумму, но остаётся частью общего капитала.
-7. Непривязанная операция влияет на Трекер, но не влияет на баланс счёта.
-8. Все бюджетные периоды сохраняются.
-9. Оплата зарезервированного расхода не уменьшает ежедневный пул второй раз.
-10. Отмена или редактирование операции полностью пересчитывает производные суммы.
-11. Повторный импорт внешней операции не создаёт дубликат.
-12. Неподтверждённая blockchain-операция не меняет финальный баланс.
-13. Суммы хранятся без потери точности, включая криптоактивы.
-14. Дата операции хранится вместе с UTC-временем и локальной финансовой датой.
-15. Пользователь получает только те данные и действия, которые разрешены его ролью.
+1. Баланс счёта равен сумме posted legs.
+2. Void полностью исключает движения и производные курсы.
+3. Внутренний transfer не меняет общий капитал и не считается расходом.
+4. Exchange использует обе фактические суммы и не считается расходом.
+5. Комиссия является отдельным expense.
+6. Перевод третьему лицу является expense.
+7. Резервный transfer не является expense.
+8. Unassigned-операция не меняет account balance.
+9. Available исключает защищённые счета, Net worth — нет.
+10. Исторический base amount не меняется из-за нового курса.
+11. Актив без курса не попадает в пересчитанный итог и явно показывается.
+12. Shared user не получает План, Трекер или чужие balances.
+13. Права проверяются на всех legs multi-account операции.
+14. Все периоды сохраняются и не пересекаются.
+15. Opening income не учитывается в периоде дважды.
+16. Fulfilled commitment заменяет плановую сумму фактической без двойного расхода.
+17. Полный replay после edit/void даёт тот же результат, что расчёт с нуля.
+18. Повторная генерация occurrences не создаёт дубликаты.
+19. UTC-время и local financial date хранятся отдельно.
+20. Точность актива не теряется ни в DB, ни в API.
 
 ---
 
-# Итоговая модель
+# 15. Критерии готовности первого релиза
 
-```text
-User + Workspace → кто управляет данными
-Asset + Account → где и в чём находятся деньги
-Transaction + TransactionLeg → как деньги перемещались
-Category → на что пришлись доходы и расходы
-PlanRule + PlanOccurrence → что ожидается
-BudgetPeriod + BudgetCommitment → сколько можно тратить сейчас
-Goal → зачем откладываются деньги
-IntegrationConnection + ImportedOperation → откуда приходят внешние операции
-Analytics → что происходило с финансами
-```
-
-Эта модель сохраняет текущую механику ежедневного бюджета, но превращает FinApp в приложение для всех счетов, совместного доступа, планирования и последующей автоматической синхронизации.
+1. Пользователь регистрируется, входит и получает личный workspace.
+2. Можно создать счета разных типов и активов с точным opening balance.
+3. Expense, income, transfer, exchange и adjustment дают правильные balances.
+4. Net worth, Available и unvalued assets вычисляются правильно.
+5. Операции фильтруются, исправляются, void-ятся и позднее привязываются к счёту.
+6. Счёт расшаривается по одноразовой ссылке с соблюдением четырёх ролей.
+7. Приглашённый не видит никакие другие финансовые данные владельца.
+8. План поддерживает все виды и recurrence из раздела 9.
+9. Полученный доход предлагает период, но требует подтверждения.
+10. Трекер сохраняет текущую daily-budget механику и историю.
+11. Обязательный расход не уменьшает daily pool дважды.
+12. Analytics отображается как заглушка.
+13. Свежая БД создаётся через Alembic без внешних сервисов.
+14. Полный pytest, JS syntax check и scratch-browser проверки проходят.
+15. README позволяет установить, запустить и протестировать приложение в
+    нескольких командах.

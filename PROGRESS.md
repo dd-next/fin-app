@@ -2,12 +2,24 @@
 
 The agent updates this after every phase.
 
-**To resume in a new session (any model):** read `specs/SPEC.md`,
-`specs/SPEC-4-family-finance.md`, `CLAUDE.md`,
-`BUILD_PLAN.md`, then this file, and continue from the first unchecked phase,
-following the same conventions.
+**To resume FinApp v2:** read `specs/FinnApp-v2.md`, `AGENTS.md`,
+`BUILD_PLAN-v2.md`, then this file. Continue from the first unchecked v2 phase.
+The older phase ledger below is historical.
 
 Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
+
+## FinApp v2
+
+- [x] V2 Phase 0 — Specification authority
+- [ ] V2 Phase 1 — Clean identity, workspace, assets, and categories
+- [ ] V2 Phase 2 — Accounts and ledger
+- [ ] V2 Phase 3 — Account sharing and permissions
+- [ ] V2 Phase 4 — Accounts and Transactions frontend
+- [ ] V2 Phase 5 — Plan rules and occurrences
+- [ ] V2 Phase 6 — Tracker periods and commitments
+- [ ] V2 Phase 7 — Final integration and verification
+
+## Historical phases
 
 - [x] Phase 1 — Pure budget core + unit tests
 - [x] Phase 2 — Data layer + API
@@ -33,6 +45,18 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 
 ## Log
 <!-- Agent: append an entry per phase — what you built, test results (pass/fail), decisions. -->
+
+### V2 Phase 0 — Specification authority (2026-07-18)
+- Replaced the v2 draft with the authoritative, decision-complete
+  `specs/FinnApp-v2.md`; added `BUILD_PLAN-v2.md` and redirected AGENTS,
+  CLAUDE, README, and this resume ledger to the new source of truth.
+- Marked the earlier specifications and build plan as historical. Confirmed
+  that every product/technical specification remains under `specs/`.
+- Locked the clean-reset release boundary: web-only core, per-account sharing,
+  categories, Plan, and Tracker; no legacy row migration, pools/goals/limits,
+  Sheets, Telegram, XLSX, crypto sync, or full Analytics.
+- Tests: **85 passed, 0 failed** (`.venv/bin/python -m pytest -q`); JavaScript
+  syntax check passed (`node --check app/static/app.js`).
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

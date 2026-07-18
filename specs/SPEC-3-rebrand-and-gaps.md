@@ -1,5 +1,8 @@
 # SPEC-3 (v2) — Rebrand first, then features, then UI, then test cases
 
+> Historical specification for the earlier product generation. The active v2
+> specification is `specs/FinnApp-v2.md`.
+
 Addendum to `SPEC.md` (as amended in PROGRESS.md). Conventions in `CLAUDE.md`
 still apply. Phases 1–8 are done. Read PROGRESS.md first: the budget math was
 reworked (daily base + carry-over + overspend rebase). Do not regress it.

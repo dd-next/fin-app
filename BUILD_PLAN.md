@@ -1,5 +1,8 @@
 # BUILD_PLAN.md — phases
 
+> Historical build plan for completed earlier versions. The active plan on the
+> `finapp-v2` branch is `BUILD_PLAN-v2.md`.
+
 Build in this order. Each phase ends with passing tests, an updated
 `PROGRESS.md`, and a git commit (see `CLAUDE.md` → Workflow rules). This is what
 lets any model resume from `PROGRESS.md` if work stops.

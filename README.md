@@ -1,8 +1,10 @@
-# FinApp — family daily-budget manager
+# FinApp v2
 
-Product specifications live in [`specs/`](specs/); start with
-[`specs/SPEC.md`](specs/SPEC.md), then read
-[`specs/SPEC-4-family-finance.md`](specs/SPEC-4-family-finance.md).
+The authoritative v2 specification is
+[`specs/FinnApp-v2.md`](specs/FinnApp-v2.md); implementation phases are in
+[`BUILD_PLAN-v2.md`](BUILD_PLAN-v2.md). The currently running code still
+represents the completed family-finance generation and will be replaced phase
+by phase while the repository remains runnable.
 
 Set an amount and a period; the app splits the money across the days and
 shows what you can spend **today**. Add an expense and today's number drops
