@@ -14,7 +14,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 1 — Clean identity, workspace, assets, and categories
 - [x] V2 Phase 2 — Accounts and ledger
 - [x] V2 Phase 3 — Account sharing and permissions
-- [ ] V2 Phase 4 — Accounts and Transactions frontend
+- [x] V2 Phase 4 — Accounts and Transactions frontend
 - [ ] V2 Phase 5 — Plan rules and occurrences
 - [ ] V2 Phase 6 — Tracker periods and commitments
 - [ ] V2 Phase 7 — Final integration and verification
@@ -100,6 +100,26 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Tests: **42 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real upgrade
   to `0003_v2`, Python compileall, JavaScript syntax, `pip check`, and diff
   checks passed.
+
+### V2 Phase 4 — Accounts and Transactions frontend (2026-07-18)
+- Replaced the temporary shell with the five-section English SPA. Accounts now
+  show visible Net worth/Available, unvalued warnings, financial groupings,
+  create/edit/reconcile/archive, detail history, sharing, and role-aware actions.
+- Transactions now provide account/type/category/status/date filters; create and
+  correction forms for expense, income, transfer, exchange with optional fee,
+  and adjustment; unassigned assignment, void, authorship, redacted-leg hints,
+  and permission-aware controls. Added owner category management and invite-link
+  acceptance through login or registration. Analytics is `Coming soon`.
+- Repository `verify` plus the in-app Browser skill validated a scratch-DB flow:
+  registration, account/opening balance, expense, correction, sharing, invite
+  acceptance as viewer, and viewer control restrictions. Responsive checks at
+  390×844 and 1280×900 had no horizontal overflow; browser console was clean.
+- Tests: **45 passed, 0 failed** (`.venv/bin/python -m pytest -q`); JavaScript
+  syntax, Python compileall, `pip check`, and diff checks passed. The requested
+  `frontend-design` skill was not available in this session; the existing design
+  was implemented and visually verified with the available repo/browser skills.
+- Decision: transaction-to-Plan linking remains for V2 Phase 5, where the Plan
+  occurrence API and link target are introduced; the Phase 4 ledger stays green.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

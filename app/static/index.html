@@ -3,43 +3,220 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101217">
   <title>FinApp v2</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main class="shell">
-    <section id="auth-card" class="card auth-card">
-      <p class="eyebrow">FinApp v2</p>
-      <h1>Your money, in one place.</h1>
+    <section id="auth-card" class="auth-card panel" aria-labelledby="auth-title">
+      <div class="brand-mark" aria-hidden="true">F</div>
+      <p class="eyebrow">FinApp</p>
+      <h1 id="auth-title">Your money, in one place.</h1>
+      <p class="muted auth-copy">Track every account, plan what is next, and know what is safe to spend.</p>
       <form id="auth-form">
         <label>Username<input id="username" autocomplete="username" required minlength="3"></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" required minlength="10"></label>
         <label id="display-field" class="hidden">Display name<input id="display-name" autocomplete="name"></label>
-        <div class="actions">
+        <div class="form-actions stacked-mobile">
           <button id="submit-auth" type="submit">Log in</button>
-          <button id="toggle-auth" type="button" class="secondary">Create account</button>
+          <button id="toggle-auth" type="button" class="button-secondary">Create account</button>
         </div>
-        <p id="auth-error" class="error" role="alert"></p>
+        <p id="auth-error" class="form-error" role="alert"></p>
       </form>
     </section>
 
     <section id="app-shell" class="hidden">
-      <header>
-        <div><p class="eyebrow">FinApp v2</p><h1 id="workspace-name">Finances</h1></div>
-        <button id="logout" class="secondary">Log out</button>
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark small" aria-hidden="true">F</div>
+          <div>
+            <p class="eyebrow">FinApp</p>
+            <h1 id="workspace-name">Finances</h1>
+          </div>
+        </div>
+        <details class="profile-menu">
+          <summary id="profile-summary" aria-label="Open profile menu">Profile</summary>
+          <div class="menu-card">
+            <strong id="profile-name">Profile</strong>
+            <span id="profile-username" class="muted"></span>
+            <button id="manage-categories" class="button-secondary">Manage categories</button>
+            <button id="logout" class="button-secondary">Log out</button>
+          </div>
+        </details>
       </header>
-      <nav aria-label="Primary">
-        <button class="active">Accounts</button><button disabled>Transactions</button>
-        <button disabled>Tracker</button><button disabled>Plan</button><button disabled>Analytics</button>
+
+      <nav class="primary-nav" aria-label="Primary">
+        <button data-view="accounts" class="active"><span aria-hidden="true">◫</span>Accounts</button>
+        <button data-view="transactions"><span aria-hidden="true">⇄</span>Transactions</button>
+        <button data-view="tracker"><span aria-hidden="true">◎</span>Tracker</button>
+        <button data-view="plan"><span aria-hidden="true">◇</span>Plan</button>
+        <button data-view="analytics"><span aria-hidden="true">⌁</span>Analytics</button>
       </nav>
-      <section class="card">
-        <p class="muted">Foundation ready</p>
-        <h2 id="welcome">Welcome</h2>
-        <p>Accounts and transactions arrive in the next phase.</p>
-        <div id="asset-list" class="chips"></div>
+
+      <div id="page-loading" class="page-loading hidden" role="status">Updating…</div>
+
+      <section id="view-accounts" class="app-view" aria-labelledby="accounts-title">
+        <div class="view-heading">
+          <div><p class="eyebrow">Overview</p><h2 id="accounts-title">Accounts</h2></div>
+          <button id="add-account">＋ Add account</button>
+        </div>
+        <div class="summary-grid">
+          <article class="metric-card capital-card">
+            <span>Total capital</span>
+            <strong id="net-worth">—</strong>
+            <small id="net-worth-code">Across visible accounts</small>
+          </article>
+          <article class="metric-card">
+            <span>Available</span>
+            <strong id="available-total">—</strong>
+            <small>Excludes protected accounts</small>
+          </article>
+        </div>
+        <div id="unvalued-warning" class="notice warning hidden"></div>
+        <div id="account-groups" class="account-groups"></div>
+        <div id="accounts-empty" class="empty-state hidden">
+          <div class="empty-icon">◫</div><h3>Add your first account</h3>
+          <p>Cash, bank cards, wallets, reserves, and crypto can all live here.</p>
+          <button id="empty-add-account">Add account</button>
+        </div>
+      </section>
+
+      <section id="view-transactions" class="app-view hidden" aria-labelledby="transactions-title">
+        <div class="view-heading">
+          <div><p class="eyebrow">Ledger</p><h2 id="transactions-title">Transactions</h2></div>
+          <button id="add-transaction">＋ Add transaction</button>
+        </div>
+        <form id="transaction-filters" class="filter-bar panel-subtle">
+          <label>Account<select id="filter-account"><option value="">All accounts</option></select></label>
+          <label>Type<select id="filter-type"><option value="">All types</option><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
+          <label>Category<select id="filter-category"><option value="">All categories</option></select></label>
+          <label>Status<select id="filter-status"><option value="">All statuses</option><option value="posted">Posted</option><option value="unassigned">Unassigned</option><option value="voided">Voided</option></select></label>
+          <label>From<input id="filter-from" type="date"></label>
+          <label>To<input id="filter-to" type="date"></label>
+          <button type="submit" class="button-secondary">Apply</button>
+          <button id="clear-filters" type="button" class="button-quiet">Clear</button>
+        </form>
+        <div id="transaction-list" class="transaction-list"></div>
+        <div id="transactions-empty" class="empty-state hidden">
+          <div class="empty-icon">⇄</div><h3>No transactions yet</h3>
+          <p>Add an expense, income, transfer, exchange, or balance adjustment.</p>
+          <button id="empty-add-transaction">Add transaction</button>
+        </div>
+        <button id="load-more" class="button-secondary load-more hidden">Load more</button>
+      </section>
+
+      <section id="view-tracker" class="app-view hidden">
+        <div class="view-heading"><div><p class="eyebrow">Daily pace</p><h2>Tracker</h2></div></div>
+        <div class="placeholder panel"><span>◎</span><h3>Tracker setup comes next</h3><p>Your active period, daily allowance, commitments, and quick expenses will appear here.</p></div>
+      </section>
+
+      <section id="view-plan" class="app-view hidden">
+        <div class="view-heading"><div><p class="eyebrow">Upcoming</p><h2>Plan</h2></div></div>
+        <div class="placeholder panel"><span>◇</span><h3>Plan setup comes next</h3><p>Expected income, required expenses, subscriptions, rent, and reserve transfers will live here.</p></div>
+      </section>
+
+      <section id="view-analytics" class="app-view hidden">
+        <div class="view-heading"><div><p class="eyebrow">Insights</p><h2>Analytics</h2></div></div>
+        <div class="placeholder panel"><span>⌁</span><h3>Coming soon</h3><p>Income, spending, and trends will be designed after the core financial data is established.</p></div>
       </section>
     </section>
   </main>
+
+  <dialog id="account-dialog" aria-labelledby="account-dialog-title">
+    <form id="account-form" class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Account</p><h2 id="account-dialog-title">Add account</h2></div><button type="button" class="icon-button" data-close="account-dialog" aria-label="Close">×</button></div>
+      <input id="account-id" type="hidden">
+      <div class="form-grid two-columns">
+        <label class="span-two">Name<input id="account-name" required maxlength="100" placeholder="Main card"></label>
+        <label>Storage<select id="account-storage" required><option value="bank">Bank account</option><option value="card">Card</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="crypto_wallet">Crypto wallet</option><option value="exchange">Exchange</option><option value="virtual">Virtual</option></select></label>
+        <label>Purpose<select id="account-purpose" required><option value="spending">Spending</option><option value="reserve">Reserve</option><option value="savings">Savings</option><option value="investment">Investment</option></select></label>
+        <label id="account-asset-field">Asset<select id="account-asset" required></select></label>
+        <label>Institution<input id="account-institution" maxlength="100" placeholder="Optional"></label>
+        <label id="opening-balance-field">Opening balance<input id="account-opening" inputmode="decimal" value="0" required></label>
+        <label class="check-row span-two"><input id="account-available" type="checkbox" checked><span>Include this account in Available</span></label>
+      </div>
+      <p id="account-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="account-dialog">Cancel</button><button id="save-account" type="submit">Save account</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="account-detail-dialog" class="wide-dialog" aria-labelledby="account-detail-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Account details</p><h2 id="account-detail-title">Account</h2></div><button type="button" class="icon-button" data-close="account-detail-dialog" aria-label="Close">×</button></div>
+      <div id="account-detail-body"></div>
+    </div>
+  </dialog>
+
+  <dialog id="reconcile-dialog" aria-labelledby="reconcile-title">
+    <form id="reconcile-form" class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Balance correction</p><h2 id="reconcile-title">Reconcile account</h2></div><button type="button" class="icon-button" data-close="reconcile-dialog" aria-label="Close">×</button></div>
+      <input id="reconcile-account-id" type="hidden">
+      <label>Actual balance<input id="reconcile-balance" inputmode="decimal" required></label>
+      <label>Note<input id="reconcile-note" maxlength="500" placeholder="Counted cash"></label>
+      <p id="reconcile-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="reconcile-dialog">Cancel</button><button type="submit">Save correction</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="sharing-dialog" class="wide-dialog" aria-labelledby="sharing-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Access</p><h2 id="sharing-title">Share account</h2></div><button type="button" class="icon-button" data-close="sharing-dialog" aria-label="Close">×</button></div>
+      <form id="invitation-form" class="invite-row">
+        <label>Role<select id="invitation-role"><option value="editor">Editor</option><option value="contributor">Contributor</option><option value="viewer">Viewer</option></select></label>
+        <button type="submit">Create invite link</button>
+      </form>
+      <div id="invite-result" class="copy-box hidden"><input id="invite-url" readonly><button id="copy-invite" type="button" class="button-secondary">Copy</button></div>
+      <p id="sharing-error" class="form-error" role="alert"></p>
+      <div id="access-list" class="access-list"></div>
+    </div>
+  </dialog>
+
+  <dialog id="transaction-dialog" class="wide-dialog" aria-labelledby="transaction-dialog-title">
+    <form id="transaction-form" class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Ledger entry</p><h2 id="transaction-dialog-title">Add transaction</h2></div><button type="button" class="icon-button" data-close="transaction-dialog" aria-label="Close">×</button></div>
+      <input id="transaction-id" type="hidden">
+      <label>Type<select id="transaction-type"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
+      <div id="single-fields" class="form-grid two-columns">
+        <label id="single-account-field">Account<select id="transaction-account"></select></label>
+        <label id="single-asset-field">Asset<select id="transaction-asset"></select></label>
+        <label id="single-amount-field">Amount<input id="transaction-amount" inputmode="decimal"></label>
+      </div>
+      <div id="multi-fields" class="form-grid two-columns hidden">
+        <label>From account<select id="transaction-from-account"></select></label>
+        <label>To account<select id="transaction-to-account"></select></label>
+        <label id="from-amount-field">From amount<input id="transaction-from-amount" inputmode="decimal"></label>
+        <label id="to-amount-field">To amount<input id="transaction-to-amount" inputmode="decimal"></label>
+      </div>
+      <div id="fee-fields" class="panel-subtle hidden">
+        <label class="check-row"><input id="transaction-has-fee" type="checkbox"><span>Add exchange fee</span></label>
+        <div id="fee-details" class="form-grid two-columns hidden"><label>Fee account<select id="transaction-fee-account"></select></label><label>Fee amount<input id="transaction-fee-amount" inputmode="decimal"></label></div>
+      </div>
+      <div class="form-grid two-columns">
+        <label id="category-field">Category<select id="transaction-category"><option value="">Uncategorized</option></select></label>
+        <label>Financial date<input id="transaction-date" type="date"></label>
+        <label>Counterparty<input id="transaction-counterparty" maxlength="160" placeholder="Optional"></label>
+        <label>Note<input id="transaction-note" maxlength="2000" placeholder="Optional"></label>
+      </div>
+      <p id="transaction-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="transaction-dialog">Cancel</button><button id="save-transaction" type="submit">Save transaction</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="categories-dialog" aria-labelledby="categories-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Settings</p><h2 id="categories-title">Categories</h2></div><button type="button" class="icon-button" data-close="categories-dialog" aria-label="Close">×</button></div>
+      <form id="category-form" class="category-form">
+        <label>Name<input id="category-name" required maxlength="100" placeholder="Groceries"></label>
+        <label>Kind<select id="category-kind"><option value="expense">Expense</option><option value="income">Income</option><option value="both">Both</option></select></label>
+        <button type="submit">Add category</button>
+      </form>
+      <p id="category-error" class="form-error" role="alert"></p>
+      <div id="category-list" class="access-list"></div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   <script src="/app.js" defer></script>
 </body>
 </html>
