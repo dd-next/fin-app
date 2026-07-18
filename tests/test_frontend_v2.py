@@ -49,6 +49,11 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "filter-status",
     } <= parser.ids
     assert "Coming soon" in html
+    assert 'aria-labelledby="tracker-title"' in html
+    assert 'aria-labelledby="plan-title"' in html
+    assert 'aria-labelledby="analytics-title"' in html
+    assert 'id="tracker-available" aria-live="polite"' in html
+    assert 'id="budget-proposal-notice" class="notice hidden" role="status"' in html
     assert not re.search(r"[А-Яа-яЁё]", html)
 
 

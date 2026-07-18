@@ -106,12 +106,12 @@
         <button id="load-more" class="button-secondary load-more hidden">Load more</button>
       </section>
 
-      <section id="view-tracker" class="app-view hidden">
-        <div class="view-heading"><div><p class="eyebrow">Daily pace</p><h2>Tracker</h2></div><button id="add-budget-period">＋ New period</button></div>
+      <section id="view-tracker" class="app-view hidden" aria-labelledby="tracker-title">
+        <div class="view-heading"><div><p class="eyebrow">Daily pace</p><h2 id="tracker-title">Tracker</h2></div><button id="add-budget-period">＋ New period</button></div>
         <div id="tracker-empty" class="empty-state panel hidden"><div class="empty-icon">◎</div><h3>Start a spending period</h3><p>Set the money available until your next income. Required spending and reserve transfers from Plan will be set aside first.</p><button id="empty-add-budget-period">Start a period</button></div>
         <div id="tracker-content" class="hidden">
           <div class="tracker-summary-grid">
-            <article class="metric-card tracker-today-card"><span>Available today</span><strong id="tracker-available">—</strong><small id="tracker-today-detail">Daily budget after spending</small></article>
+            <article class="metric-card tracker-today-card"><span>Available today</span><strong id="tracker-available" aria-live="polite">—</strong><small id="tracker-today-detail">Daily budget after spending</small></article>
             <article class="metric-card"><span>Remaining period</span><strong id="tracker-remaining">—</strong><small id="tracker-days-left">—</small></article>
             <article class="metric-card"><span>Commitments</span><strong id="tracker-commitments-total">—</strong><small>Reserved or fulfilled</small></article>
           </div>
@@ -143,8 +143,8 @@
         </div>
       </section>
 
-      <section id="view-plan" class="app-view hidden">
-        <div class="view-heading"><div><p class="eyebrow">Upcoming</p><h2>Plan</h2></div><button id="add-plan-rule">＋ Add rule</button></div>
+      <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
+        <div class="view-heading"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title">Plan</h2></div><button id="add-plan-rule">＋ Add rule</button></div>
         <div class="plan-summary summary-grid">
           <article class="metric-card"><span>Open items</span><strong id="plan-open-count">0</strong><small>Planned and overdue</small></article>
           <article class="metric-card"><span>Completed</span><strong id="plan-completed-count">0</strong><small>Linked to real transactions</small></article>
@@ -155,8 +155,8 @@
         <section id="plan-rules-section" class="rules-section"><div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div><div id="plan-rule-list" class="rule-list"></div></section>
       </section>
 
-      <section id="view-analytics" class="app-view hidden">
-        <div class="view-heading"><div><p class="eyebrow">Insights</p><h2>Analytics</h2></div></div>
+      <section id="view-analytics" class="app-view hidden" aria-labelledby="analytics-title">
+        <div class="view-heading"><div><p class="eyebrow">Insights</p><h2 id="analytics-title">Analytics</h2></div></div>
         <div class="placeholder panel"><span>⌁</span><h3>Coming soon</h3><p>Income, spending, and trends will be designed after the core financial data is established.</p></div>
       </section>
     </section>
@@ -307,7 +307,7 @@
       <div class="dialog-heading"><div><p class="eyebrow">Tracker period</p><h2 id="budget-period-title">Start a period</h2></div><button type="button" class="icon-button" data-close="budget-period-dialog" aria-label="Close">×</button></div>
       <input id="budget-opening-transaction" type="hidden">
       <input id="budget-opening-occurrence" type="hidden">
-      <div id="budget-proposal-notice" class="notice hidden"></div>
+      <div id="budget-proposal-notice" class="notice hidden" role="status"></div>
       <div class="form-grid two-columns">
         <label>Start date<input id="budget-start-date" type="date" required></label>
         <label>End date<input id="budget-end-date" type="date" required></label>

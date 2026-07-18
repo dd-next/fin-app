@@ -17,7 +17,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 4 — Accounts and Transactions frontend
 - [x] V2 Phase 5 — Plan rules and occurrences
 - [x] V2 Phase 6 — Tracker periods and commitments
-- [ ] V2 Phase 7 — Final integration and verification
+- [x] V2 Phase 7 — Final integration and verification
 
 ## Historical phases
 
@@ -163,6 +163,25 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - Decision: commitments snapshot required/explicitly-required expense rules and
   reserve transfers. Planned values use frozen base equivalents; fulfilled
   values are controlled only by their linked posted transaction.
+
+### V2 Phase 7 — Final integration and verification (2026-07-18)
+- Completed accessible section labelling and live Tracker/proposal status
+  announcements. Moved the rewritten Russian release checklist into
+  `specs/MANUAL_TEST_CASES-v2.md`; README now documents the final feature set,
+  clean-schema boundary, install, migration, run, and test commands.
+- Verified a fresh `0001_v2` → `0005_v2` Alembic install with eight seeded
+  assets and no users, then ran scratch-browser E2E for registration, account
+  opening balance, period creation, quick expense replay, and the Analytics
+  placeholder. Both 480×900 and 1280×900 layouts had no horizontal overflow;
+  all five sections were reachable and the browser console was clean.
+- Audited the authoritative acceptance criteria and release boundary: all API
+  routes are present, legacy runtime modules/tests/dependencies are removed,
+  and excluded integrations remain documentation-only historical/future work.
+- Tests: **59 passed, 0 failed** (`.venv/bin/python -m pytest -q`); JavaScript
+  syntax, Python compileall, `pip check`, `git diff --check`, fresh migration,
+  and live `GET /health` (**200**, `{"status":"ok"}`) passed.
+- Decision: the first release is complete. Analytics intentionally remains a
+  stable `Coming soon` view, and all other future-work items stay out of scope.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links
