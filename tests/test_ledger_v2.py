@@ -126,7 +126,11 @@ async def test_exchange_derives_rate_values_accounts_and_fee_is_expense(client):
     assert exchange.status_code == 201, exchange.text
     rates = (await client.get("/api/v1/exchange-rates")).json()
     assert len(rates) == 2
-    assert any(item["base_asset"]["code"] == "VND" and Decimal(item["rate"]) == Decimal("1") / Decimal("26000") for item in rates)
+    assert any(
+        item["base_asset"]["code"] == "VND"
+        and Decimal(item["rate"]) == Decimal("0.000038461538461538")
+        for item in rates
+    )
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert Decimal(summary["net_worth"]) == Decimal("998")
     assert summary["unvalued"] == []

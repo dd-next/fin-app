@@ -15,8 +15,10 @@ from app.ledger import (
     ZERO,
     account_balance,
     account_out,
+    account_values,
     financial_times,
     normalize_name,
+    quantize_asset_amount,
     require_asset_code,
     transaction_out,
     validate_amount,
@@ -129,42 +131,55 @@ async def account_summary(
             )
         ).scalars()
     )
+    exact_values = [
+        await account_values(session, account, base_asset) for account in accounts
+    ]
     outputs = [
         await account_out(
             session,
             account,
             workspace.base_asset_id,
             access_role=(await account_role(session, account, user.id)) or "viewer",
+            values=values,
         )
-        for account in accounts
+        for account, values in zip(accounts, exact_values, strict=True)
     ]
     net_worth = sum(
-        (item.valued_balance for item in outputs if item.valued_balance is not None),
+        (
+            values.valued_balance
+            for values in exact_values
+            if values.valued_balance is not None
+        ),
         ZERO,
     )
     available = sum(
         (
-            item.valued_balance
-            for item in outputs
-            if item.include_in_available and item.valued_balance is not None
+            values.valued_balance
+            for account, values in zip(accounts, exact_values, strict=True)
+            if account.include_in_available and values.valued_balance is not None
         ),
         ZERO,
     )
     unvalued_totals: dict[int, Decimal] = {}
     assets: dict[int, AssetOut] = {}
-    for account, output in zip(accounts, outputs, strict=True):
-        if output.valued_balance is None and output.balance != 0:
+    for account, output, values in zip(
+        accounts, outputs, exact_values, strict=True
+    ):
+        if values.valued_balance is None and values.balance != 0:
             unvalued_totals[account.asset_id] = (
-                unvalued_totals.get(account.asset_id, ZERO) + output.balance
+                unvalued_totals.get(account.asset_id, ZERO) + values.balance
             )
             assets[account.asset_id] = output.asset
     return AccountSummaryOut(
         base_asset=AssetOut.model_validate(base_asset),
-        net_worth=net_worth,
-        available=available,
+        net_worth=quantize_asset_amount(net_worth, base_asset),
+        available=quantize_asset_amount(available, base_asset),
         accounts=outputs,
         unvalued=[
-            UnvaluedAssetOut(asset=assets[asset_id], total=total)
+            UnvaluedAssetOut(
+                asset=assets[asset_id],
+                total=quantize_asset_amount(total, assets[asset_id]),
+            )
             for asset_id, total in sorted(
                 unvalued_totals.items(), key=lambda item: assets[item[0]].code
             )

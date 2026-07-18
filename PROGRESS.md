@@ -19,7 +19,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 6 — Tracker periods and commitments
 - [x] V2 Phase 7 — Final integration and verification
 - [x] V2 Phase 8 — Corrective release audit and documentation authority
-- [ ] V2 Phase 9 — Ledger isolation, frozen values, and display precision
+- [x] V2 Phase 9 — Ledger isolation, frozen values, and display precision
 - [ ] V2 Phase 10 — Period mutation invariants
 - [ ] V2 Phase 11 — Plan history and historical UI integrity
 - [ ] V2 Phase 12 — Corrective final verification
@@ -199,6 +199,21 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   compileall, `pip check`, `git diff --check`, and documentation-path checks passed.
 - Decision: the earlier Phase 7 completion is provisional until the corrective
   phases and a fresh scratch-database release verification are complete.
+
+### V2 Phase 9 — Ledger isolation, frozen values, and display precision (2026-07-19)
+- Scoped every exchange-rate lookup to its source workspace and covered both
+  Accounts and Tracker against cross-workspace valuation leakage.
+- Preserved frozen Tracker valuation for metadata-only corrections while
+  economic edits deliberately revalue and replay; manual and exchange-derived
+  rates are stored and returned at the supported 18-decimal precision.
+- Quantized API balances and totals by their asset precision, rejected values
+  outside `NUMERIC(38,18)` boundaries, and retained exact ledger movements.
+- Tests: **64 passed, 0 failed** (`env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1
+  .venv/bin/python -m pytest -p no:cacheprovider -q`); focused Phase 9 tests
+  (**20 passed**), JavaScript syntax, Python compileall, `pip check`, and
+  `git diff --check` passed.
+- Decision: rates remain financial-history snapshots. Display quantization uses
+  `ROUND_HALF_UP`; a positive rate that rounds to zero is rejected with `422`.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

@@ -1,7 +1,8 @@
 """Shared ledger queries, validation, valuation, and response builders."""
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -28,6 +29,44 @@ from app.schemas import (
 
 
 ZERO = Decimal("0")
+RATE_DECIMALS = 18
+MAX_INTEGER_DIGITS = 20
+
+
+@dataclass(frozen=True)
+class AccountValues:
+    balance: Decimal
+    valued_balance: Decimal | None
+
+
+def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
+    """Round an API-facing Decimal without changing its ledger source value."""
+    decimal = Decimal(value)
+    quantum = Decimal(1).scaleb(-decimals)
+    # Quantizing a valid 38-digit ledger amount to an 18-place display value can
+    # need more precision than Decimal's default 28-digit context.
+    with localcontext() as context:
+        context.prec = max(80, len(decimal.as_tuple().digits) + decimals + 2)
+        return decimal.quantize(quantum, rounding=ROUND_HALF_UP)
+
+
+def quantize_asset_amount(value: Decimal, asset: Asset | AssetOut) -> Decimal:
+    return quantize_decimal(value, asset.decimals)
+
+
+def quantize_exchange_rate(value: Decimal) -> Decimal:
+    decimal = Decimal(value)
+    if not decimal.is_finite() or decimal <= 0:
+        raise HTTPException(status_code=422, detail="Exchange rate must be positive and finite")
+    quantized = quantize_decimal(decimal, RATE_DECIMALS)
+    if quantized == 0:
+        raise HTTPException(
+            status_code=422,
+            detail="Exchange rate is below the supported 18-decimal precision",
+        )
+    if quantized.adjusted() + 1 > MAX_INTEGER_DIGITS:
+        raise HTTPException(status_code=422, detail="Exchange rate has too many digits")
+    return quantized
 
 
 def normalize_name(value: str) -> str:
@@ -48,6 +87,8 @@ def validate_amount(value: Decimal, asset: Asset, *, allow_zero: bool = False) -
         )
     if len(value.as_tuple().digits) > 38:
         raise HTTPException(status_code=422, detail="Amount has too many digits")
+    if value != 0 and value.adjusted() + 1 > MAX_INTEGER_DIGITS:
+        raise HTTPException(status_code=422, detail="Amount has too many integer digits")
     return value
 
 
@@ -135,7 +176,11 @@ async def account_balance(session: AsyncSession, account_id: int) -> Decimal:
 
 
 async def latest_rate(
-    session: AsyncSession, base_asset_id: int, quote_asset_id: int
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    base_asset_id: int,
+    quote_asset_id: int,
 ) -> ExchangeRate | None:
     return (
         await session.execute(
@@ -144,6 +189,7 @@ async def latest_rate(
             .where(
                 ExchangeRate.base_asset_id == base_asset_id,
                 ExchangeRate.quote_asset_id == quote_asset_id,
+                Transaction.workspace_id == workspace_id,
                 Transaction.status == "posted",
             )
             .order_by(ExchangeRate.captured_at.desc(), ExchangeRate.id.desc())
@@ -155,13 +201,42 @@ async def latest_rate(
 async def valued_balance(
     session: AsyncSession,
     balance: Decimal,
+    workspace_id: int,
     asset_id: int,
-    base_asset_id: int,
+    base_asset: Asset,
 ) -> Decimal | None:
-    if asset_id == base_asset_id:
-        return balance
-    rate = await latest_rate(session, asset_id, base_asset_id)
-    return None if rate is None else balance * rate.rate
+    if asset_id == base_asset.id:
+        valued = balance
+    else:
+        rate = await latest_rate(
+            session,
+            workspace_id=workspace_id,
+            base_asset_id=asset_id,
+            quote_asset_id=base_asset.id,
+        )
+        if rate is None:
+            return None
+        valued = balance * rate.rate
+    return valued
+
+
+async def account_values(
+    session: AsyncSession,
+    account: Account,
+    base_asset: Asset,
+) -> AccountValues:
+    """Return exact derived values; API callers decide where to round."""
+    balance = await account_balance(session, account.id)
+    return AccountValues(
+        balance=balance,
+        valued_balance=await valued_balance(
+            session,
+            balance,
+            account.workspace_id,
+            account.asset_id,
+            base_asset,
+        ),
+    )
 
 
 async def account_out(
@@ -170,9 +245,12 @@ async def account_out(
     base_asset_id: int,
     *,
     access_role: str = "owner",
+    values: AccountValues | None = None,
 ) -> AccountOut:
     await session.refresh(account, attribute_names=["asset"])
-    balance = await account_balance(session, account.id)
+    base_asset = await session.get(Asset, base_asset_id)
+    assert base_asset is not None
+    values = values or await account_values(session, account, base_asset)
     return AccountOut(
         id=account.id,
         workspace_id=account.workspace_id,
@@ -183,9 +261,11 @@ async def account_out(
         asset=AssetOut.model_validate(account.asset),
         institution=account.institution,
         include_in_available=account.include_in_available,
-        balance=balance,
-        valued_balance=await valued_balance(
-            session, balance, account.asset_id, base_asset_id
+        balance=quantize_asset_amount(values.balance, account.asset),
+        valued_balance=(
+            quantize_asset_amount(values.valued_balance, base_asset)
+            if values.valued_balance is not None
+            else None
         ),
         archived_at=account.archived_at,
         access_role=access_role,
@@ -250,7 +330,11 @@ async def transaction_out(
         source=(transaction.source if private_details else "manual"),
         status=transaction.status,
         base_amount=(transaction.base_amount if private_details else None),
-        base_rate=(transaction.base_rate if private_details else None),
+        base_rate=(
+            quantize_exchange_rate(transaction.base_rate)
+            if private_details and transaction.base_rate is not None
+            else None
+        ),
         rate_source=(transaction.rate_source if private_details else None),
         created_at=transaction.created_at,
         updated_at=transaction.updated_at,
@@ -268,7 +352,7 @@ async def rate_out(session: AsyncSession, rate: ExchangeRate) -> ExchangeRateOut
     return ExchangeRateOut(
         base_asset=AssetOut.model_validate(base),
         quote_asset=AssetOut.model_validate(quote),
-        rate=rate.rate,
+        rate=quantize_exchange_rate(rate.rate),
         captured_at=rate.captured_at,
         source_transaction_id=rate.source_transaction_id,
     )

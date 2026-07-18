@@ -329,6 +329,80 @@ async def test_multi_asset_values_freeze_and_missing_rate_requires_equivalent(cl
     assert D(supplied.json()["base_amount"]) == D("50")
 
 
+async def test_metadata_patch_preserves_frozen_value_but_amount_patch_revalues(client):
+    context = await register(client)
+    workspace_id = context["workspace"]["id"]
+    usd = await create_account(client, "Rate USD", "USD", "5000")
+    btc = await create_account(client, "Rate BTC", "BTC", "1")
+    first_rate = await client.post(
+        "/api/v1/transactions/exchange",
+        json={
+            "from_account_id": usd["id"],
+            "from_amount": "1000",
+            "to_account_id": btc["id"],
+            "to_amount": "0.01",
+        },
+    )
+    assert first_rate.status_code == 201, first_rate.text
+    assert (await create_manual_period(client, workspace_id)).status_code == 201
+    expense = await client.post(
+        "/api/v1/transactions/expense",
+        json={"account_id": btc["id"], "amount": "0.001"},
+    )
+    assert expense.status_code == 201, expense.text
+    original = expense.json()
+    assert D(original["base_amount"]) == D("100")
+
+    latest_rate = await client.post(
+        "/api/v1/transactions/exchange",
+        json={
+            "from_account_id": usd["id"],
+            "from_amount": "2000",
+            "to_account_id": btc["id"],
+            "to_amount": "0.01",
+        },
+    )
+    assert latest_rate.status_code == 201, latest_rate.text
+    metadata_patch = await client.patch(
+        f"/api/v1/transactions/{original['id']}",
+        json={"note": "metadata only"},
+    )
+    assert metadata_patch.status_code == 200, metadata_patch.text
+    metadata = metadata_patch.json()
+    assert D(metadata["base_amount"]) == D("100")
+    assert metadata["base_rate"] == original["base_rate"]
+    assert metadata["rate_source"] == original["rate_source"]
+    tracker = (
+        await client.get(f"/api/v1/workspaces/{workspace_id}/tracker/today")
+    ).json()
+    assert D(tracker["spent_total"]) == D("100")
+
+    for no_op_patch in (
+        {"amount": "0.001"},
+        {"occurred_at": None},
+        {"from_amount": "2"},
+    ):
+        unchanged = await client.patch(
+            f"/api/v1/transactions/{original['id']}",
+            json=no_op_patch,
+        )
+        assert unchanged.status_code == 200, unchanged.text
+        assert D(unchanged.json()["base_amount"]) == D("100")
+        assert unchanged.json()["base_rate"] == original["base_rate"]
+        assert unchanged.json()["rate_source"] == original["rate_source"]
+
+    amount_patch = await client.patch(
+        f"/api/v1/transactions/{original['id']}",
+        json={"amount": "0.002"},
+    )
+    assert amount_patch.status_code == 200, amount_patch.text
+    assert D(amount_patch.json()["base_amount"]) == D("400")
+    tracker = (
+        await client.get(f"/api/v1/workspaces/{workspace_id}/tracker/today")
+    ).json()
+    assert D(tracker["spent_total"]) == D("400")
+
+
 async def test_shared_expense_joins_owner_period_but_tracker_remains_private(client):
     alice = await register(client)
     workspace_id = alice["workspace"]["id"]

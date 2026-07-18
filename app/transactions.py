@@ -13,6 +13,7 @@ from app.access import require_account_action, visible_account_ids
 from app.db import get_session
 from app.ledger import (
     financial_times,
+    quantize_exchange_rate,
     rate_out,
     require_asset_code,
     require_category,
@@ -256,14 +257,14 @@ async def _replace_rates(
                 source_transaction_id=transaction.id,
                 base_asset_id=source.asset_id,
                 quote_asset_id=target.asset_id,
-                rate=target_amount / source_amount,
+                rate=quantize_exchange_rate(target_amount / source_amount),
                 captured_at=transaction.occurred_at,
             ),
             ExchangeRate(
                 source_transaction_id=transaction.id,
                 base_asset_id=target.asset_id,
                 quote_asset_id=source.asset_id,
-                rate=source_amount / target_amount,
+                rate=quantize_exchange_rate(source_amount / target_amount),
                 captured_at=transaction.occurred_at,
             ),
         ]
@@ -536,6 +537,18 @@ async def _transaction_legs(
     )
 
 
+def _financial_state(
+    transaction: Transaction, legs: list[TransactionLeg]
+) -> tuple:
+    """Capture persisted economic facts, excluding descriptive metadata."""
+    return (
+        transaction.occurred_at,
+        transaction.local_date,
+        transaction.status,
+        tuple((leg.account_id, leg.asset_id, Decimal(leg.amount)) for leg in legs),
+    )
+
+
 @router.patch("/transactions/{transaction_id}", response_model=TransactionOut)
 async def patch_transaction(
     transaction_id: int,
@@ -565,6 +578,9 @@ async def patch_transaction(
             detail="Ended period correction requires explicit confirmation",
         )
     legs = await _transaction_legs(session, transaction.id)
+    original_financial_state = _financial_state(transaction, legs)
+    original_base_amount = transaction.base_amount
+    exchange_rate_inputs: tuple[Account, Decimal, Account, Decimal] | None = None
     if "note" in body.model_fields_set:
         transaction.note = body.note
     if "counterparty" in body.model_fields_set:
@@ -682,7 +698,16 @@ async def patch_transaction(
         negative.account_id, negative.asset_id, negative.amount = source.id, source.asset_id, -from_amount
         positive.account_id, positive.asset_id, positive.amount = target.id, target.asset_id, to_amount
         if transaction.type == "exchange":
-            await _replace_rates(session, transaction, source, from_amount, target, to_amount)
+            exchange_rate_inputs = (source, from_amount, target, to_amount)
+    has_financial_change = (
+        _financial_state(transaction, legs) != original_financial_state
+        or (
+            "base_amount" in body.model_fields_set
+            and body.base_amount != original_base_amount
+        )
+    )
+    if exchange_rate_inputs is not None and has_financial_change:
+        await _replace_rates(session, transaction, *exchange_rate_inputs)
     await session.flush()
     linked_occurrence = (
         await session.execute(
@@ -691,15 +716,19 @@ async def patch_transaction(
             )
         )
     ).scalar_one_or_none()
-    if linked_occurrence is not None:
+    if linked_occurrence is not None and has_financial_change:
         await sync_plan_fulfillment(
             session, linked_occurrence, transaction, body.base_amount
         )
-    elif transaction.type in {"expense", "income"}:
+    elif (
+        linked_occurrence is None
+        and transaction.type in {"expense", "income"}
+        and has_financial_change
+    ):
         await attach_transaction_to_tracker(
             session, transaction, body.base_amount
         )
-    else:
+    elif transaction.type not in {"expense", "income"} and linked_occurrence is None:
         transaction.budget_period_id = None
         transaction.base_amount = None
         transaction.base_rate = None

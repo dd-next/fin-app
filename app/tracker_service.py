@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ledger import latest_rate, validate_amount
+from app.ledger import latest_rate, quantize_exchange_rate, validate_amount
 from app.budget import round_to_quantum
 from app.models import (
     Asset,
@@ -54,6 +54,7 @@ async def period_for_date(
 
 async def value_amount(
     session: AsyncSession,
+    workspace_id: int,
     amount: Decimal,
     asset: Asset,
     base_asset: Asset,
@@ -67,8 +68,13 @@ async def value_amount(
         frozen = validate_amount(supplied_base_amount, base_asset)
         if frozen <= 0:
             raise HTTPException(status_code=422, detail="base_amount must be positive")
-        return frozen, frozen / source_amount, "manual"
-    rate = await latest_rate(session, asset.id, base_asset.id)
+        return frozen, quantize_exchange_rate(frozen / source_amount), "manual"
+    rate = await latest_rate(
+        session,
+        workspace_id=workspace_id,
+        base_asset_id=asset.id,
+        quote_asset_id=base_asset.id,
+    )
     if rate is None:
         raise HTTPException(
             status_code=422,
@@ -81,7 +87,11 @@ async def value_amount(
         round_to_quantum(source_amount * rate.rate, asset_quantum(base_asset)),
         base_asset,
     )
-    return frozen, rate.rate, f"exchange:{rate.source_transaction_id}"
+    return (
+        frozen,
+        quantize_exchange_rate(rate.rate),
+        f"exchange:{rate.source_transaction_id}",
+    )
 
 
 async def transaction_value_source(
@@ -119,7 +129,7 @@ async def freeze_transaction_for_period(
         base_asset = await session.get(Asset, period.base_asset_id)
         assert base_asset is not None
         frozen, rate, source = await value_amount(
-            session, amount, asset, base_asset, supplied_base_amount
+            session, transaction.workspace_id, amount, asset, base_asset, supplied_base_amount
         )
         period.funding_amount = frozen
         transaction.budget_period_id = period.id
@@ -131,7 +141,7 @@ async def freeze_transaction_for_period(
     base_asset = await session.get(Asset, period.base_asset_id)
     assert base_asset is not None
     frozen, rate, source = await value_amount(
-        session, amount, asset, base_asset, supplied_base_amount
+        session, transaction.workspace_id, amount, asset, base_asset, supplied_base_amount
     )
     transaction.budget_period_id = period.id
     transaction.base_amount = frozen
@@ -287,6 +297,7 @@ async def build_commitment_proposals(
         try:
             planned, _, _ = await value_amount(
                 session,
+                workspace.id,
                 occurrence.planned_amount,
                 source_asset,
                 base_asset,
@@ -357,7 +368,7 @@ async def build_period_proposal(
         amount, source_asset = await transaction_value_source(session, transaction)
         try:
             frozen_funding, _, _ = await value_amount(
-                session, amount, source_asset, base_asset
+                session, workspace.id, amount, source_asset, base_asset
             )
         except HTTPException as exc:
             if exc.status_code != 422:

@@ -12,7 +12,7 @@ from app.access import require_workspace_owner
 from app.auth import require_user
 from app.budget import compute_budget, preview_after
 from app.db import get_session
-from app.ledger import require_asset_code, validate_amount
+from app.ledger import quantize_exchange_rate, require_asset_code, validate_amount
 from app.models import (
     Asset,
     BudgetCommitment,
@@ -427,7 +427,9 @@ async def create_budget_period(
             )
         transaction.budget_period_id = period.id
         transaction.base_amount = proposal.funding_amount
-        transaction.base_rate = proposal.funding_amount / amount
+        transaction.base_rate = quantize_exchange_rate(
+            proposal.funding_amount / amount
+        )
         transaction.rate_source = (
             "opening" if source_asset.id == base_asset.id else "manual-opening"
         )
@@ -638,6 +640,7 @@ async def create_budget_commitment(
     assert source_asset is not None and base_asset is not None
     planned, _, _ = await value_amount(
         session,
+        workspace_id,
         occurrence.planned_amount,
         source_asset,
         base_asset,
