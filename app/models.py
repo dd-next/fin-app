@@ -141,6 +141,9 @@ class Workspace(Base):
     transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    plan_rules: Mapped[list["PlanRule"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
 
 
 class Category(Base):
@@ -364,3 +367,78 @@ class ExchangeRate(Base):
     captured_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     source_transaction: Mapped[Transaction] = relationship(back_populates="rates")
+
+
+class PlanRule(Base):
+    __tablename__ = "plan_rule"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(24), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    recurrence: Mapped[str] = mapped_column(String(16), nullable=False)
+    first_due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id", ondelete="RESTRICT"), nullable=True
+    )
+    default_from_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("account.id", ondelete="RESTRICT"), nullable=True
+    )
+    default_to_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("account.id", ondelete="RESTRICT"), nullable=True
+    )
+    is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+    workspace: Mapped[Workspace] = relationship(back_populates="plan_rules")
+    creator: Mapped[User] = relationship()
+    asset: Mapped[Asset] = relationship()
+    category: Mapped[Category | None] = relationship()
+    default_from_account: Mapped[Account | None] = relationship(
+        foreign_keys=[default_from_account_id]
+    )
+    default_to_account: Mapped[Account | None] = relationship(
+        foreign_keys=[default_to_account_id]
+    )
+    occurrences: Mapped[list["PlanOccurrence"]] = relationship(
+        back_populates="plan_rule", cascade="all, delete-orphan"
+    )
+
+
+class PlanOccurrence(Base):
+    __tablename__ = "plan_occurrence"
+    __table_args__ = (
+        UniqueConstraint("plan_rule_id", "due_date", name="uq_plan_occurrence_rule_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_rule_id: Mapped[int] = mapped_column(
+        ForeignKey("plan_rule.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    planned_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="planned", index=True)
+    transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="RESTRICT"),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+    plan_rule: Mapped[PlanRule] = relationship(back_populates="occurrences")
+    transaction: Mapped[Transaction | None] = relationship()

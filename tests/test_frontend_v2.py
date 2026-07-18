@@ -35,6 +35,10 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "sharing-dialog",
         "transaction-dialog",
         "categories-dialog",
+        "plan-rule-dialog",
+        "plan-action-dialog",
+        "plan-link-dialog",
+        "plan-occurrence-groups",
         "filter-account",
         "filter-type",
         "filter-category",
@@ -54,12 +58,16 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
         "/account-invitations/${encodeURIComponent(pendingInvite)}/accept",
         "/api/v1/transactions/${type}",
         "/categories/${category.id}/archive",
+        "/plan-rules/${rule.id}/archive",
+        "/plan-occurrences/${occurrence.id}/${action}",
+        "/link-transaction",
         "/assign-account",
         "/void",
     ):
         assert route in javascript
     assert "has_hidden_legs" in javascript
     assert "access_role" in javascript
+    assert "state.categories.clear()" in javascript
     assert not re.search(r"[А-Яа-яЁё]", javascript)
 
 

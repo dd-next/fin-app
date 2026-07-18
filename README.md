@@ -7,10 +7,10 @@ in [`BUILD_PLAN-v2.md`](BUILD_PLAN-v2.md).
 
 The current checkpoint provides open web registration, secure cookie sessions,
 multi-asset accounts, an exact double-entry-style movement ledger, derived
-exchange rates, account-level sharing with four roles, and a responsive
-Accounts/Transactions SPA. Plan and Tracker are the next implementation phases;
-Analytics intentionally remains a `Coming soon` placeholder for the first
-release.
+exchange rates, account-level sharing with four roles, and a responsive SPA.
+Plan supports recurring rules, occurrence actions, explicit transaction links,
+and plan-vs-actual. Tracker is the next implementation phase; Analytics
+intentionally remains a `Coming soon` placeholder for the first release.
 
 ## Install and run
 

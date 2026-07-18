@@ -1,7 +1,8 @@
 """Financial transaction commands and history."""
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import delete, or_, select, update
@@ -22,6 +23,7 @@ from app.models import (
     Account,
     Asset,
     ExchangeRate,
+    PlanOccurrence,
     Transaction,
     TransactionLeg,
     User,
@@ -702,6 +704,22 @@ async def void_transaction(
     await session.execute(
         delete(ExchangeRate).where(ExchangeRate.source_transaction_id == transaction.id)
     )
+    linked_occurrence = (
+        await session.execute(
+            select(PlanOccurrence).where(
+                PlanOccurrence.transaction_id == transaction.id
+            )
+        )
+    ).scalar_one_or_none()
+    if linked_occurrence is not None:
+        workspace = await session.get(Workspace, transaction.workspace_id)
+        assert workspace is not None
+        today = datetime.now(UTC).astimezone(ZoneInfo(workspace.timezone)).date()
+        linked_occurrence.status = (
+            "overdue" if linked_occurrence.due_date < today else "planned"
+        )
+        linked_occurrence.transaction_id = None
+        linked_occurrence.matched_at = None
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(

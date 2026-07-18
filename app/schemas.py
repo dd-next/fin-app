@@ -207,6 +207,7 @@ class TransactionOut(BaseModel):
     voided_at: datetime | None
     legs: list[TransactionLegOut]
     has_hidden_legs: bool = False
+    plan_occurrence_id: int | None = None
 
 
 class TransactionCommon(BaseModel):
@@ -315,3 +316,100 @@ class AccountAccessOut(BaseModel):
     user: UserOut
     role: Literal["owner", "editor", "contributor", "viewer"]
     created_at: datetime | None
+
+
+PlanKind = Literal[
+    "income",
+    "required_expense",
+    "subscription",
+    "reserve_transfer",
+    "other_expense",
+]
+Recurrence = Literal["once", "weekly", "monthly", "yearly"]
+
+
+class PlanRuleCreate(BaseModel):
+    kind: PlanKind
+    name: str = Field(min_length=1, max_length=120)
+    amount: PositiveAmount
+    asset_code: str = Field(min_length=2, max_length=16)
+    recurrence: Recurrence = "once"
+    first_due_date: date
+    category_id: int | None = None
+    default_from_account_id: int | None = None
+    default_to_account_id: int | None = None
+    is_required: bool = False
+
+    @field_validator("asset_code")
+    @classmethod
+    def normalize_plan_asset_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class PlanRulePatch(BaseModel):
+    kind: PlanKind | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    amount: PositiveAmount | None = None
+    asset_code: str | None = Field(default=None, min_length=2, max_length=16)
+    recurrence: Recurrence | None = None
+    first_due_date: date | None = None
+    category_id: int | None = None
+    default_from_account_id: int | None = None
+    default_to_account_id: int | None = None
+    is_required: bool | None = None
+
+    @field_validator("asset_code")
+    @classmethod
+    def normalize_plan_patch_asset_code(cls, value: str | None) -> str | None:
+        return value.strip().upper() if value is not None else None
+
+
+class PlanRuleOut(BaseModel):
+    id: int
+    workspace_id: int
+    created_by_user_id: int
+    kind: PlanKind
+    name: str
+    amount: Decimal
+    asset: AssetOut
+    recurrence: Recurrence
+    first_due_date: date
+    category_id: int | None
+    default_from_account_id: int | None
+    default_to_account_id: int | None
+    is_required: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class PlanOccurrenceOut(BaseModel):
+    id: int
+    plan_rule_id: int
+    due_date: date
+    planned_amount: Decimal
+    status: Literal["planned", "completed", "skipped", "overdue"]
+    transaction_id: int | None
+    actual_amount: Decimal | None
+    matched_at: datetime | None
+    created_at: datetime
+    rule: PlanRuleOut
+
+
+class PlanExecuteIn(BaseModel):
+    amount: PositiveAmount | None = None
+    account_id: int | None = None
+    from_account_id: int | None = None
+    to_account_id: int | None = None
+    local_date: date | None = None
+    occurred_at: datetime | None = None
+    counterparty: str | None = Field(default=None, max_length=160)
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class PlanLinkTransactionIn(BaseModel):
+    transaction_id: int
+
+
+class TransactionLinkPlanIn(BaseModel):
+    occurrence_id: int

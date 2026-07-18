@@ -3,12 +3,16 @@ const $ = (id) => document.getElementById(id);
 const state = {
   registerMode: false,
   context: null,
+  lastUserId: null,
   assets: [],
   accounts: [],
   summary: null,
   categories: new Map(),
   transactions: [],
   nextCursor: null,
+  planRules: [],
+  planOccurrences: [],
+  planLinkTransactions: [],
   activeView: "accounts",
   activeAccount: null,
   sharingAccount: null,
@@ -168,6 +172,14 @@ async function acceptPendingInvitation() {
 }
 
 async function showApp(context) {
+  if (state.lastUserId !== null && state.lastUserId !== context.user.id) {
+    state.categories.clear();
+    state.accounts = [];
+    state.transactions = [];
+    state.planRules = [];
+    state.planOccurrences = [];
+  }
+  state.lastUserId = context.user.id;
   state.context = context;
   $("auth-card").classList.add("hidden");
   $("app-shell").classList.remove("hidden");
@@ -184,14 +196,19 @@ async function refreshAll() {
   setLoading(true);
   try {
     if (!state.assets.length) state.assets = await api("/api/v1/assets");
-    const [summary, page] = await Promise.all([
+    const workspaceId = state.context.workspace.id;
+    const [summary, page, planRules, planOccurrences] = await Promise.all([
       api("/api/v1/accounts/summary"),
       api("/api/v1/transactions?limit=50"),
+      api(`/api/v1/workspaces/${workspaceId}/plan-rules`),
+      api(`/api/v1/workspaces/${workspaceId}/plan-occurrences`),
     ]);
     state.summary = summary;
     state.accounts = summary.accounts;
     state.transactions = page.items;
     state.nextCursor = page.next_cursor;
+    state.planRules = planRules;
+    state.planOccurrences = planOccurrences;
     const workspaceIds = [...new Set(state.accounts.map((account) => account.workspace_id))];
     await Promise.all([
       categoriesFor(state.context.workspace.id),
@@ -200,6 +217,7 @@ async function refreshAll() {
     renderAccounts();
     renderFilterOptions();
     renderTransactions();
+    renderPlan();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -290,7 +308,13 @@ function renderAccounts() {
 function renderFilterOptions() {
   const items = state.accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` }));
   selectOptions($("filter-account"), items, { placeholder: "All accounts" });
-  const categories = [...state.categories.values()].flat();
+  const visibleWorkspaceIds = new Set([
+    state.context.workspace.id,
+    ...state.accounts.map((account) => account.workspace_id),
+  ]);
+  const categories = [...visibleWorkspaceIds].flatMap(
+    (workspaceId) => state.categories.get(workspaceId) || []
+  );
   const unique = [...new Map(categories.map((category) => [category.id, category])).values()];
   if ($("filter-category")) {
     selectOptions($("filter-category"), unique.map((category) => ({ value: category.id, label: category.name })), { placeholder: "All categories" });
@@ -569,6 +593,301 @@ async function createCategory(event) {
   } catch (error) { $("category-error").textContent = error.message; }
 }
 
+function planKindLabel(kind) {
+  return {
+    income: "Upcoming income",
+    required_expense: "Required spending",
+    subscription: "Subscriptions",
+    reserve_transfer: "Reserve transfers",
+    other_expense: "Other expenses",
+  }[kind] || kind;
+}
+
+function planKindIcon(kind) {
+  return { income: "↑", required_expense: "!", subscription: "↻", reserve_transfer: "◇", other_expense: "↓" }[kind] || "·";
+}
+
+function planOccurrenceById(id) {
+  return state.planOccurrences.find((item) => item.id === Number(id));
+}
+
+function planOccurrenceNode(occurrence) {
+  const row = document.createElement("article");
+  row.className = `plan-item ${occurrence.status}`;
+  const actual = occurrence.actual_amount === null
+    ? ""
+    : `<small>Planned ${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)} · actual ${formatMoney(occurrence.actual_amount, occurrence.rule.asset.code)}</small>`;
+  row.innerHTML = `
+    <div class="plan-item-main"><strong>${escapeHtml(occurrence.rule.name)}</strong><span>${localDate(occurrence.due_date)} · ${escapeHtml(planKindLabel(occurrence.rule.kind))} · ${escapeHtml(occurrence.status)}</span></div>
+    <div class="plan-item-amount"><strong>${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)}</strong>${actual}</div>
+    <div class="plan-item-actions"></div>`;
+  const actions = row.querySelector(".plan-item-actions");
+  if (["planned", "overdue"].includes(occurrence.status)) {
+    const complete = document.createElement("button");
+    complete.type = "button";
+    complete.textContent = occurrence.rule.kind === "income" ? "Receive" : "Pay";
+    complete.addEventListener("click", () => openPlanAction(occurrence));
+    const link = document.createElement("button");
+    link.type = "button";
+    link.className = "button-secondary";
+    link.textContent = "Link";
+    link.addEventListener("click", () => openPlanLink({ occurrence }));
+    const skip = document.createElement("button");
+    skip.type = "button";
+    skip.className = "button-quiet";
+    skip.textContent = "Skip";
+    skip.addEventListener("click", () => skipPlanOccurrence(occurrence));
+    actions.append(complete, link, skip);
+  } else {
+    const badge = document.createElement("span");
+    badge.className = `badge ${occurrence.status}`;
+    badge.textContent = occurrence.status;
+    actions.append(badge);
+  }
+  return row;
+}
+
+function renderPlan() {
+  const open = state.planOccurrences.filter((item) => ["planned", "overdue"].includes(item.status));
+  const completed = state.planOccurrences.filter((item) => item.status === "completed");
+  $("plan-open-count").textContent = String(open.length);
+  $("plan-completed-count").textContent = String(completed.length);
+  $("plan-rule-count").textContent = `${state.planRules.length} active`;
+  const filter = $("plan-status-filter").value;
+  let visible = state.planOccurrences;
+  if (filter === "open") visible = open;
+  if (filter === "completed") visible = completed;
+  if (filter === "skipped") visible = state.planOccurrences.filter((item) => item.status === "skipped");
+
+  const groups = [
+    ["Overdue", visible.filter((item) => item.status === "overdue"), "!"],
+    ...["income", "required_expense", "subscription", "reserve_transfer", "other_expense"].map((kind) => [
+      planKindLabel(kind),
+      visible.filter((item) => !["overdue", "completed", "skipped"].includes(item.status) && item.rule.kind === kind),
+      planKindIcon(kind),
+    ]),
+    ["Completed", visible.filter((item) => item.status === "completed"), "✓"],
+    ["Skipped", visible.filter((item) => item.status === "skipped"), "−"],
+  ];
+  const sections = groups.filter(([, items]) => items.length).map(([title, items, icon]) => {
+    const section = document.createElement("section");
+    section.className = "plan-group";
+    section.innerHTML = `<h3><span>${icon}</span>${escapeHtml(title)}</h3><div class="plan-list"></div>`;
+    const list = section.querySelector(".plan-list");
+    for (const occurrence of items) list.append(planOccurrenceNode(occurrence));
+    return section;
+  });
+  $("plan-occurrence-groups").replaceChildren(...sections);
+  $("plan-empty").classList.toggle("hidden", state.planRules.length > 0);
+  $("plan-occurrence-groups").classList.toggle("hidden", sections.length === 0);
+
+  const ruleNodes = state.planRules.map((rule) => {
+    const card = document.createElement("article");
+    card.className = "rule-card";
+    card.innerHTML = `<div><strong>${escapeHtml(rule.name)}</strong><span>${formatMoney(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)} · from ${localDate(rule.first_due_date)}</span></div><div class="rule-actions"></div>`;
+    const actions = card.querySelector(".rule-actions");
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.title = "Edit rule";
+    edit.addEventListener("click", () => openPlanRule(rule));
+    const archive = document.createElement("button");
+    archive.type = "button";
+    archive.textContent = "×";
+    archive.title = "Archive rule";
+    archive.addEventListener("click", () => archivePlanRule(rule));
+    actions.append(edit, archive);
+    return card;
+  });
+  $("plan-rule-list").replaceChildren(...ruleNodes);
+  $("plan-rules-section").classList.toggle("hidden", state.planRules.length === 0);
+}
+
+function ownedPlanAccounts(assetCode = null) {
+  return state.accounts.filter((account) => (
+    account.workspace_id === state.context.workspace.id
+    && account.access_role === "owner"
+    && (!assetCode || account.asset.code === assetCode)
+  ));
+}
+
+async function updatePlanRuleFields(rule = null) {
+  const kind = $("plan-rule-kind").value;
+  const assetCode = $("plan-rule-asset").value;
+  const accounts = ownedPlanAccounts(assetCode).map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` }));
+  selectOptions($("plan-rule-from-account"), accounts, {
+    placeholder: "Choose when paying",
+    selected: rule?.default_from_account_id ?? $("plan-rule-from-account").value,
+  });
+  selectOptions($("plan-rule-to-account"), accounts, {
+    placeholder: "Choose when receiving",
+    selected: rule?.default_to_account_id ?? $("plan-rule-to-account").value,
+  });
+  const categories = (await categoriesFor(state.context.workspace.id)).filter((category) => {
+    const expected = kind === "income" ? "income" : "expense";
+    return category.kind === "both" || category.kind === expected;
+  });
+  selectOptions($("plan-rule-category"), categories.map((category) => ({ value: category.id, label: category.name })), {
+    placeholder: "Uncategorized",
+    selected: rule?.category_id ?? $("plan-rule-category").value,
+  });
+  $("plan-rule-category-field").classList.toggle("hidden", kind === "reserve_transfer");
+  $("plan-rule-from-field").classList.toggle("hidden", kind === "income");
+  $("plan-rule-to-field").classList.toggle("hidden", !["income", "reserve_transfer"].includes(kind));
+}
+
+async function openPlanRule(rule = null) {
+  $("plan-rule-form").reset();
+  $("plan-rule-error").textContent = "";
+  $("plan-rule-id").value = rule ? rule.id : "";
+  $("plan-rule-title").textContent = rule ? "Edit rule" : "Add rule";
+  $("save-plan-rule").textContent = rule ? "Save changes" : "Save rule";
+  selectOptions($("plan-rule-asset"), state.assets.map((asset) => ({ value: asset.code, label: `${asset.code} · ${asset.name}` })));
+  $("plan-rule-asset").value = rule ? rule.asset.code : state.context.workspace.base_asset.code;
+  $("plan-rule-kind").value = rule ? rule.kind : "required_expense";
+  $("plan-rule-name").value = rule ? rule.name : "";
+  $("plan-rule-amount").value = rule ? rule.amount : "";
+  $("plan-rule-recurrence").value = rule ? rule.recurrence : "monthly";
+  $("plan-rule-date").value = rule ? rule.first_due_date : todayValue();
+  $("plan-rule-required").checked = rule ? rule.is_required : true;
+  await updatePlanRuleFields(rule);
+  $("plan-rule-dialog").showModal();
+}
+
+async function savePlanRule(event) {
+  event.preventDefault();
+  $("plan-rule-error").textContent = "";
+  const workspaceId = state.context.workspace.id;
+  const ruleId = $("plan-rule-id").value;
+  const kind = $("plan-rule-kind").value;
+  const body = {
+    kind,
+    name: $("plan-rule-name").value.trim(),
+    amount: $("plan-rule-amount").value,
+    asset_code: $("plan-rule-asset").value,
+    recurrence: $("plan-rule-recurrence").value,
+    first_due_date: $("plan-rule-date").value,
+    category_id: kind === "reserve_transfer" || !$("plan-rule-category").value ? null : Number($("plan-rule-category").value),
+    default_from_account_id: kind === "income" || !$("plan-rule-from-account").value ? null : Number($("plan-rule-from-account").value),
+    default_to_account_id: !["income", "reserve_transfer"].includes(kind) || !$("plan-rule-to-account").value ? null : Number($("plan-rule-to-account").value),
+    is_required: $("plan-rule-required").checked,
+  };
+  try {
+    await api(ruleId ? `/api/v1/workspaces/${workspaceId}/plan-rules/${ruleId}` : `/api/v1/workspaces/${workspaceId}/plan-rules`, {
+      method: ruleId ? "PATCH" : "POST", body: JSON.stringify(body),
+    });
+    $("plan-rule-dialog").close();
+    toast(ruleId ? "Plan rule updated" : "Plan rule added");
+    await refreshAll();
+    switchView("plan");
+  } catch (error) { $("plan-rule-error").textContent = error.message; }
+}
+
+async function archivePlanRule(rule) {
+  if (!window.confirm(`Archive ${rule.name}? Open occurrences will be removed.`)) return;
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
+    toast("Plan rule archived");
+    await refreshAll();
+  } catch (error) { toast(error.message); }
+}
+
+function openPlanAction(occurrence) {
+  const rule = occurrence.rule;
+  const accounts = ownedPlanAccounts(rule.asset.code).map((account) => ({ value: account.id, label: account.name }));
+  $("plan-action-occurrence-id").value = occurrence.id;
+  $("plan-action-title").textContent = rule.kind === "income" ? `Receive ${rule.name}` : `Pay ${rule.name}`;
+  $("complete-plan-item").textContent = rule.kind === "income" ? "Confirm income" : "Confirm payment";
+  $("plan-action-amount").value = occurrence.planned_amount;
+  $("plan-action-date").value = todayValue();
+  $("plan-action-note").value = "";
+  $("plan-action-error").textContent = "";
+  selectOptions($("plan-action-account"), accounts, { placeholder: "Choose account", selected: rule.kind === "income" ? rule.default_to_account_id : rule.default_from_account_id });
+  selectOptions($("plan-action-from-account"), accounts, { placeholder: "Choose source", selected: rule.default_from_account_id });
+  selectOptions($("plan-action-to-account"), accounts, { placeholder: "Choose target", selected: rule.default_to_account_id });
+  $("plan-action-account-field").classList.toggle("hidden", rule.kind === "reserve_transfer");
+  $("plan-action-from-field").classList.toggle("hidden", rule.kind !== "reserve_transfer");
+  $("plan-action-to-field").classList.toggle("hidden", rule.kind !== "reserve_transfer");
+  $("plan-action-dialog").showModal();
+}
+
+async function completePlanOccurrence(event) {
+  event.preventDefault();
+  $("plan-action-error").textContent = "";
+  const occurrence = planOccurrenceById($("plan-action-occurrence-id").value);
+  const reserve = occurrence.rule.kind === "reserve_transfer";
+  const body = {
+    amount: $("plan-action-amount").value,
+    local_date: $("plan-action-date").value,
+    note: $("plan-action-note").value.trim() || null,
+  };
+  if (reserve) {
+    body.from_account_id = Number($("plan-action-from-account").value);
+    body.to_account_id = Number($("plan-action-to-account").value);
+  } else {
+    body.account_id = Number($("plan-action-account").value);
+  }
+  const action = occurrence.rule.kind === "income" ? "receive" : "pay";
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/${action}`, { method: "POST", body: JSON.stringify(body) });
+    $("plan-action-dialog").close();
+    toast(action === "receive" ? "Income received" : "Plan item paid");
+    await refreshAll();
+    switchView("plan");
+  } catch (error) { $("plan-action-error").textContent = error.message; }
+}
+
+async function skipPlanOccurrence(occurrence) {
+  if (!window.confirm(`Skip ${occurrence.rule.name} on ${localDate(occurrence.due_date)}?`)) return;
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/skip`, { method: "POST" });
+    toast("Plan item skipped");
+    await refreshAll();
+  } catch (error) { toast(error.message); }
+}
+
+function transactionMatchesOccurrence(transaction, occurrence) {
+  const expected = occurrence.rule.kind === "income" ? "income" : occurrence.rule.kind === "reserve_transfer" ? "transfer" : "expense";
+  return transaction.type === expected
+    && transaction.status === "posted"
+    && !transaction.plan_occurrence_id
+    && transaction.legs.length > 0
+    && transaction.legs.every((leg) => leg.asset.code === occurrence.rule.asset.code);
+}
+
+async function openPlanLink({ occurrence = null, transaction = null }) {
+  $("plan-link-error").textContent = "";
+  const workspaceId = state.context.workspace.id;
+  const page = await api(`/api/v1/transactions?workspace_id=${workspaceId}&status=posted&limit=100`);
+  state.planLinkTransactions = page.items;
+  let occurrences = state.planOccurrences.filter((item) => ["planned", "overdue"].includes(item.status));
+  if (transaction) occurrences = occurrences.filter((item) => transactionMatchesOccurrence(transaction, item));
+  let transactions = state.planLinkTransactions.filter((item) => !item.plan_occurrence_id);
+  if (occurrence) transactions = transactions.filter((item) => transactionMatchesOccurrence(item, occurrence));
+  selectOptions($("plan-link-occurrence"), occurrences.map((item) => ({ value: item.id, label: `${item.rule.name} · ${localDate(item.due_date)} · ${formatMoney(item.planned_amount, item.rule.asset.code)}` })), { placeholder: "Choose plan item", selected: occurrence?.id });
+  selectOptions($("plan-link-transaction"), transactions.map((item) => ({ value: item.id, label: `#${item.id} · ${transactionTitle(item)} · ${localDate(item.local_date)} · ${transactionAmount(item)}` })), { placeholder: "Choose transaction", selected: transaction?.id });
+  $("plan-link-dialog").showModal();
+}
+
+async function linkPlanTransaction(event) {
+  event.preventDefault();
+  $("plan-link-error").textContent = "";
+  const occurrenceId = $("plan-link-occurrence").value;
+  const transactionId = $("plan-link-transaction").value;
+  if (!occurrenceId || !transactionId) {
+    $("plan-link-error").textContent = "Choose both a plan item and a transaction";
+    return;
+  }
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrenceId}/link-transaction`, {
+      method: "POST", body: JSON.stringify({ transaction_id: Number(transactionId) }),
+    });
+    $("plan-link-dialog").close();
+    toast("Transaction linked to Plan");
+    await refreshAll();
+  } catch (error) { $("plan-link-error").textContent = error.message; }
+}
+
 function transactionTitle(transaction) {
   const category = [...state.categories.values()].flat().find((item) => item.id === transaction.category_id);
   if (transaction.note) return transaction.note;
@@ -631,6 +950,22 @@ function renderTransactions() {
       voidButton.textContent = "Void";
       voidButton.addEventListener("click", () => voidTransaction(transaction));
       actions.append(edit, voidButton);
+    }
+    if (transaction.plan_occurrence_id) {
+      const planBadge = document.createElement("span");
+      planBadge.className = "badge";
+      planBadge.textContent = "Plan";
+      actions.prepend(planBadge);
+    } else if (
+      transaction.workspace_id === state.context.workspace.id
+      && transaction.status === "posted"
+      && ["expense", "income", "transfer"].includes(transaction.type)
+    ) {
+      const linkPlan = document.createElement("button");
+      linkPlan.type = "button";
+      linkPlan.textContent = "Plan";
+      linkPlan.addEventListener("click", () => openPlanLink({ transaction }));
+      actions.append(linkPlan);
     }
     if (transaction.status !== "posted") {
       const badge = document.createElement("span");
@@ -874,6 +1209,14 @@ $("logout").addEventListener("click", async () => {
 
 $("manage-categories").addEventListener("click", openCategories);
 $("category-form").addEventListener("submit", createCategory);
+$("add-plan-rule").addEventListener("click", () => openPlanRule());
+$("empty-add-plan-rule").addEventListener("click", () => openPlanRule());
+$("plan-rule-kind").addEventListener("change", () => updatePlanRuleFields());
+$("plan-rule-asset").addEventListener("change", () => updatePlanRuleFields());
+$("plan-rule-form").addEventListener("submit", savePlanRule);
+$("plan-action-form").addEventListener("submit", completePlanOccurrence);
+$("plan-link-form").addEventListener("submit", linkPlanTransaction);
+$("plan-status-filter").addEventListener("change", renderPlan);
 
 $("add-account").addEventListener("click", () => openAccountForm());
 $("empty-add-account").addEventListener("click", () => openAccountForm());

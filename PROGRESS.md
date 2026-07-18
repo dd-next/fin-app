@@ -15,7 +15,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 2 — Accounts and ledger
 - [x] V2 Phase 3 — Account sharing and permissions
 - [x] V2 Phase 4 — Accounts and Transactions frontend
-- [ ] V2 Phase 5 — Plan rules and occurrences
+- [x] V2 Phase 5 — Plan rules and occurrences
 - [ ] V2 Phase 6 — Tracker periods and commitments
 - [ ] V2 Phase 7 — Final integration and verification
 
@@ -120,6 +120,23 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   was implemented and visually verified with the available repo/browser skills.
 - Decision: transaction-to-Plan linking remains for V2 Phase 5, where the Plan
   occurrence API and link target are introduced; the Phase 4 ledger stays green.
+
+### V2 Phase 5 — Plan rules and occurrences (2026-07-18)
+- Added owner-private plan rules and rolling, idempotent 12-month occurrences
+  for once, weekly, monthly, and yearly schedules. Monthly dates clamp to the
+  last valid day; yearly leap-day schedules recover on the next leap year.
+- Implemented income, required expense, subscription, reserve transfer, and
+  other expense actions with planned/completed/skipped/overdue states. Paying
+  or receiving creates a `planned` ledger transaction; existing posted
+  transactions can be linked explicitly, and voiding one reopens its item.
+- Built the Plan UI with grouped overdue/upcoming/completed items, status
+  filtering, rule create/edit/archive, action/skip/link flows, and plan-vs-actual.
+  Scratch-browser checks covered recurrence, completion, transaction linking,
+  owner privacy after account sharing, and a clean browser console.
+- Tests: **51 passed, 0 failed** (`.venv/bin/python -m pytest -q`); JavaScript
+  syntax, Python compileall, migration to `0004_v2`, and diff checks passed.
+- Decision: an expected-income completion is recorded now; the proposed Tracker
+  period it triggers is intentionally introduced in V2 Phase 6 with periods.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

@@ -14,6 +14,7 @@ from app.db import SessionLocal
 from app.workspaces import router as workspaces_router
 from app.transactions import router as transactions_router
 from app.sharing import router as sharing_router
+from app.plan import router as plan_router
 
 
 @asynccontextmanager
@@ -32,6 +33,7 @@ app.include_router(categories_router, prefix="/api/v1")
 app.include_router(accounts_router, prefix="/api/v1")
 app.include_router(transactions_router, prefix="/api/v1")
 app.include_router(sharing_router, prefix="/api/v1")
+app.include_router(plan_router, prefix="/api/v1")
 
 
 @app.get("/health")

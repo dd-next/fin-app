@@ -13,6 +13,7 @@ from app.models import (
     Asset,
     Category,
     ExchangeRate,
+    PlanOccurrence,
     Transaction,
     TransactionLeg,
     Workspace,
@@ -224,6 +225,15 @@ async def transaction_out(
                 amount=leg.amount,
             )
         )
+    plan_occurrence_id = None
+    if visible_account_ids is None:
+        plan_occurrence_id = (
+            await session.execute(
+                select(PlanOccurrence.id).where(
+                    PlanOccurrence.transaction_id == transaction.id
+                )
+            )
+        ).scalar_one_or_none()
     return TransactionOut(
         id=transaction.id,
         workspace_id=transaction.workspace_id,
@@ -245,6 +255,7 @@ async def transaction_out(
         voided_at=transaction.voided_at,
         legs=legs,
         has_hidden_legs=has_hidden,
+        plan_occurrence_id=plan_occurrence_id,
     )
 
 

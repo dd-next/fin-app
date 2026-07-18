@@ -148,6 +148,30 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .placeholder { min-height: 360px; display: grid; place-items: center; align-content: center; text-align: center; }
 .placeholder > span { display: grid; width: 62px; height: 62px; margin-bottom: 18px; place-items: center; border-radius: 19px; background: var(--accent-soft); color: var(--accent); font-size: 1.7rem; }
 .placeholder p { max-width: 510px; margin-bottom: 0; color: var(--muted); line-height: 1.6; }
+.plan-summary { margin-bottom: 14px; }
+.plan-summary .metric-card { min-height: 128px; }
+.plan-summary .metric-card strong { font-size: 2.45rem; }
+.plan-toolbar { display: flex; justify-content: flex-end; margin-bottom: 24px; }
+.plan-toolbar label { width: min(220px, 100%); }
+.plan-groups { display: grid; gap: 28px; }
+.plan-group h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; font-size: 1.05rem; }
+.plan-group h3 span { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+.plan-list { display: grid; gap: 8px; }
+.plan-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 17px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.plan-item.overdue { border-color: rgba(255,125,130,.35); background: linear-gradient(100deg, rgba(255,125,130,.07), var(--surface) 38%); }
+.plan-item-main strong, .plan-item-main span { display: block; }
+.plan-item-main span { margin-top: 4px; color: var(--muted); font-size: .78rem; }
+.plan-item-amount { text-align: right; white-space: nowrap; }
+.plan-item-amount strong, .plan-item-amount small { display: block; }
+.plan-item-actions { display: flex; gap: 6px; }
+.plan-item-actions button { padding: 0 12px; }
+.rules-section { margin-top: 42px; padding-top: 26px; border-top: 1px solid var(--border); }
+.rule-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rule-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface-soft); }
+.rule-card strong, .rule-card span { display: block; }
+.rule-card span { margin-top: 4px; color: var(--muted); font-size: .76rem; }
+.rule-actions { display: flex; gap: 5px; }
+.rule-actions button { width: 44px; padding: 0; background: transparent; color: var(--muted); }
 
 dialog { width: min(560px, calc(100% - 28px)); max-height: calc(100vh - 36px); padding: 0; overflow: auto; border-radius: 23px; color: var(--text); }
 dialog.wide-dialog { width: min(760px, calc(100% - 28px)); }
@@ -208,6 +232,9 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   dialog, dialog.wide-dialog { width: 100%; max-width: none; max-height: 92vh; margin: auto 0 0; border-radius: 23px 23px 0 0; }
   .dialog-form { padding: 21px; }
   .detail-hero { align-items: flex-start; flex-direction: column; }
+  .plan-item { grid-template-columns: minmax(0, 1fr) auto; }
+  .plan-item-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--border); }
+  .rule-list { grid-template-columns: 1fr; }
   .invite-row, .category-form, .copy-box { grid-template-columns: 1fr; }
   .access-row { grid-template-columns: minmax(0, 1fr) auto; }
   .access-row select { grid-column: 1 / -1; }
