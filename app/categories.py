@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.access import require_workspace_owner
+from app.access import require_workspace_category_reader, require_workspace_owner
 from app.db import get_session
 from app.models import Category, Workspace, utcnow
 from app.schemas import CategoryCreate, CategoryOut, CategoryPatch
@@ -41,7 +41,7 @@ async def _category(
 async def list_categories(
     workspace_id: int,
     include_archived: bool = False,
-    workspace: Workspace = Depends(require_workspace_owner),
+    workspace: Workspace = Depends(require_workspace_category_reader),
     session: AsyncSession = Depends(get_session),
 ):
     del workspace

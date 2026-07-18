@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import primary_workspace, require_user
+from app.access import account_role, require_account_action, visible_account_ids
 from app.db import get_session
 from app.ledger import (
     ZERO,
@@ -17,7 +18,6 @@ from app.ledger import (
     financial_times,
     normalize_name,
     require_asset_code,
-    require_owned_account,
     transaction_out,
     validate_amount,
 )
@@ -92,12 +92,18 @@ async def list_accounts(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    statement = select(Account).where(Account.owner_user_id == user.id)
+    visible_ids = await visible_account_ids(session, user.id)
+    statement = select(Account).where(Account.id.in_(visible_ids))
     if not include_archived:
         statement = statement.where(Account.archived_at.is_(None))
     accounts = list((await session.execute(statement.order_by(Account.name))).scalars())
     return [
-        await account_out(session, account, workspace.base_asset_id)
+        await account_out(
+            session,
+            account,
+            workspace.base_asset_id,
+            access_role=(await account_role(session, account, user.id)) or "viewer",
+        )
         for account in accounts
     ]
 
@@ -110,12 +116,13 @@ async def account_summary(
     workspace = await primary_workspace(session, user.id)
     base_asset = await session.get(Asset, workspace.base_asset_id)
     assert base_asset is not None
+    visible_ids = await visible_account_ids(session, user.id)
     accounts = list(
         (
             await session.execute(
                 select(Account)
                 .where(
-                    Account.owner_user_id == user.id,
+                    Account.id.in_(visible_ids),
                     Account.archived_at.is_(None),
                 )
                 .order_by(Account.name)
@@ -123,7 +130,12 @@ async def account_summary(
         ).scalars()
     )
     outputs = [
-        await account_out(session, account, workspace.base_asset_id)
+        await account_out(
+            session,
+            account,
+            workspace.base_asset_id,
+            access_role=(await account_role(session, account, user.id)) or "viewer",
+        )
         for account in accounts
     ]
     net_worth = sum(
@@ -167,10 +179,12 @@ async def get_account(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    account = await require_owned_account(
-        session, account_id, user.id, allow_archived=True
+    account, role = await require_account_action(
+        session, account_id, user.id, "view", allow_archived=True
     )
-    return await account_out(session, account, workspace.base_asset_id)
+    return await account_out(
+        session, account, workspace.base_asset_id, access_role=role
+    )
 
 
 @router.patch("/{account_id}", response_model=AccountOut)
@@ -181,7 +195,9 @@ async def patch_account(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    account = await require_owned_account(session, account_id, user.id)
+    account, role = await require_account_action(
+        session, account_id, user.id, "account_edit"
+    )
     if body.name is not None:
         account.name = " ".join(body.name.strip().split())
         account.normalized_name = normalize_name(account.name)
@@ -199,7 +215,9 @@ async def patch_account(
         await session.rollback()
         raise HTTPException(status_code=409, detail="Account name already exists")
     await session.refresh(account)
-    return await account_out(session, account, workspace.base_asset_id)
+    return await account_out(
+        session, account, workspace.base_asset_id, access_role=role
+    )
 
 
 @router.post("/{account_id}/reconcile", response_model=TransactionOut)
@@ -210,7 +228,7 @@ async def reconcile_account(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    account = await require_owned_account(session, account_id, user.id)
+    account, _ = await require_account_action(session, account_id, user.id, "owner")
     target = validate_amount(body.target_balance, account.asset, allow_zero=True)
     delta = target - await account_balance(session, account.id)
     validate_amount(delta, account.asset)
@@ -241,8 +259,10 @@ async def archive_account(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    account = await require_owned_account(session, account_id, user.id)
+    account, role = await require_account_action(session, account_id, user.id, "owner")
     account.archived_at = utcnow()
     await session.commit()
     await session.refresh(account)
-    return await account_out(session, account, workspace.base_asset_id)
+    return await account_out(
+        session, account, workspace.base_asset_id, access_role=role
+    )

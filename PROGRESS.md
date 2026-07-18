@@ -13,7 +13,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 0 — Specification authority
 - [x] V2 Phase 1 — Clean identity, workspace, assets, and categories
 - [x] V2 Phase 2 — Accounts and ledger
-- [ ] V2 Phase 3 — Account sharing and permissions
+- [x] V2 Phase 3 — Account sharing and permissions
 - [ ] V2 Phase 4 — Accounts and Transactions frontend
 - [ ] V2 Phase 5 — Plan rules and occurrences
 - [ ] V2 Phase 6 — Tracker periods and commitments
@@ -85,6 +85,21 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   child fees, and derived rates from all totals.
 - Tests: **39 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real upgrade
   to `0002_v2`, Python compileall, JavaScript syntax, and diff checks passed.
+
+### V2 Phase 3 — Account sharing and permissions (2026-07-18)
+- Added `AccountAccess` plus hashed, one-time, seven-day
+  `AccountInvitation` links in migration `0003_v2`; owners can list, change,
+  and revoke account access while accepted and expired links cannot be reused.
+- Enforced owner/editor/contributor/viewer capabilities at every account and
+  transaction command. Multi-account edits and voids require edit rights on
+  every participating account, including exchange-fee accounts.
+- Shared users see only accessible accounts and transaction legs. Hidden legs
+  are redacted with `has_hidden_legs=true`; private accounts, workspace totals,
+  Plan, and Tracker remain outside their visibility, while categories are
+  selectable but owner-managed.
+- Tests: **42 passed, 0 failed** (`.venv/bin/python -m pytest -q`); real upgrade
+  to `0003_v2`, Python compileall, JavaScript syntax, `pip check`, and diff
+  checks passed.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

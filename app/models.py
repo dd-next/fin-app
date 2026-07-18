@@ -75,6 +75,9 @@ class User(Base):
     workspaces: Mapped[list["Workspace"]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
+    account_accesses: Mapped[list["AccountAccess"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class AuthSession(Base):
@@ -203,6 +206,60 @@ class Account(Base):
     owner: Mapped[User] = relationship()
     asset: Mapped[Asset] = relationship()
     legs: Mapped[list["TransactionLeg"]] = relationship(back_populates="account")
+    accesses: Mapped[list["AccountAccess"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
+    invitations: Mapped[list["AccountInvitation"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
+
+
+class AccountAccess(Base):
+    __tablename__ = "account_access"
+    __table_args__ = (
+        UniqueConstraint("account_id", "user_id", name="uq_account_access_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+
+    account: Mapped[Account] = relationship(back_populates="accesses")
+    user: Mapped[User] = relationship(back_populates="account_accesses")
+
+
+class AccountInvitation(Base):
+    __tablename__ = "account_invitation"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    token_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, unique=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    accepted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True
+    )
+
+    account: Mapped[Account] = relationship(back_populates="invitations")
 
 
 class Transaction(Base):

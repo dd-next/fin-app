@@ -162,6 +162,8 @@ class AccountOut(BaseModel):
     balance: Decimal
     valued_balance: Decimal | None
     archived_at: datetime | None
+    access_role: Literal["owner", "editor", "contributor", "viewer"] = "owner"
+    is_shared: bool = False
 
 
 class UnvaluedAssetOut(BaseModel):
@@ -288,3 +290,28 @@ class ExchangeRateOut(BaseModel):
 class TransactionPageOut(BaseModel):
     items: list[TransactionOut]
     next_cursor: int | None
+
+
+SharedRole = Literal["editor", "contributor", "viewer"]
+
+
+class AccountInvitationCreate(BaseModel):
+    role: SharedRole
+
+
+class AccountInvitationOut(BaseModel):
+    token: str
+    account_id: int
+    role: SharedRole
+    expires_at: datetime
+
+
+class AccountAccessPatch(BaseModel):
+    role: SharedRole
+
+
+class AccountAccessOut(BaseModel):
+    account_id: int
+    user: UserOut
+    role: Literal["owner", "editor", "contributor", "viewer"]
+    created_at: datetime | None

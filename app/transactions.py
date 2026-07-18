@@ -4,17 +4,17 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import primary_workspace, require_user
+from app.access import require_account_action, visible_account_ids
 from app.db import get_session
 from app.ledger import (
     financial_times,
     rate_out,
     require_asset_code,
     require_category,
-    require_owned_account,
     transaction_out,
     validate_amount,
 )
@@ -77,9 +77,12 @@ async def _principal(
     user: User,
     account_id: int | None,
     asset_code: str | None,
+    action: str,
 ) -> tuple[Account | None, Asset]:
     if account_id is not None:
-        account = await require_owned_account(session, account_id, user.id)
+        account, _ = await require_account_action(
+            session, account_id, user.id, action
+        )
         if asset_code is not None and asset_code != account.asset.code:
             raise HTTPException(status_code=422, detail="Asset does not match account")
         return account, account.asset
@@ -90,14 +93,23 @@ async def _principal(
 
 async def _create_single(
     session: AsyncSession,
-    workspace: Workspace,
     user: User,
     transaction_type: str,
     body: SingleTransactionIn,
 ) -> Transaction:
     account, asset = await _principal(
-        session, user, body.account_id, body.asset_code
+        session,
+        user,
+        body.account_id,
+        body.asset_code,
+        "expense" if transaction_type == "expense" else "income",
     )
+    workspace = (
+        await session.get(Workspace, account.workspace_id)
+        if account is not None
+        else await primary_workspace(session, user.id)
+    )
+    assert workspace is not None
     amount = validate_amount(body.amount, asset)
     category = await require_category(
         session, body.category_id, workspace.id, transaction_type
@@ -136,9 +148,8 @@ async def create_expense(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    workspace = await primary_workspace(session, user.id)
     return await transaction_out(
-        session, await _create_single(session, workspace, user, "expense", body)
+        session, await _create_single(session, user, "expense", body)
     )
 
 
@@ -148,9 +159,8 @@ async def create_income(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    workspace = await primary_workspace(session, user.id)
     return await transaction_out(
-        session, await _create_single(session, workspace, user, "income", body)
+        session, await _create_single(session, user, "income", body)
     )
 
 
@@ -162,9 +172,16 @@ async def create_transfer(
 ):
     if body.category_id is not None:
         raise HTTPException(status_code=422, detail="Transfers cannot have a category")
-    workspace = await primary_workspace(session, user.id)
-    source = await require_owned_account(session, body.from_account_id, user.id)
-    target = await require_owned_account(session, body.to_account_id, user.id)
+    source, _ = await require_account_action(
+        session, body.from_account_id, user.id, "edit"
+    )
+    target, _ = await require_account_action(
+        session, body.to_account_id, user.id, "edit"
+    )
+    if source.workspace_id != target.workspace_id:
+        raise HTTPException(status_code=422, detail="Accounts must belong to one workspace")
+    workspace = await session.get(Workspace, source.workspace_id)
+    assert workspace is not None
     if source.id == target.id:
         raise HTTPException(status_code=422, detail="Accounts must be different")
     if source.asset_id != target.asset_id:
@@ -230,9 +247,16 @@ async def create_exchange(
 ):
     if body.category_id is not None:
         raise HTTPException(status_code=422, detail="Exchanges cannot have a category")
-    workspace = await primary_workspace(session, user.id)
-    source = await require_owned_account(session, body.from_account_id, user.id)
-    target = await require_owned_account(session, body.to_account_id, user.id)
+    source, _ = await require_account_action(
+        session, body.from_account_id, user.id, "edit"
+    )
+    target, _ = await require_account_action(
+        session, body.to_account_id, user.id, "edit"
+    )
+    if source.workspace_id != target.workspace_id:
+        raise HTTPException(status_code=422, detail="Accounts must belong to one workspace")
+    workspace = await session.get(Workspace, source.workspace_id)
+    assert workspace is not None
     if source.id == target.id or source.asset_id == target.asset_id:
         raise HTTPException(status_code=422, detail="Exchange requires different assets")
     from_amount = validate_amount(body.from_amount, source.asset)
@@ -254,9 +278,11 @@ async def create_exchange(
     await session.flush()
     await _replace_rates(session, transaction, source, from_amount, target, to_amount)
     if body.fee is not None:
-        fee_account = await require_owned_account(
-            session, body.fee.account_id, user.id
+        fee_account, _ = await require_account_action(
+            session, body.fee.account_id, user.id, "edit"
         )
+        if fee_account.workspace_id != workspace.id:
+            raise HTTPException(status_code=422, detail="Fee account belongs to another workspace")
         fee_amount = validate_amount(body.fee.amount, fee_account.asset)
         fee_category = await require_category(
             session, body.fee.category_id, workspace.id, "expense"
@@ -292,8 +318,11 @@ async def create_adjustment(
 ):
     if body.category_id is not None:
         raise HTTPException(status_code=422, detail="Adjustments cannot have a category")
-    workspace = await primary_workspace(session, user.id)
-    account = await require_owned_account(session, body.account_id, user.id)
+    account, _ = await require_account_action(
+        session, body.account_id, user.id, "owner"
+    )
+    workspace = await session.get(Workspace, account.workspace_id)
+    assert workspace is not None
     delta = validate_amount(body.delta, account.asset)
     occurred_at, local_date = financial_times(
         workspace, body.occurred_at, body.local_date
@@ -310,14 +339,58 @@ async def create_adjustment(
     return await transaction_out(session, transaction)
 
 
-async def _owned_transaction(
+async def _visible_transaction(
     session: AsyncSession, transaction_id: int, user: User
-) -> Transaction:
+) -> tuple[Transaction, set[int] | None]:
     transaction = await session.get(Transaction, transaction_id)
-    workspace = await primary_workspace(session, user.id)
-    if transaction is None or transaction.workspace_id != workspace.id:
+    if transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    return transaction
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
+    if workspace.owner_user_id == user.id:
+        return transaction, None
+    visible_ids = await visible_account_ids(session, user.id)
+    legs = await _transaction_legs(session, transaction.id)
+    has_visible_leg = any(
+        leg.account_id is not None and leg.account_id in visible_ids for leg in legs
+    )
+    is_own_unassigned = (
+        transaction.created_by_user_id == user.id
+        and transaction.status == "unassigned"
+        and any(leg.account_id is None for leg in legs)
+    )
+    if not has_visible_leg and not is_own_unassigned:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return transaction, visible_ids
+
+
+async def _require_transaction_edit(
+    session: AsyncSession, transaction_id: int, user: User
+) -> tuple[Transaction, set[int] | None]:
+    transaction, visible_ids = await _visible_transaction(session, transaction_id, user)
+    legs = await _transaction_legs(session, transaction.id)
+    child_legs = list(
+        (
+            await session.execute(
+                select(TransactionLeg)
+                .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+                .where(Transaction.parent_transaction_id == transaction.id)
+            )
+        ).scalars()
+    )
+    for leg in [*legs, *child_legs]:
+        if leg.account_id is None:
+            if transaction.created_by_user_id != user.id:
+                raise HTTPException(status_code=403, detail="Transaction permission denied")
+            continue
+        await require_account_action(
+            session,
+            leg.account_id,
+            user.id,
+            "owner" if transaction.type == "adjustment" else "edit",
+            allow_archived=True,
+        )
+    return transaction, visible_ids
 
 
 @router.get("/transactions", response_model=TransactionPageOut)
@@ -337,12 +410,29 @@ async def list_transactions(
     session: AsyncSession = Depends(get_session),
 ):
     workspace = await primary_workspace(session, user.id)
-    if workspace_id is not None and workspace_id != workspace.id:
-        raise HTTPException(status_code=404, detail="Workspace not found")
-    statement = select(Transaction).where(Transaction.workspace_id == workspace.id)
+    visible_ids = await visible_account_ids(session, user.id)
+    statement = (
+        select(Transaction)
+        .outerjoin(TransactionLeg)
+        .where(
+            or_(
+                Transaction.workspace_id == workspace.id,
+                TransactionLeg.account_id.in_(visible_ids),
+                (
+                    (Transaction.created_by_user_id == user.id)
+                    & (Transaction.status == "unassigned")
+                    & TransactionLeg.account_id.is_(None)
+                ),
+            )
+        )
+    )
+    if workspace_id is not None:
+        statement = statement.where(Transaction.workspace_id == workspace_id)
     if account_id is not None:
-        await require_owned_account(session, account_id, user.id, allow_archived=True)
-        statement = statement.join(TransactionLeg).where(TransactionLeg.account_id == account_id)
+        await require_account_action(
+            session, account_id, user.id, "view", allow_archived=True
+        )
+        statement = statement.where(TransactionLeg.account_id == account_id)
     if date_from is not None:
         statement = statement.where(Transaction.local_date >= date_from)
     if date_to is not None:
@@ -369,7 +459,16 @@ async def list_transactions(
     has_more = len(transactions) > limit
     page = transactions[:limit]
     return TransactionPageOut(
-        items=[await transaction_out(session, item) for item in page],
+        items=[
+            await transaction_out(
+                session,
+                item,
+                visible_account_ids=(
+                    None if item.workspace_id == workspace.id else visible_ids
+                ),
+            )
+            for item in page
+        ],
         next_cursor=page[-1].id if has_more and page else None,
     )
 
@@ -380,8 +479,11 @@ async def get_transaction(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    transaction, visible_ids = await _visible_transaction(
+        session, transaction_id, user
+    )
     return await transaction_out(
-        session, await _owned_transaction(session, transaction_id, user)
+        session, transaction, visible_account_ids=visible_ids
     )
 
 
@@ -406,10 +508,13 @@ async def patch_transaction(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    transaction = await _owned_transaction(session, transaction_id, user)
+    transaction, visible_ids = await _require_transaction_edit(
+        session, transaction_id, user
+    )
     if transaction.status == "voided":
         raise HTTPException(status_code=409, detail="Voided transaction cannot be edited")
-    workspace = await primary_workspace(session, user.id)
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
     legs = await _transaction_legs(session, transaction.id)
     if "note" in body.model_fields_set:
         transaction.note = body.note
@@ -432,7 +537,15 @@ async def patch_transaction(
         leg = legs[0]
         if transaction.type == "adjustment":
             if body.delta is not None:
-                account = await require_owned_account(session, leg.account_id, user.id) if leg.account_id else None
+                account = (
+                    (
+                        await require_account_action(
+                            session, leg.account_id, user.id, "owner"
+                        )
+                    )[0]
+                    if leg.account_id
+                    else None
+                )
                 assert account is not None
                 leg.amount = validate_amount(body.delta, account.asset)
             if any(value is not None for value in (body.amount, body.from_amount, body.to_amount)):
@@ -441,17 +554,34 @@ async def patch_transaction(
             current_asset = await session.get(Asset, leg.asset_id)
             assert current_asset is not None
             account = (
-                await require_owned_account(session, leg.account_id, user.id)
+                (
+                    await require_account_action(
+                        session, leg.account_id, user.id, "edit"
+                    )
+                )[0]
                 if leg.account_id is not None
                 else None
             )
             asset = current_asset
             if "account_id" in body.model_fields_set:
-                account = (
-                    await require_owned_account(session, body.account_id, user.id)
-                    if body.account_id is not None
-                    else None
-                )
+                if body.account_id is None:
+                    if workspace.owner_user_id != user.id:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only the workspace owner can unassign a transaction",
+                        )
+                    account = None
+                else:
+                    account = (
+                        await require_account_action(
+                            session, body.account_id, user.id, "edit"
+                        )
+                    )[0]
+                    if account.workspace_id != transaction.workspace_id:
+                        raise HTTPException(
+                            status_code=422,
+                            detail="Account belongs to another workspace",
+                        )
                 if account is not None:
                     asset = account.asset
             if "asset_code" in body.model_fields_set:
@@ -470,12 +600,22 @@ async def patch_transaction(
     else:
         negative = next(leg for leg in legs if leg.amount < 0)
         positive = next(leg for leg in legs if leg.amount > 0)
-        source = await require_owned_account(
-            session, body.from_account_id or negative.account_id, user.id
-        )
-        target = await require_owned_account(
-            session, body.to_account_id or positive.account_id, user.id
-        )
+        source_id = body.from_account_id or negative.account_id
+        target_id = body.to_account_id or positive.account_id
+        assert source_id is not None and target_id is not None
+        source = (
+            await require_account_action(session, source_id, user.id, "edit")
+        )[0]
+        target = (
+            await require_account_action(session, target_id, user.id, "edit")
+        )[0]
+        if (
+            source.workspace_id != transaction.workspace_id
+            or target.workspace_id != transaction.workspace_id
+        ):
+            raise HTTPException(
+                status_code=422, detail="Accounts must belong to the transaction workspace"
+            )
         if source.id == target.id:
             raise HTTPException(status_code=422, detail="Accounts must be different")
         if transaction.type == "transfer" and source.asset_id != target.asset_id:
@@ -499,7 +639,9 @@ async def patch_transaction(
     transaction.rate_source = None
     await session.commit()
     await session.refresh(transaction)
-    return await transaction_out(session, transaction)
+    return await transaction_out(
+        session, transaction, visible_account_ids=visible_ids
+    )
 
 
 @router.post("/transactions/{transaction_id}/assign-account", response_model=TransactionOut)
@@ -509,20 +651,33 @@ async def assign_account(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    transaction = await _owned_transaction(session, transaction_id, user)
+    transaction, visible_ids = await _visible_transaction(
+        session, transaction_id, user
+    )
     if transaction.status != "unassigned":
         raise HTTPException(status_code=409, detail="Transaction is not unassigned")
+    workspace = await session.get(Workspace, transaction.workspace_id)
+    assert workspace is not None
+    if transaction.created_by_user_id != user.id and workspace.owner_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Transaction permission denied")
     legs = await _transaction_legs(session, transaction.id)
     if len(legs) != 1 or legs[0].account_id is not None:
         raise HTTPException(status_code=409, detail="Transaction cannot be assigned")
-    account = await require_owned_account(session, body.account_id, user.id)
+    action = "expense" if transaction.type == "expense" else "income"
+    account = (
+        await require_account_action(session, body.account_id, user.id, action)
+    )[0]
+    if account.workspace_id != transaction.workspace_id:
+        raise HTTPException(status_code=422, detail="Account belongs to another workspace")
     if account.asset_id != legs[0].asset_id:
         raise HTTPException(status_code=422, detail="Account asset does not match transaction")
     legs[0].account_id = account.id
     transaction.status = "posted"
     await session.commit()
     await session.refresh(transaction)
-    return await transaction_out(session, transaction)
+    return await transaction_out(
+        session, transaction, visible_account_ids=visible_ids
+    )
 
 
 @router.post("/transactions/{transaction_id}/void", response_model=TransactionOut)
@@ -531,7 +686,9 @@ async def void_transaction(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    transaction = await _owned_transaction(session, transaction_id, user)
+    transaction, visible_ids = await _require_transaction_edit(
+        session, transaction_id, user
+    )
     if transaction.status == "voided":
         raise HTTPException(status_code=409, detail="Transaction is already voided")
     now = utcnow()
@@ -547,7 +704,9 @@ async def void_transaction(
     )
     await session.commit()
     await session.refresh(transaction)
-    return await transaction_out(session, transaction)
+    return await transaction_out(
+        session, transaction, visible_account_ids=visible_ids
+    )
 
 
 @router.get("/exchange-rates", response_model=list[ExchangeRateOut])

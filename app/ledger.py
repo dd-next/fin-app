@@ -164,7 +164,11 @@ async def valued_balance(
 
 
 async def account_out(
-    session: AsyncSession, account: Account, base_asset_id: int
+    session: AsyncSession,
+    account: Account,
+    base_asset_id: int,
+    *,
+    access_role: str = "owner",
 ) -> AccountOut:
     await session.refresh(account, attribute_names=["asset"])
     balance = await account_balance(session, account.id)
@@ -183,6 +187,8 @@ async def account_out(
             session, balance, account.asset_id, base_asset_id
         ),
         archived_at=account.archived_at,
+        access_role=access_role,
+        is_shared=access_role != "owner",
     )
 
 
