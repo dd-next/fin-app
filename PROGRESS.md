@@ -18,6 +18,11 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
 - [x] V2 Phase 5 — Plan rules and occurrences
 - [x] V2 Phase 6 — Tracker periods and commitments
 - [x] V2 Phase 7 — Final integration and verification
+- [x] V2 Phase 8 — Corrective release audit and documentation authority
+- [ ] V2 Phase 9 — Ledger isolation, frozen values, and display precision
+- [ ] V2 Phase 10 — Period mutation invariants
+- [ ] V2 Phase 11 — Plan history and historical UI integrity
+- [ ] V2 Phase 12 — Corrective final verification
 
 ## Historical phases
 
@@ -182,6 +187,18 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` done
   and live `GET /health` (**200**, `{"status":"ok"}`) passed.
 - Decision: the first release is complete. Analytics intentionally remains a
   stable `Coming soon` view, and all other future-work items stay out of scope.
+
+### V2 Phase 8 — Corrective release audit and documentation authority (2026-07-19)
+- Reversed the incomplete post-release documentation move: authoritative
+  specifications are again under `specs/`, operational plan/progress files are
+  at the repository root, duplicate `docs/` copies are removed, and links resolve.
+- Independently re-audited the implementation and recorded Phases 9–12 for the
+  reproduced ledger-isolation, historical-value, period, Plan, and UI gaps.
+- Tests: **59 passed, 0 failed** (`env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1
+  .venv/bin/python -m pytest -p no:cacheprovider -q`); JavaScript syntax, Python
+  compileall, `pip check`, `git diff --check`, and documentation-path checks passed.
+- Decision: the earlier Phase 7 completion is provisional until the corrective
+  phases and a fresh scratch-database release verification are complete.
 
 ### Phase 14 — Workspace and migration foundation (SPEC-4) (2026-07-17)
 - Added `specs/SPEC-4-family-finance.md`, moved all active documentation links

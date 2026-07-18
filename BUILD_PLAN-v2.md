@@ -130,6 +130,72 @@ exclusion, carry/rebase/prompt, history, and corrections.
 Tests: complete `pytest`, JavaScript syntax, fresh-DB Alembic check, and
 scratch-DB browser E2E at 480×900 and 1280×900.
 
+## V2 Phase 8 — Corrective release audit and documentation authority
+
+- Restore the required repository layout after the incomplete documentation
+  move: specifications live in `specs/`; `BUILD_PLAN-v2.md`, `BUILD_PLAN.md`,
+  and `PROGRESS.md` remain operational files at the repository root.
+- Remove duplicate copies and verify that AGENTS, CLAUDE, README, plan, manual,
+  and historical-document links resolve to the authoritative files.
+- Record the independently reproduced release gaps as explicit corrective
+  phases before changing product code.
+
+Tests: complete `pytest`, JavaScript syntax, Python compileall, dependency and
+diff checks, plus a repository documentation-link audit.
+
+## V2 Phase 9 — Ledger isolation, frozen values, and display precision
+
+- Scope exchange-derived rates to the workspace that owns their source
+  transaction so one user's exchange cannot value another user's accounts.
+- Preserve a transaction's frozen Tracker `base_amount` for non-financial
+  corrections; only an explicit economic change may recompute it.
+- Quantize displayed rates, account balances, Net worth, Available, and
+  Unvalued amounts to the relevant asset precision without losing exact ledger
+  storage.
+
+Tests: cross-workspace rate isolation, note-only correction freeze, economic
+correction replay, and fiat/crypto output-precision boundaries.
+
+## V2 Phase 10 — Period mutation invariants
+
+- Require explicit ended-period confirmation for every correction or void that
+  changes an ended period, including moving a transaction into one.
+- Reject new transactions in explicitly closed periods and keep closed periods
+  outside current-period auto-assignment.
+- Reject period date edits that would leave attached transactions or frozen
+  commitments outside the resulting range.
+
+Tests: ended-period source/destination moves, closed-period creation, void and
+correction confirmation, and date-range edits with attached financial facts.
+
+## V2 Phase 11 — Plan history and historical UI integrity
+
+- Edit recurring Plan schedules without deleting occurrences referenced by a
+  snapshotted BudgetCommitment; preserve financial history while regenerating
+  only safe open occurrences.
+- Keep archived category names visible on historical transactions while hiding
+  them from new transaction and Plan choices.
+- Make migration tests independent of ambient `DATABASE_URL` and add a real
+  migrated-database application-startup regression check.
+
+Tests: committed-occurrence rule edits, archived-category history rendering,
+ambient-database migration isolation, and FastAPI lifespan on a fresh migrated
+scratch database.
+
+## V2 Phase 12 — Corrective final verification
+
+- Re-audit every first-release invariant and API route against the authoritative
+  specification after Phases 9–11.
+- Verify fresh migration and real startup, registration and representative API
+  flows, all five SPA sections, 1:1 Tracker preview/save behavior, and clean
+  browser console state.
+- Confirm phone and desktop layouts have no horizontal overflow and retain
+  44px primary controls.
+
+Tests: complete `pytest`, JavaScript syntax, Python compileall, dependency and
+diff checks, fresh-DB Alembic/startup, live `/health`, and scratch-browser E2E
+at 480×900 and 1280×900.
+
 ## Future work — not active phases
 
 - Blockchain/exchange read-only synchronization and import inbox.
