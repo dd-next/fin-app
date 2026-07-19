@@ -108,7 +108,86 @@
 
       <section id="view-operations" class="app-view hidden" aria-labelledby="operations-title">
         <div class="view-heading"><div><p class="eyebrow">Financial actions</p><h2 id="operations-title">Operations</h2></div></div>
-        <div class="placeholder panel"><span>◎</span><h3>Operations</h3><p>Spend, add funds, transfer, and account-period controls are being prepared on the clean release schema.</p></div>
+        <div class="operations-toolbar panel-subtle">
+          <label>Account<select id="operations-account" aria-label="Operations account"></select></label>
+          <button id="operations-undo" type="button" class="button-secondary hidden" disabled>↶ Undo</button>
+        </div>
+        <section id="operations-period" class="operations-period panel-subtle" aria-labelledby="operations-period-title" aria-busy="false">
+          <div class="group-heading">
+            <div><p class="eyebrow">Account period</p><h3 id="operations-period-title">Current period</h3></div>
+            <div class="period-actions">
+              <button id="operations-add-period" type="button">Add period</button>
+              <button id="operations-edit-period" type="button" class="button-secondary hidden">Edit</button>
+              <button id="operations-close-period" type="button" class="button-secondary hidden">Close</button>
+              <button id="operations-period-history" type="button" class="button-secondary hidden">History</button>
+              <button id="operations-period-retry" type="button" class="button-secondary hidden">Retry</button>
+            </div>
+          </div>
+          <div class="operations-period-cards summary-grid">
+            <article class="metric-card"><span>Available today</span><strong id="operations-period-available">N/A</strong></article>
+            <article class="metric-card"><span>Remaining</span><strong id="operations-period-remaining">N/A</strong></article>
+            <article class="metric-card"><span>Planned</span><strong id="operations-period-planned">N/A</strong></article>
+          </div>
+          <p id="operations-period-status" class="muted" role="status">Select an account to see its period.</p>
+        </section>
+        <div id="operations-selector" class="operations-selector" role="tablist" aria-label="Operation type">
+          <button id="operation-tab-spend" type="button" role="tab" data-operation-action="spend" aria-controls="operation-panel-spend" aria-selected="true" class="active">Spend</button>
+          <button id="operation-tab-add-funds" type="button" role="tab" data-operation-action="add-funds" aria-controls="operation-panel-add-funds" aria-selected="false" tabindex="-1">Add funds</button>
+          <button id="operation-tab-transfer" type="button" role="tab" data-operation-action="transfer" aria-controls="operation-panel-transfer" aria-selected="false" tabindex="-1">Transfer</button>
+          <button id="operation-tab-scan" type="button" role="tab" data-operation-action="scan" aria-controls="operation-panel-scan" aria-selected="false" tabindex="-1">Scan</button>
+        </div>
+        <div class="operations-workspace panel">
+          <section id="operation-panel-spend" role="tabpanel" aria-labelledby="operation-tab-spend">
+            <p class="eyebrow">Spend</p><h3>Record spending</h3>
+            <form id="operations-spend-form" class="operations-form" aria-busy="false">
+              <div class="form-grid two-columns">
+                <label>Amount<input id="operations-spend-amount" inputmode="decimal" required></label>
+                <label>Category<select id="operations-spend-category"><option value="">Uncategorized</option></select></label>
+                <label>Financial date<input id="operations-spend-date" type="date" required></label>
+                <label>Note<input id="operations-spend-note" maxlength="2000" placeholder="Optional"></label>
+              </div>
+              <p id="operations-spend-error" class="form-error" role="alert"></p>
+              <div class="form-actions"><button id="operations-spend-submit" type="submit">Save spending</button></div>
+            </form>
+          </section>
+          <section id="operation-panel-add-funds" role="tabpanel" aria-labelledby="operation-tab-add-funds" class="hidden">
+            <p class="eyebrow">Add funds</p><h3>Record incoming funds</h3>
+            <form id="operations-add-form" class="operations-form" aria-busy="false">
+              <div class="form-grid two-columns">
+                <label>Amount<input id="operations-add-amount" inputmode="decimal" required></label>
+                <label>Category<select id="operations-add-category"><option value="">Uncategorized</option></select></label>
+                <label>Financial date<input id="operations-add-date" type="date" required></label>
+                <label>Note<input id="operations-add-note" maxlength="2000" placeholder="Optional"></label>
+              </div>
+              <p id="operations-add-error" class="form-error" role="alert"></p>
+              <div class="form-actions"><button id="operations-add-submit" type="submit">Add funds</button></div>
+            </form>
+          </section>
+          <section id="operation-panel-transfer" role="tabpanel" aria-labelledby="operation-tab-transfer" class="hidden">
+            <p class="eyebrow">Transfer</p><h3>Move money</h3>
+            <form id="operations-transfer-form" class="operations-form" aria-busy="false">
+              <div class="form-grid two-columns">
+                <label>To account<select id="operations-transfer-to" required></select></label>
+                <label>Financial date<input id="operations-transfer-date" type="date" required></label>
+                <label id="operations-transfer-amount-field">Amount<input id="operations-transfer-amount" inputmode="decimal" required></label>
+                <label id="operations-exchange-from-field" class="hidden">From amount<input id="operations-exchange-from" inputmode="decimal"></label>
+                <label id="operations-exchange-to-field" class="hidden">To amount<input id="operations-exchange-to" inputmode="decimal"></label>
+                <label>Note<input id="operations-transfer-note" maxlength="2000" placeholder="Optional"></label>
+              </div>
+              <p id="operations-transfer-mode" class="muted"></p>
+              <div id="operations-fee" class="panel-subtle hidden">
+                <label class="check-row"><input id="operations-has-fee" type="checkbox"><span>Add fee</span></label>
+                <div id="operations-fee-fields" class="form-grid two-columns hidden">
+                  <label>Fee account<select id="operations-fee-account"></select></label>
+                  <label>Fee amount<input id="operations-fee-amount" inputmode="decimal"></label>
+                </div>
+              </div>
+              <p id="operations-transfer-error" class="form-error" role="alert"></p>
+              <div class="form-actions"><button id="operations-transfer-submit" type="submit">Save transfer</button></div>
+            </form>
+          </section>
+          <section id="operation-panel-scan" role="tabpanel" aria-labelledby="operation-tab-scan" class="hidden"><div class="placeholder compact"><span>⌁</span><h3>Coming soon</h3><p>Scan is reserved for a later release. No OCR is performed.</p></div></section>
+        </div>
       </section>
 
       <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
@@ -164,6 +243,32 @@
       <p id="reconcile-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="reconcile-dialog">Cancel</button><button type="submit">Save correction</button></div>
     </form>
+  </dialog>
+
+  <dialog id="period-dialog" aria-labelledby="period-dialog-title">
+    <form id="period-form" class="dialog-form" aria-busy="false">
+      <div class="dialog-heading"><div><p class="eyebrow">Account period</p><h2 id="period-dialog-title">Add period</h2></div><button type="button" class="icon-button" data-close="period-dialog" aria-label="Close">×</button></div>
+      <input id="period-id" type="hidden">
+      <input id="period-account-id" type="hidden">
+      <p id="period-account-name" class="muted"></p>
+      <div class="form-grid two-columns">
+        <label>Start date<input id="period-start" type="date" required></label>
+        <label>End date<input id="period-end" type="date" required></label>
+        <label class="span-two">Funding amount<input id="period-funding" inputmode="decimal" required></label>
+      </div>
+      <p class="muted">Funding is a snapshot. Existing activity is not replayed into it.</p>
+      <p id="period-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="period-dialog">Cancel</button><button id="period-save" type="submit">Save period</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="period-history-dialog" class="wide-dialog" aria-labelledby="period-history-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Account period</p><h2 id="period-history-title">Period history</h2></div><button type="button" class="icon-button" data-close="period-history-dialog" aria-label="Close">×</button></div>
+      <p id="period-history-account" class="muted"></p>
+      <div id="period-history-list" class="period-history-list"></div>
+      <p id="period-history-empty" class="empty-inline hidden">No periods yet.</p>
+    </div>
   </dialog>
 
   <dialog id="sharing-dialog" class="wide-dialog" aria-labelledby="sharing-title">

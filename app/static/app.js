@@ -13,6 +13,18 @@ const state = {
   planRules: [],
   planOccurrences: [],
   planLinkTransactions: [],
+  operationsAccountId: null,
+  operationsAction: "spend",
+  operationsPeriods: [],
+  operationsPeriodAccountId: null,
+  operationsPeriodLoading: false,
+  operationsPeriodError: null,
+  operationsPeriodRequestId: 0,
+  operationsUndoCandidate: null,
+  operationsUndoLoading: false,
+  operationsUndoRequestId: 0,
+  operationsCommandLoading: false,
+  periodCommandLoading: false,
   activeView: "accounts",
   activeAccount: null,
   sharingAccount: null,
@@ -51,7 +63,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function formatNumber(value) {
+function formatNumber(value, precision = null) {
   if (value === null || value === undefined) return "—";
   let raw = String(value);
   let sign = "";
@@ -63,13 +75,15 @@ function formatNumber(value) {
     raw = raw.slice(1);
   }
   let [integer, fraction = ""] = raw.split(".");
-  fraction = fraction.replace(/0+$/, "");
+  if (precision === null) fraction = fraction.replace(/0+$/, "");
+  else if (fraction.length < precision) fraction = fraction.padEnd(precision, "0");
   integer = integer.replace(/^0+(?=\d)/, "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return `${sign}${integer || "0"}${fraction ? `.${fraction}` : ""}`;
 }
 
 function formatMoney(value, code) {
-  return `${formatNumber(value)} ${code}`;
+  const precision = assetByCode(code)?.decimals ?? null;
+  return `${formatNumber(value, precision)} ${code}`;
 }
 
 function localDate(value) {
@@ -85,6 +99,12 @@ function todayValue() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
   return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
+function dateValueAfter(start, days) {
+  const value = new Date(`${start}T00:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
 }
 
 function setLoading(value) {
@@ -178,6 +198,14 @@ async function showApp(context) {
     state.transactions = [];
     state.planRules = [];
     state.planOccurrences = [];
+    state.operationsAccountId = null;
+    state.operationsAction = "spend";
+    state.operationsPeriods = [];
+    state.operationsPeriodAccountId = null;
+    state.operationsPeriodError = null;
+    state.operationsPeriodRequestId += 1;
+    state.operationsUndoCandidate = null;
+    state.operationsUndoRequestId += 1;
   }
   state.lastUserId = context.user.id;
   state.context = context;
@@ -218,6 +246,7 @@ async function refreshAll() {
     renderFilterOptions();
     renderTransactions();
     renderPlan();
+    renderOperationsNavigation();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -233,6 +262,7 @@ function switchView(view, updateUrl = true) {
   document.querySelectorAll(".primary-nav button").forEach((button) => {
     button.classList.toggle("active", button.dataset.view === state.activeView);
   });
+  if (state.activeView === "operations") renderOperationsNavigation();
   if (updateUrl) {
     const url = new URL(window.location.href);
     if (state.activeView === "accounts") url.searchParams.delete("view");
@@ -240,6 +270,541 @@ function switchView(view, updateUrl = true) {
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
   window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+const OPERATION_ACTIONS = ["spend", "add-funds", "transfer", "scan"];
+
+function operationsStorageKey(kind) {
+  return `finapp:v2:operations:${state.context?.user.id || "guest"}:${kind}`;
+}
+
+function readOperationsPreference(kind) {
+  try {
+    return window.localStorage.getItem(operationsStorageKey(kind));
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeOperationsPreference(kind, value) {
+  try {
+    window.localStorage.setItem(operationsStorageKey(kind), String(value));
+  } catch (_error) {
+    // Private browsing or disabled storage must not block financial actions.
+  }
+}
+
+function setOperationsAction(action, { persist = true, focus = false } = {}) {
+  state.operationsAction = OPERATION_ACTIONS.includes(action) ? action : "spend";
+  document.querySelectorAll("[data-operation-action]").forEach((button) => {
+    const active = button.dataset.operationAction === state.operationsAction;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+    button.tabIndex = active ? 0 : -1;
+    if (active && focus) button.focus();
+  });
+  for (const item of OPERATION_ACTIONS) {
+    $(`operation-panel-${item}`).classList.toggle("hidden", item !== state.operationsAction);
+  }
+  if (persist) writeOperationsPreference("action", state.operationsAction);
+}
+
+function renderOperationsNavigation() {
+  if (!state.context) return;
+  const accountItems = state.accounts.map((account) => ({
+    value: account.id,
+    label: `${account.name} · ${account.asset.code}${account.is_shared ? ` · ${account.access_role}` : ""}`,
+  }));
+  const storedAccountId = Number(readOperationsPreference("account"));
+  const currentIsValid = state.accounts.some((account) => account.id === Number(state.operationsAccountId));
+  const storedIsValid = state.accounts.some((account) => account.id === storedAccountId);
+  state.operationsAccountId = currentIsValid
+    ? Number(state.operationsAccountId)
+    : storedIsValid
+      ? storedAccountId
+      : state.accounts[0]?.id || null;
+  selectOptions($("operations-account"), accountItems, {
+    placeholder: accountItems.length ? null : "No accessible accounts",
+    selected: state.operationsAccountId,
+  });
+  $("operations-account").disabled = !accountItems.length;
+  if (state.operationsAccountId !== null) {
+    $("operations-account").value = String(state.operationsAccountId);
+    writeOperationsPreference("account", state.operationsAccountId);
+  }
+  const storedAction = readOperationsPreference("action");
+  const action = OPERATION_ACTIONS.includes(state.operationsAction)
+    && state.operationsAction !== "spend"
+    ? state.operationsAction
+    : OPERATION_ACTIONS.includes(storedAction)
+      ? storedAction
+      : "spend";
+  setOperationsAction(action, { persist: false });
+  void renderOperationsForms();
+  void loadOperationsPeriods();
+  void loadOperationsUndoCandidate();
+}
+
+function selectedOperationsAccount() {
+  return accountById(state.operationsAccountId);
+}
+
+function renderOperationsUndo() {
+  const candidate = state.operationsUndoCandidate;
+  const button = $("operations-undo");
+  button.classList.toggle("hidden", !candidate);
+  button.disabled = state.operationsUndoLoading || !candidate;
+  button.textContent = candidate
+    ? `↶ Undo ${candidate.type.replaceAll("_", " ")}`
+    : "↶ Undo";
+  button.setAttribute(
+    "aria-label",
+    candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo",
+  );
+}
+
+async function loadOperationsUndoCandidate() {
+  const account = selectedOperationsAccount();
+  const accountId = account?.id || null;
+  const requestId = ++state.operationsUndoRequestId;
+  state.operationsUndoCandidate = null;
+  state.operationsUndoLoading = Boolean(account);
+  renderOperationsUndo();
+  if (!account) return;
+  try {
+    const candidate = await api(`/api/v1/operations/accounts/${accountId}/undo`);
+    if (
+      requestId !== state.operationsUndoRequestId
+      || selectedOperationsAccount()?.id !== accountId
+    ) return;
+    state.operationsUndoCandidate = candidate;
+  } catch (error) {
+    if (
+      requestId === state.operationsUndoRequestId
+      && selectedOperationsAccount()?.id === accountId
+      && ![403, 404].includes(error.status)
+    ) toast(error.message);
+  } finally {
+    if (
+      requestId === state.operationsUndoRequestId
+      && selectedOperationsAccount()?.id === accountId
+    ) {
+      state.operationsUndoLoading = false;
+      renderOperationsUndo();
+    }
+  }
+}
+
+async function undoLatestOperation() {
+  const account = selectedOperationsAccount();
+  const transaction = state.operationsUndoCandidate;
+  if (
+    !account
+    || !transaction
+    || !window.confirm(`Undo your latest ${transaction.type} operation? Balances and periods will be recalculated.`)
+  ) return;
+  state.operationsUndoLoading = true;
+  renderOperationsUndo();
+  try {
+    await api(`/api/v1/operations/accounts/${account.id}/undo`, {
+      method: "POST",
+      body: JSON.stringify({
+        transaction_id: transaction.id,
+        confirm_ended_period: true,
+      }),
+    });
+    state.operationsUndoCandidate = null;
+    renderOperationsUndo();
+    toast("Operation undone");
+    await refreshAll();
+    switchView("operations");
+  } catch (error) {
+    toast(error.message);
+    await loadOperationsUndoCandidate();
+  } finally {
+    state.operationsUndoLoading = false;
+    renderOperationsUndo();
+  }
+}
+
+async function updateOperationsCategories(account) {
+  if (!account) return;
+  const accountId = account.id;
+  const categories = await categoriesFor(account.workspace_id);
+  if (selectedOperationsAccount()?.id !== accountId) return;
+  const choices = (kind) => categories
+    .filter((category) => !category.archived_at && [kind, "both"].includes(category.kind))
+    .map((category) => ({ value: category.id, label: category.name }));
+  selectOptions($("operations-spend-category"), choices("expense"), { placeholder: "Uncategorized" });
+  selectOptions($("operations-add-category"), choices("income"), { placeholder: "Uncategorized" });
+}
+
+function updateOperationsTransferMode() {
+  const source = selectedOperationsAccount();
+  const target = accountById($("operations-transfer-to").value);
+  const exchange = Boolean(source && target && source.asset.id !== target.asset.id);
+  $("operations-transfer-amount").required = !exchange;
+  $("operations-exchange-from").required = exchange;
+  $("operations-exchange-to").required = exchange;
+  $("operations-fee-account").required = exchange && $("operations-has-fee").checked;
+  $("operations-fee-amount").required = exchange && $("operations-has-fee").checked;
+  $("operations-transfer-amount-field").classList.toggle("hidden", exchange);
+  $("operations-exchange-from-field").classList.toggle("hidden", !exchange);
+  $("operations-exchange-to-field").classList.toggle("hidden", !exchange);
+  $("operations-fee").classList.toggle("hidden", !exchange);
+  if (!exchange) {
+    $("operations-has-fee").checked = false;
+    $("operations-fee-fields").classList.add("hidden");
+  }
+  $("operations-transfer-mode").textContent = !source || !target
+    ? "Choose a destination account."
+    : exchange
+      ? `Cross-asset exchange · ${source.asset.code} → ${target.asset.code}`
+      : `Same-asset transfer · ${source.asset.code}`;
+  $("operations-transfer-submit").textContent = exchange ? "Save exchange" : "Save transfer";
+}
+
+function setOperationsCommandLoading(value) {
+  state.operationsCommandLoading = value;
+  for (const id of ["operations-spend-form", "operations-add-form", "operations-transfer-form"]) {
+    $(id).setAttribute("aria-busy", String(value));
+  }
+  for (const id of ["operations-spend-submit", "operations-add-submit", "operations-transfer-submit"]) {
+    if (value) $(id).disabled = true;
+  }
+  if (!value) {
+    const account = selectedOperationsAccount();
+    const hasTarget = state.accounts.some((item) => (
+      account
+      && item.id !== account.id
+      && item.workspace_id === account.workspace_id
+      && canUseAccount(item, "edit")
+    ));
+    $("operations-spend-submit").disabled = !canUseAccount(account, "expense");
+    $("operations-add-submit").disabled = !canUseAccount(account, "income");
+    $("operations-transfer-submit").disabled = !canUseAccount(account, "edit") || !hasTarget;
+  }
+}
+
+async function renderOperationsForms() {
+  const account = selectedOperationsAccount();
+  for (const id of ["operations-spend-date", "operations-add-date", "operations-transfer-date"]) {
+    if (!$(id).value) $(id).value = todayValue();
+  }
+  const spendAllowed = canUseAccount(account, "expense");
+  const incomeAllowed = canUseAccount(account, "income");
+  const transferAllowed = canUseAccount(account, "edit");
+  $("operations-spend-submit").disabled = state.operationsCommandLoading || !spendAllowed;
+  $("operations-add-submit").disabled = state.operationsCommandLoading || !incomeAllowed;
+  $("operations-spend-error").textContent = account && !spendAllowed ? "You cannot record spending on this account." : "";
+  $("operations-add-error").textContent = account && !incomeAllowed ? "You cannot add funds to this account." : "";
+
+  const targets = state.accounts.filter((item) => (
+    account
+    && item.id !== account.id
+    && item.workspace_id === account.workspace_id
+    && canUseAccount(item, "edit")
+  ));
+  selectOptions($("operations-transfer-to"), targets.map((item) => ({
+    value: item.id,
+    label: `${item.name} · ${item.asset.code}`,
+  })), { placeholder: targets.length ? "Choose destination" : "No eligible destination" });
+  const feeAccounts = state.accounts.filter((item) => (
+    account
+    && item.workspace_id === account.workspace_id
+    && canUseAccount(item, "edit")
+  ));
+  selectOptions($("operations-fee-account"), feeAccounts.map((item) => ({
+    value: item.id,
+    label: `${item.name} · ${item.asset.code}`,
+  })), { placeholder: "Choose fee account", selected: account?.id });
+  $("operations-transfer-submit").disabled = state.operationsCommandLoading || !transferAllowed || !targets.length;
+  $("operations-transfer-error").textContent = account && !transferAllowed ? "You cannot transfer from this account." : "";
+  updateOperationsTransferMode();
+  try {
+    await updateOperationsCategories(account);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function currentOperationsPeriod() {
+  return state.operationsPeriods.find((period) => period.status === "current") || null;
+}
+
+function renderOperationsPeriodHistory() {
+  const account = selectedOperationsAccount();
+  $("period-history-account").textContent = account
+    ? `${account.name} · ${account.asset.code}`
+    : "No account selected";
+  const nodes = state.operationsPeriods.map((period) => {
+    const row = document.createElement("article");
+    row.className = "period-history-row";
+    row.innerHTML = `
+      <div><strong>${localDate(period.start_date)} – ${localDate(period.end_date)}</strong><span>${escapeHtml(period.status)} · Funding ${escapeHtml(formatMoney(period.funding_amount, period.asset.code))} · Remaining ${escapeHtml(formatMoney(period.remaining, period.asset.code))}</span></div>
+      <div class="period-actions"></div>`;
+    const actions = row.querySelector(".period-actions");
+    if (period.status !== "closed") {
+      const edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "button-secondary";
+      edit.textContent = "Edit";
+      edit.disabled = state.periodCommandLoading;
+      edit.addEventListener("click", () => openPeriodDialog(period));
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "button-secondary";
+      close.textContent = "Close";
+      close.disabled = state.periodCommandLoading;
+      close.addEventListener("click", () => closeOperationsPeriod(period));
+      actions.append(edit, close);
+    }
+    return row;
+  });
+  $("period-history-list").replaceChildren(...nodes);
+  $("period-history-empty").classList.toggle("hidden", nodes.length > 0);
+}
+
+function renderOperationsPeriod() {
+  const account = selectedOperationsAccount();
+  const owner = canUseAccount(account, "owner");
+  const current = owner ? currentOperationsPeriod() : null;
+  const ready = owner
+    && !state.operationsPeriodLoading
+    && !state.operationsPeriodError
+    && !state.periodCommandLoading;
+  const unavailable = !current;
+  $("operations-period").setAttribute(
+    "aria-busy",
+    String(state.operationsPeriodLoading || state.periodCommandLoading),
+  );
+  $("operations-period-available").textContent = unavailable
+    ? "N/A"
+    : formatMoney(current.available_today, current.asset.code);
+  $("operations-period-remaining").textContent = unavailable
+    ? "N/A"
+    : formatMoney(current.remaining, current.asset.code);
+  $("operations-period-planned").textContent = unavailable
+    ? "N/A"
+    : formatMoney(current.planned, current.asset.code);
+  $("operations-add-period").classList.toggle("hidden", !ready || Boolean(current));
+  $("operations-edit-period").classList.toggle("hidden", !ready || !current);
+  $("operations-close-period").classList.toggle("hidden", !ready || !current);
+  $("operations-period-history").classList.toggle("hidden", !ready);
+  $("operations-period-retry").classList.toggle("hidden", !owner || !state.operationsPeriodError);
+  if (!account) {
+    $("operations-period-status").textContent = "Select an account to see its period.";
+  } else if (!owner) {
+    $("operations-period-status").textContent = "Period information is available only to the account owner.";
+  } else if (state.operationsPeriodLoading) {
+    $("operations-period-status").textContent = "Loading period…";
+  } else if (state.operationsPeriodError) {
+    $("operations-period-status").textContent = "Period data could not be loaded. Try again.";
+  } else if (current) {
+    $("operations-period-status").textContent = `${localDate(current.start_date)} – ${localDate(current.end_date)} · Funding ${formatMoney(current.funding_amount, current.asset.code)}`;
+  } else {
+    const upcoming = state.operationsPeriods.filter((period) => period.status === "upcoming").length;
+    $("operations-period-status").textContent = upcoming
+      ? `No current period · ${upcoming} upcoming`
+      : "No current period. Add one when you are ready.";
+  }
+  renderOperationsPeriodHistory();
+}
+
+async function loadOperationsPeriods() {
+  const account = selectedOperationsAccount();
+  const requestedAccountId = account?.id || null;
+  const requestId = ++state.operationsPeriodRequestId;
+  state.operationsPeriodAccountId = requestedAccountId;
+  state.operationsPeriods = [];
+  state.operationsPeriodError = null;
+  state.operationsPeriodLoading = Boolean(account && canUseAccount(account, "owner"));
+  renderOperationsPeriod();
+  if (!state.operationsPeriodLoading) return;
+  try {
+    const periods = await api(`/api/v1/accounts/${requestedAccountId}/periods?scope=all`);
+    if (
+      requestId !== state.operationsPeriodRequestId
+      || selectedOperationsAccount()?.id !== requestedAccountId
+    ) return;
+    state.operationsPeriods = periods;
+  } catch (error) {
+    if (
+      requestId === state.operationsPeriodRequestId
+      && selectedOperationsAccount()?.id === requestedAccountId
+    ) state.operationsPeriodError = error.message;
+  } finally {
+    if (
+      requestId === state.operationsPeriodRequestId
+      && selectedOperationsAccount()?.id === requestedAccountId
+    ) {
+      state.operationsPeriodLoading = false;
+      renderOperationsPeriod();
+    }
+  }
+}
+
+function openPeriodDialog(period = null) {
+  const account = selectedOperationsAccount();
+  if (!account || !canUseAccount(account, "owner") || state.periodCommandLoading) return;
+  if ($("period-history-dialog").open) $("period-history-dialog").close();
+  $("period-id").value = period?.id || "";
+  $("period-account-id").value = account.id;
+  $("period-dialog-title").textContent = period ? "Edit period" : "Add period";
+  $("period-account-name").textContent = `${account.name} · ${account.asset.code}`;
+  $("period-start").value = period?.start_date || todayValue();
+  $("period-end").value = period?.end_date || dateValueAfter(todayValue(), 29);
+  $("period-funding").value = period?.funding_amount ?? account.balance;
+  $("period-error").textContent = "";
+  $("period-dialog").showModal();
+}
+
+async function saveOperationsPeriod(event) {
+  event.preventDefault();
+  if (state.periodCommandLoading) return;
+  $("period-error").textContent = "";
+  try {
+    const periodId = $("period-id").value;
+    const accountId = Number(requiredValue("period-account-id", "Account"));
+    if (selectedOperationsAccount()?.id !== accountId) throw new Error("Selected account changed");
+    const body = {
+      start_date: requiredValue("period-start", "Start date"),
+      end_date: requiredValue("period-end", "End date"),
+      funding_amount: requiredValue("period-funding", "Funding amount"),
+    };
+    setPeriodCommandLoading(true);
+    if (periodId) {
+      await apiWithEndedPeriodConfirmation(
+        `/api/v1/account-periods/${periodId}`,
+        "PATCH",
+        body,
+        "This period needs explicit confirmation. Continue?",
+      );
+    } else {
+      await apiCommand(`/api/v1/accounts/${accountId}/periods`, "POST", body);
+    }
+    $("period-dialog").close();
+    toast(periodId ? "Period updated" : "Period added");
+    await loadOperationsPeriods();
+  } catch (error) {
+    $("period-error").textContent = error.message;
+  } finally {
+    setPeriodCommandLoading(false);
+  }
+}
+
+async function closeOperationsPeriod(period) {
+  if (
+    !period
+    || state.periodCommandLoading
+    || !window.confirm("Close this period? Closed periods are read-only.")
+  ) return;
+  setPeriodCommandLoading(true);
+  try {
+    await api(`/api/v1/account-periods/${period.id}/close`, { method: "POST" });
+    toast("Period closed");
+    await loadOperationsPeriods();
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    setPeriodCommandLoading(false);
+  }
+}
+
+function setPeriodCommandLoading(value) {
+  state.periodCommandLoading = value;
+  $("period-form").setAttribute("aria-busy", String(value));
+  $("period-save").disabled = value;
+  renderOperationsPeriod();
+}
+
+function openPeriodHistory() {
+  if (
+    !canUseAccount(selectedOperationsAccount(), "owner")
+    || state.periodCommandLoading
+  ) return;
+  renderOperationsPeriodHistory();
+  $("period-history-dialog").showModal();
+}
+
+async function saveOperationsSingle(event, kind) {
+  event.preventDefault();
+  if (state.operationsCommandLoading) return;
+  const prefix = kind === "spend" ? "operations-spend" : "operations-add";
+  const account = selectedOperationsAccount();
+  $(`${prefix}-error`).textContent = "";
+  if (!account) return $(`${prefix}-error`).textContent = "Choose an account.";
+  try {
+    const body = {
+      account_id: account.id,
+      amount: requiredValue(`${prefix}-amount`, "Amount"),
+      category_id: $(`${prefix}-category`).value ? Number($(`${prefix}-category`).value) : null,
+      local_date: $(`${prefix}-date`).value || null,
+      note: $(`${prefix}-note`).value.trim() || null,
+    };
+    const route = kind === "spend"
+      ? "/api/v1/operations/spend"
+      : "/api/v1/operations/add-funds";
+    setOperationsCommandLoading(true);
+    await apiWithEndedPeriodConfirmation(
+      route,
+      "POST",
+      body,
+    );
+    $(`${prefix}-amount`).value = "";
+    $(`${prefix}-note`).value = "";
+    toast(kind === "spend" ? "Spending saved" : "Funds added");
+    await refreshAll();
+    switchView("operations");
+  } catch (error) {
+    $(`${prefix}-error`).textContent = error.message;
+  } finally {
+    setOperationsCommandLoading(false);
+  }
+}
+
+async function saveOperationsTransfer(event) {
+  event.preventDefault();
+  if (state.operationsCommandLoading) return;
+  $("operations-transfer-error").textContent = "";
+  const source = selectedOperationsAccount();
+  const target = accountById($("operations-transfer-to").value);
+  if (!source || !target) return $("operations-transfer-error").textContent = "Choose both accounts.";
+  try {
+    const exchange = source.asset.id !== target.asset.id;
+    const body = {
+      from_account_id: source.id,
+      to_account_id: target.id,
+      local_date: $("operations-transfer-date").value || null,
+      note: $("operations-transfer-note").value.trim() || null,
+    };
+    let route = "/api/v1/operations/transfer";
+    if (exchange) {
+      route = "/api/v1/operations/exchange";
+      body.from_amount = requiredValue("operations-exchange-from", "From amount");
+      body.to_amount = requiredValue("operations-exchange-to", "To amount");
+      if ($("operations-has-fee").checked) {
+        body.fee = {
+          account_id: Number(requiredValue("operations-fee-account", "Fee account")),
+          amount: requiredValue("operations-fee-amount", "Fee amount"),
+        };
+      }
+    } else {
+      body.amount = requiredValue("operations-transfer-amount", "Amount");
+    }
+    setOperationsCommandLoading(true);
+    await apiWithEndedPeriodConfirmation(route, "POST", body);
+    for (const id of ["operations-transfer-amount", "operations-exchange-from", "operations-exchange-to", "operations-fee-amount", "operations-transfer-note"]) $(id).value = "";
+    $("operations-has-fee").checked = false;
+    $("operations-fee-fields").classList.add("hidden");
+    toast(exchange ? "Exchange saved" : "Transfer saved");
+    await refreshAll();
+    switchView("operations");
+  } catch (error) {
+    $("operations-transfer-error").textContent = error.message;
+  } finally {
+    setOperationsCommandLoading(false);
+  }
 }
 
 function accountGroup(account) {
@@ -290,7 +855,7 @@ function renderAccounts() {
       button.dataset.accountId = account.id;
       const valued = account.valued_balance === null
         ? "Not valued"
-        : `${formatNumber(account.valued_balance)} ${base}`;
+        : formatMoney(account.valued_balance, base);
       button.innerHTML = `
         <span class="account-top"><span class="account-icon">${accountIcon(account)}</span>${account.is_shared ? `<span class="badge shared">${escapeHtml(account.access_role)}</span>` : ""}</span>
         <span class="account-name">${escapeHtml(account.name)}</span>
@@ -706,14 +1271,19 @@ async function apiCommand(path, method, body) {
   return api(path, { method, body: JSON.stringify(body) });
 }
 
-async function apiWithEndedPeriodConfirmation(path, method, body) {
+async function apiWithEndedPeriodConfirmation(
+  path,
+  method,
+  body,
+  confirmation = "This transaction needs explicit confirmation. Continue?",
+) {
   try {
     return await apiCommand(path, method, body);
   } catch (error) {
     if (
       error.status !== 409
       || !String(error.message).includes("explicit confirmation")
-      || !window.confirm("This changes an ended account period. Continue and recompute its history?")
+      || !window.confirm(confirmation)
     ) throw error;
     body.confirm_ended_period = true;
     return apiCommand(path, method, body);
@@ -1190,6 +1760,43 @@ document.querySelectorAll("dialog").forEach((dialog) => {
   });
 });
 document.querySelectorAll(".primary-nav button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+document.querySelectorAll("[data-operation-action]").forEach((button) => {
+  button.addEventListener("click", () => setOperationsAction(button.dataset.operationAction));
+  button.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const current = OPERATION_ACTIONS.indexOf(state.operationsAction);
+    const next = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? OPERATION_ACTIONS.length - 1
+        : (current + (event.key === "ArrowRight" ? 1 : -1) + OPERATION_ACTIONS.length) % OPERATION_ACTIONS.length;
+    setOperationsAction(OPERATION_ACTIONS[next], { focus: true });
+  });
+});
+$("operations-account").addEventListener("change", () => {
+  const account = accountById($("operations-account").value);
+  state.operationsAccountId = account?.id || null;
+  if (state.operationsAccountId !== null) writeOperationsPreference("account", state.operationsAccountId);
+  void renderOperationsForms();
+  void loadOperationsPeriods();
+  void loadOperationsUndoCandidate();
+});
+$("operations-spend-form").addEventListener("submit", (event) => saveOperationsSingle(event, "spend"));
+$("operations-add-form").addEventListener("submit", (event) => saveOperationsSingle(event, "add-funds"));
+$("operations-transfer-form").addEventListener("submit", saveOperationsTransfer);
+$("operations-transfer-to").addEventListener("change", updateOperationsTransferMode);
+$("operations-has-fee").addEventListener("change", () => {
+  $("operations-fee-fields").classList.toggle("hidden", !$("operations-has-fee").checked);
+  updateOperationsTransferMode();
+});
+$("operations-add-period").addEventListener("click", () => openPeriodDialog());
+$("operations-edit-period").addEventListener("click", () => openPeriodDialog(currentOperationsPeriod()));
+$("operations-close-period").addEventListener("click", () => closeOperationsPeriod(currentOperationsPeriod()));
+$("operations-period-history").addEventListener("click", openPeriodHistory);
+$("operations-period-retry").addEventListener("click", loadOperationsPeriods);
+$("period-form").addEventListener("submit", saveOperationsPeriod);
+$("operations-undo").addEventListener("click", undoLatestOperation);
 
 $("toggle-auth").addEventListener("click", () => {
   state.registerMode = !state.registerMode;

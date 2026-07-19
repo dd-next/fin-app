@@ -34,6 +34,7 @@ from app.models import (
     Workspace,
     utcnow,
 )
+from app.operations_undo import reindex_operations_root
 from app.periods import (
     enforce_transaction_period_impact,
     transaction_period_impact,
@@ -88,6 +89,7 @@ def _transaction(
     note: str | None = None,
     status: str = "posted",
     parent_transaction_id: int | None = None,
+    origin: str = "manual",
 ) -> Transaction:
     return Transaction(
         workspace_id=workspace.id,
@@ -99,7 +101,7 @@ def _transaction(
         note=note,
         occurred_at=occurred_at,
         local_date=local_date,
-        origin="manual",
+        origin=origin,
         status=status,
     )
 
@@ -128,6 +130,9 @@ async def _create_single(
     user: User,
     transaction_type: str,
     body: SingleTransactionIn,
+    *,
+    origin: str = "manual",
+    commit: bool = True,
 ) -> Transaction:
     account, asset = await _principal(
         session,
@@ -159,6 +164,7 @@ async def _create_single(
         counterparty=body.counterparty,
         note=body.note,
         status="posted" if account else "unassigned",
+        origin=origin,
     )
     signed = decimal_negate(amount) if transaction_type == "expense" else amount
     transaction.legs.append(
@@ -178,8 +184,9 @@ async def _create_single(
         confirmed=body.confirm_ended_period,
         legs=list(transaction.legs),
     )
-    await session.commit()
-    await session.refresh(transaction)
+    if commit:
+        await session.commit()
+        await session.refresh(transaction)
     return transaction
 
 
@@ -223,12 +230,14 @@ async def create_income(
     )
 
 
-@router.post("/transactions/transfer", response_model=TransactionOut, status_code=201)
-async def create_transfer(
+async def _create_transfer(
+    session: AsyncSession,
+    user: User,
     body: TransferIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
+    *,
+    origin: str = "manual",
+    commit: bool = True,
+) -> Transaction:
     if body.category_id is not None:
         raise HTTPException(status_code=422, detail="Transfers cannot have a category")
     source, _ = await require_account_action(
@@ -252,6 +261,7 @@ async def create_transfer(
     transaction = _transaction(
         workspace, user, "transfer", occurred_at, local_date,
         counterparty=body.counterparty, note=body.note,
+        origin=origin,
     )
     transaction.legs.extend(
         [
@@ -273,9 +283,21 @@ async def create_transfer(
         confirmed=body.confirm_ended_period,
         legs=list(transaction.legs),
     )
-    await session.commit()
-    await session.refresh(transaction)
-    return await transaction_out(session, transaction)
+    if commit:
+        await session.commit()
+        await session.refresh(transaction)
+    return transaction
+
+
+@router.post("/transactions/transfer", response_model=TransactionOut, status_code=201)
+async def create_transfer(
+    body: TransferIn,
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await transaction_out(
+        session, await _create_transfer(session, user, body)
+    )
 
 
 async def _replace_rates(
@@ -317,12 +339,14 @@ async def _replace_rates(
     )
 
 
-@router.post("/transactions/exchange", response_model=TransactionOut, status_code=201)
-async def create_exchange(
+async def _create_exchange(
+    session: AsyncSession,
+    user: User,
     body: ExchangeIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
+    *,
+    origin: str = "manual",
+    commit: bool = True,
+) -> Transaction:
     if body.category_id is not None:
         raise HTTPException(status_code=422, detail="Exchanges cannot have a category")
     source, _ = await require_account_action(
@@ -345,6 +369,7 @@ async def create_exchange(
     transaction = _transaction(
         workspace, user, "exchange", occurred_at, local_date,
         counterparty=body.counterparty, note=body.note,
+        origin=origin,
     )
     transaction.legs.extend(
         [
@@ -378,6 +403,7 @@ async def create_exchange(
             category_id=fee_category.id if fee_category else None,
             note=body.fee.note or "Exchange fee",
             parent_transaction_id=transaction.id,
+            origin=origin,
         )
         fee.legs.append(
             TransactionLeg(
@@ -397,9 +423,21 @@ async def create_exchange(
         legs=list(transaction.legs),
         include_children=True,
     )
-    await session.commit()
-    await session.refresh(transaction)
-    return await transaction_out(session, transaction)
+    if commit:
+        await session.commit()
+        await session.refresh(transaction)
+    return transaction
+
+
+@router.post("/transactions/exchange", response_model=TransactionOut, status_code=201)
+async def create_exchange(
+    body: ExchangeIn,
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    return await transaction_out(
+        session, await _create_exchange(session, user, body)
+    )
 
 
 @router.post("/transactions/adjustment", response_model=TransactionOut, status_code=201)
@@ -629,6 +667,9 @@ async def patch_transaction(
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
     legs = await _transaction_legs(session, transaction.id)
+    previous_root_account_ids = {
+        leg.account_id for leg in legs if leg.account_id is not None
+    }
     original_period_impact = await transaction_period_impact(
         session, transaction, legs=legs
     )
@@ -799,6 +840,18 @@ async def patch_transaction(
         )
     if exchange_rate_inputs is not None and has_financial_change:
         await _replace_rates(session, transaction, *exchange_rate_inputs)
+    if (
+        has_financial_change
+        and transaction.origin == "operations"
+        and transaction.parent_transaction_id is None
+    ):
+        await session.flush()
+        await reindex_operations_root(
+            session,
+            user_id=transaction.created_by_user_id,
+            transaction_id=transaction.id,
+            previous_account_ids=previous_root_account_ids,
+        )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -823,6 +876,9 @@ async def assign_account(
     if transaction.created_by_user_id != user.id and workspace.owner_user_id != user.id:
         raise HTTPException(status_code=403, detail="Transaction permission denied")
     legs = await _transaction_legs(session, transaction.id)
+    previous_root_account_ids = {
+        leg.account_id for leg in legs if leg.account_id is not None
+    }
     if len(legs) != 1 or legs[0].account_id is not None:
         raise HTTPException(status_code=409, detail="Transaction cannot be assigned")
     action = "expense" if transaction.type == "expense" else "income"
@@ -844,6 +900,16 @@ async def assign_account(
         confirmed=body.confirm_ended_period,
         legs=legs,
     )
+    if (
+        transaction.origin == "operations"
+        and transaction.parent_transaction_id is None
+    ):
+        await reindex_operations_root(
+            session,
+            user_id=transaction.created_by_user_id,
+            transaction_id=transaction.id,
+            previous_account_ids=previous_root_account_ids,
+        )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -851,18 +917,19 @@ async def assign_account(
     )
 
 
-@router.post("/transactions/{transaction_id}/void", response_model=TransactionOut)
-async def void_transaction(
-    transaction_id: int,
-    body: VoidTransactionIn | None = None,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    transaction, visible_ids = await _require_transaction_edit(
-        session, transaction_id, user
-    )
+async def _void_posted_transaction(
+    session: AsyncSession,
+    transaction: Transaction,
+    user: User,
+    *,
+    confirmed: bool,
+) -> None:
+    """Soft-void one root and its children without committing the transaction."""
     if transaction.status == "voided":
         raise HTTPException(status_code=409, detail="Transaction is already voided")
+    if transaction.parent_transaction_id is not None:
+        raise HTTPException(status_code=409, detail="Child transaction cannot be voided alone")
+    original_status = transaction.status
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
     await _enforce_period_guard(
@@ -870,18 +937,23 @@ async def void_transaction(
         transaction,
         user,
         workspace,
-        confirmed=bool(body and body.confirm_ended_period),
+        confirmed=confirmed,
         include_children=True,
     )
-    if (
-        user.id != workspace.owner_user_id
-        and not (body and body.confirm_ended_period)
-    ):
+    if user.id != workspace.owner_user_id and not confirmed:
         raise HTTPException(
             status_code=409,
             detail="Shared transaction correction requires explicit confirmation",
         )
     now = utcnow()
+    result = await session.execute(
+        update(Transaction)
+        .where(Transaction.id == transaction.id, Transaction.status == original_status)
+        .values(status="voided", voided_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Transaction is already voided")
     transaction.status = "voided"
     transaction.voided_at = now
     await session.execute(
@@ -906,6 +978,24 @@ async def void_transaction(
         )
         linked_occurrence.transaction_id = None
         linked_occurrence.matched_at = None
+
+
+@router.post("/transactions/{transaction_id}/void", response_model=TransactionOut)
+async def void_transaction(
+    transaction_id: int,
+    body: VoidTransactionIn | None = None,
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    transaction, visible_ids = await _require_transaction_edit(
+        session, transaction_id, user
+    )
+    await _void_posted_transaction(
+        session,
+        transaction,
+        user,
+        confirmed=bool(body and body.confirm_ended_period),
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(

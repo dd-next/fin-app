@@ -11,13 +11,18 @@ class DomSmokeParser(HTMLParser):
         super().__init__()
         self.ids: set[str] = set()
         self.views: set[str] = set()
+        self.operation_actions: list[str] = []
+        self.id_counts: dict[str, int] = {}
 
     def handle_starttag(self, _tag, attrs):
         values = dict(attrs)
         if values.get("id"):
             self.ids.add(values["id"])
+            self.id_counts[values["id"]] = self.id_counts.get(values["id"], 0) + 1
         if values.get("data-view"):
             self.views.add(values["data-view"])
+        if values.get("data-operation-action"):
+            self.operation_actions.append(values["data-operation-action"])
 
 
 def test_spa_has_five_sections_and_financial_dialogs():
@@ -39,6 +44,28 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "plan-link-dialog",
         "plan-occurrence-groups",
         "operations-title",
+        "operations-account",
+        "operations-selector",
+        "operations-undo",
+        "operations-spend-form",
+        "operations-add-form",
+        "operations-transfer-form",
+        "operations-transfer-to",
+        "operations-has-fee",
+        "operations-period",
+        "operations-add-period",
+        "operations-edit-period",
+        "operations-close-period",
+        "operations-period-history",
+        "operations-period-retry",
+        "operations-period-available",
+        "operations-period-remaining",
+        "operations-period-planned",
+        "period-dialog",
+        "period-form",
+        "period-save",
+        "period-history-dialog",
+        "period-history-list",
         "filter-account",
         "filter-type",
         "filter-category",
@@ -51,6 +78,8 @@ def test_spa_has_five_sections_and_financial_dialogs():
     assert "Tracker" not in html
     assert "Commitments" not in html
     assert not re.search(r"[А-Яа-яЁё]", html)
+    assert parser.operation_actions == ["spend", "add-funds", "transfer", "scan"]
+    assert all(count == 1 for count in parser.id_counts.values())
 
 
 def test_spa_wires_account_transaction_and_invitation_api_flows():
@@ -67,6 +96,15 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
         "/link-transaction",
         "/assign-account",
         "/void",
+        "/api/v1/operations/spend",
+        "/api/v1/operations/add-funds",
+        "/api/v1/operations/transfer",
+        "/api/v1/operations/exchange",
+        "/api/v1/operations/accounts/${accountId}/undo",
+        "/api/v1/operations/accounts/${account.id}/undo",
+        "/periods?scope=all",
+        "/api/v1/account-periods/${periodId}",
+        "/api/v1/account-periods/${period.id}/close",
     ):
         assert route in javascript
     assert "/budget-periods" not in javascript
@@ -76,6 +114,25 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert "has_hidden_legs" in javascript
     assert "access_role" in javascript
     assert "state.categories.clear()" in javascript
+    assert "window.localStorage.getItem(operationsStorageKey(kind))" in javascript
+    assert "window.localStorage.setItem(operationsStorageKey(kind)" in javascript
+    assert 'const OPERATION_ACTIONS = ["spend", "add-funds", "transfer", "scan"]' in javascript
+    assert "renderOperationsNavigation()" in javascript
+    assert "saveOperationsSingle" in javascript
+    assert "saveOperationsTransfer" in javascript
+    assert "Cross-asset exchange" in javascript
+    assert "This transaction needs explicit confirmation. Continue?" in javascript
+    assert "This period needs explicit confirmation. Continue?" in javascript
+    assert "This changes an ended account period" not in javascript
+    assert 'canUseAccount(account, "owner")' in javascript
+    assert "period?.funding_amount ?? account.balance" in javascript
+    assert 'period.status === "current"' in javascript
+    assert "operationsPeriodRequestId" in javascript
+    assert "Period data could not be loaded. Try again." in javascript
+    assert "operationsUndoCandidate" in javascript
+    assert "loadOperationsUndoCandidate" in javascript
+    assert "Operation undone" in javascript
+    assert "transaction_id: transaction.id" in javascript
     assert not re.search(r"[А-Яа-яЁё]", javascript)
 
 
@@ -92,3 +149,52 @@ def test_responsive_styles_keep_mobile_controls_tappable():
     assert "min-height: 44px" in css
     assert "@media (max-width: 640px)" in css
     assert ".primary-nav { position: fixed" in css
+    assert ".operations-selector" in css
+    assert "tracker" not in css.lower()
+
+
+def test_money_formatting_uses_explicit_asset_precision():
+    javascript = (STATIC / "app.js").read_text()
+    assert "assetByCode(code)?.decimals" in javascript
+    assert 'fraction.padEnd(precision, "0")' in javascript
+    assert "formatMoney(account.valued_balance, base)" in javascript
+
+
+def test_operations_accessibility_and_loading_contract():
+    html = (STATIC / "index.html").read_text()
+    javascript = (STATIC / "app.js").read_text()
+    assert html.count('role="tab"') == 4
+    assert html.count('role="tabpanel"') == 4
+    for action in ("spend", "add-funds", "transfer", "scan"):
+        assert f'aria-controls="operation-panel-{action}"' in html
+        assert f'aria-labelledby="operation-tab-{action}"' in html
+    assert 'aria-busy="false"' in html
+    assert 'id="operations-period-status" class="muted" role="status"' in html
+    for error_id in (
+        "operations-spend-error",
+        "operations-add-error",
+        "operations-transfer-error",
+        "period-error",
+    ):
+        assert f'id="{error_id}" class="form-error" role="alert"' in html
+    assert "operationsPeriodLoading" in javascript
+    assert "operationsPeriodError" in javascript
+    assert "operations-period-retry" in javascript
+    assert "operationsUndoLoading" in javascript
+    assert "operationsCommandLoading" in javascript
+    assert "periodCommandLoading" in javascript
+    assert "setOperationsCommandLoading(true)" in javascript
+    assert "setPeriodCommandLoading(true)" in javascript
+    assert javascript.count("if (state.operationsCommandLoading) return;") == 2
+    assert javascript.count("setOperationsCommandLoading(false);") == 2
+    assert javascript.count("state.periodCommandLoading") >= 6
+    assert javascript.count("setPeriodCommandLoading(false);") == 2
+    for form_id in (
+        "operations-spend-form",
+        "operations-add-form",
+        "operations-transfer-form",
+        "period-form",
+    ):
+        assert f'id="{form_id}"' in html
+        assert re.search(rf'id="{form_id}"[^>]*aria-busy="false"', html)
+    assert 'button.setAttribute(\n    "aria-label"' in javascript

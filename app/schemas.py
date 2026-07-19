@@ -277,6 +277,11 @@ class SingleTransactionIn(TransactionCommon):
         return value.strip().upper() if value is not None else None
 
 
+class OperationsSingleIn(TransactionCommon):
+    account_id: int
+    amount: PositiveAmount
+
+
 class TransferIn(TransactionCommon):
     from_account_id: int
     to_account_id: int
@@ -456,3 +461,7 @@ class TransactionLinkPlanIn(BaseModel):
 
 class VoidTransactionIn(BaseModel):
     confirm_ended_period: bool = False
+
+
+class OperationsUndoIn(VoidTransactionIn):
+    transaction_id: int

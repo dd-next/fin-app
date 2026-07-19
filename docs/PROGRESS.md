@@ -11,8 +11,8 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 
 - [x] Phase 8 — Documentation and specification reset
 - [x] Phase 9 — Clean release schema
-- [ ] Phase 10 — Financial correctness
-- [ ] Phase 11 — Operations and account periods UI
+- [x] Phase 10 — Financial correctness
+- [x] Phase 11 — Operations and account periods UI
 - [ ] Phase 12 — Transactions and Plan
 - [ ] Phase 13 — Docker and release verification
 
@@ -152,6 +152,99 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - Decisions / assumptions: calculation helpers use an explicit high-precision
   Decimal context or context-free sign operations; API quantization remains a
   separate final presentation step.
+- Blocker: none.
+
+### Phase 11 — Operations and account periods UI (2026-07-19)
+
+- Status: [x]
+- Completed: added the persistent per-user Operations account/action selector
+  with the exact Spend, Add funds, Transfer, Scan order, keyboard tab behavior,
+  safe account fallback, and a no-OCR Scan placeholder. Added action-first
+  Spend/Add funds/Transfer/Exchange forms backed by `/api/v1/operations`, with
+  category/date/note/fee handling, same-workspace role filtering, generic
+  ended-period confirmation, and explicit `operations` origin while legacy
+  transaction routes retain `manual` origin. Added owner-private selected
+  account period cards and create/edit/close/history UI with ledger-balance
+  funding prefill, N/A/Add period behavior, persistent load errors/Retry,
+  stale-response rejection, and asset-precision money display. Added
+  server-persistent creator/account-scoped Undo with atomic operation cursor
+  creation, optimistic candidate claiming, root/fee soft void, multi-leg
+  consumption, no older fallback, later-candidate preservation, and a
+  reload-safe compact UI control.
+  Transaction correction, unassignment, and assignment now reindex the
+  creator's Undo cursor atomically: current root accounts advance while every
+  removed account is consumed without overwriting a later candidate.
+  Completed responsive/accessibility hardening with 44px targets, two-column
+  phone selector, roving keyboard focus, labelled alerts/status/busy regions,
+  persistent load errors, and guarded non-idempotent financial/period commands
+  that cannot be double-submitted.
+- Reviewer blocks: navigation/selection → `phase11_navigation_review` →
+  APPROVED with no P0–P3; financial forms →
+  `phase11_financial_forms_review` → P0 owner-private period disclosure and P2
+  client validation/permission-origin coverage gaps fixed →
+  `phase11_financial_forms_rereview` APPROVED; period lifecycle/cards →
+  `phase11_period_ui_review` → P2 same-account response race/loading-error
+  ambiguity and P3 confirmation copy fixed → `phase11_period_ui_rereview` → P1
+  missing asset-precision padding fixed → final closure pass APPROVED with no
+  P0–P3; Persistent Undo → initial reused review found P1 stale cross-tab
+  candidate and fixed it with required expected transaction ID/conditional
+  cursor claim; pre-commit review then found P1 correction/assignment cursor
+  drift and the missing fresh-review pass → cursor reindex fixed → fresh
+  `/root/phase11_financial_forms_review/phase11_undo_fresh_review` APPROVED
+  with no P0–P3. Responsive/accessibility/browser → initial reused review
+  found P1 missing in-flight guards/accessibly busy states and fixed them →
+  fresh `/root/phase11_navigation_review/phase11_accessibility_fresh_review`
+  APPROVED with no P0–P3. Final pre-commit review → fresh
+  `/root/phase11_navigation_review/phase11_commit_gate_fresh_review` →
+  APPROVED with no P0–P3; the complete Phase 11 diff was commit-ready.
+- Tests: navigation targeted suite — **4 passed**; financial forms targeted
+  suite — **27 passed in 3.03s**; post-review privacy, role, period, manual
+  origin, and frontend suite — **24 passed in 3.33s**; independent re-review —
+  **29 passed**; period UI targeted suite — **22 passed in 2.86s**; independent
+  period closure suite — **17 passed in 1.94s**; `node --check
+  app/static/app.js` and `git diff --check` — passed after all three completed
+  blocks. Undo targeted suite — **37 passed in 4.50s**; independent Undo
+  closure suite — **41 passed**; compileall, OpenAPI GET/POST Undo generation,
+  `node --check app/static/app.js`, and `git diff --check` — passed. Final
+  frontend/Operations/Undo/period targeted suite — **30 passed in 4.53s**;
+  independent accessibility closure suite — **33 passed in 4.68s**; JavaScript
+  syntax, diff, and forbidden-copy scan passed. Phase gate `env -u DATABASE_URL
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider -q`
+  — **102 passed in 11.01s**; `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m
+  compileall -q app tests`, `.venv/bin/pip check`, `node --check
+  app/static/app.js`, and `git diff --check` — passed/no broken requirements;
+  `env -u DATABASE_URL .venv/bin/alembic check` — no new upgrade operations.
+  Post-fix Undo correction/assignment targeted suite — **34 passed in
+  6.24s**; fresh accessibility reviewer — **35 independent tests** plus
+  OpenAPI, JavaScript, diff, and forbidden-copy/history audits passed. The
+  fresh final reviewer independently ran the full suite — **102 passed in
+  11.36s** — plus JavaScript, compileall, pip, diff, existing/fresh-schema
+  Alembic, database integrity/eight-asset seed, and 47-path OpenAPI boundary
+  checks; all passed.
+- Checks: no Operations history or Tracker/commitment residue; invalid or
+  unavailable local storage does not break navigation; shared-user mutation
+  responses preserve generic period wording and hidden accounts return 404.
+  Shared accounts make no period API call; request generations prevent stale
+  A→B→A and same-account responses from replacing newer period state.
+  Undo guards rejected ended/closed changes without consuming state; repeated
+  candidate reads, stale-tab rejection, multi-account consume, root/fee void,
+  creator separation, role downgrade, and later-cursor preservation are
+  covered.
+  Correction destination replacement, removed-account consumption,
+  unassignment, reassignment, and post-correction Undo/no-fallback are covered.
+  Scratch browser verification used migrated DB
+  `/private/tmp/finapp-phase11.igfb2w/verify.db` and `/health` returned 200.
+  At 1440×900 the body/view had no overflow; at 480×900 body width remained
+  480px, the selector rendered as two 219.5px columns, and selector/submit
+  controls were 44px. Real UI checks covered funding prefill/replacement,
+  N/A/current cards, validation alert, keyboard ArrowRight/End focus,
+  Spend/Add funds/Transfer, candidate reload/Undo, both transfer accounts,
+  period history, Scan/Coming soon, desktop/phone screenshots, and an empty
+  browser error log. The temporary viewport was reset and browser session
+  closed.
+- Decisions / assumptions: Operations confirmation copy is intentionally
+  generic for every account so the browser cannot disclose owner-private
+  period state.
 - Blocker: none.
 
 ## Required phase-entry template
