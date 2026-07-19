@@ -1,11 +1,8 @@
 # FinApp — Product & Technical Specification
 
-> Historical v1 specification. On the `finapp-v2` branch, the authoritative
-> specification is `specs/FinnApp-v2.md`.
-
-This is the single source of truth for what to build. If anything here
-conflicts with your own assumptions, this file wins. If something is genuinely
-undefined, pick the simplest option and record the decision in PROGRESS.md.
+> Historical v1 specification. The authoritative current specification is
+> [`FinnApp-v2.md`](FinnApp-v2.md). The content below is
+> archival only and must not be used as a source of current requirements.
 
 ## 1. What the app is
 

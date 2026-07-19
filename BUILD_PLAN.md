@@ -1,7 +1,9 @@
 # BUILD_PLAN.md — phases
 
-> Historical build plan for completed earlier versions. The active plan on the
-> `finapp-v2` branch is `BUILD_PLAN-v2.md`.
+> Historical build plan for completed earlier versions. The active plan is
+> [`docs/BUILD_PLAN-v2.md`](docs/BUILD_PLAN-v2.md). Everything below this note,
+> including its references to root `PROGRESS.md`, is archival and must not be
+> executed for the current release.
 
 Build in this order. Each phase ends with passing tests, an updated
 `PROGRESS.md`, and a git commit (see `CLAUDE.md` → Workflow rules). This is what
