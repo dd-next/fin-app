@@ -28,7 +28,7 @@ async def test_archived_category_is_preserved_only_as_an_existing_transaction_va
     assert historical.status_code == other.status_code == 201
 
     transaction = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account.json()["id"],
             "amount": "10",
@@ -57,7 +57,7 @@ async def test_archived_category_is_preserved_only_as_an_existing_transaction_va
     assert reassigned.json()["detail"] == "Invalid category"
 
     created_with_archived = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account.json()["id"],
             "amount": "1",

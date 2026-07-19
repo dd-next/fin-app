@@ -55,15 +55,15 @@ async def test_38_digit_balance_and_direct_rate_math_stay_exact(client):
         "99999999999999999999.123456789012345678",
     )
     smallest_unit = await client.post(
-        "/api/v1/transactions/adjustment",
-        json={"account_id": holding["id"], "delta": "0.000000000000000001"},
+        f"/api/v1/accounts/{holding['id']}/reconcile",
+        json={"target_balance": "99999999999999999999.123456789012345679"},
     )
-    assert smallest_unit.status_code == 201, smallest_unit.text
+    assert smallest_unit.status_code == 200, smallest_unit.text
 
     rate_source = await create_account(client, "Rate source ETH", "ETH", "1")
     rate_target = await create_account(client, "Rate target BTC", "BTC", "0")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": rate_source["id"],
             "from_amount": "1",
@@ -80,7 +80,7 @@ async def test_38_digit_balance_and_direct_rate_math_stay_exact(client):
     assert summary["net_worth"] == "12345678000000000000.01524158"
 
     outgoing = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": holding["id"],
             "amount": "99999999999999999999.123456789012345678",
@@ -101,7 +101,7 @@ async def test_manual_override_delete_exchange_fallback_and_unvalued(client):
     usd = await create_account(client, "Rate USD", "USD", "10")
     vnd = await create_account(client, "Rate VND", "VND", "0")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "1",
@@ -151,7 +151,7 @@ async def test_manual_override_delete_exchange_fallback_and_unvalued(client):
     assert account_named(summary, "Regression VND")["valued_balance"] == "610.34"
 
     voided = await client.post(
-        f"/api/v1/transactions/{exchange.json()['id']}/void"
+        f"/api/v1/transactions/{exchange.json()['id']}/delete"
     )
     assert voided.status_code == 200, voided.text
     summary = (await client.get("/api/v1/accounts/summary")).json()
@@ -264,7 +264,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     alice_vnd = await create_account(client, "Alice rate VND", "VND", "0")
     held_vnd = await create_account(client, "Alice held VND", "VND", "260000")
     first = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": alice_usd["id"],
             "from_amount": "1",
@@ -274,7 +274,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     )
     assert first.status_code == 201, first.text
     second = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": alice_usd["id"],
             "from_amount": "1",
@@ -286,7 +286,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert account_named(summary, "Alice held VND")["valued_balance"] == "10.00"
     assert (
-        await client.post(f"/api/v1/transactions/{second.json()['id']}/void")
+        await client.post(f"/api/v1/transactions/{second.json()['id']}/delete")
     ).status_code == 200
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert account_named(summary, "Alice held VND")["valued_balance"] == "10.40"
@@ -294,7 +294,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     alice_eur = await create_account(client, "Alice EUR", "EUR", "100")
     alice_btc = await create_account(client, "Alice BTC", "BTC", "1")
     btc_eur = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": alice_btc["id"],
             "from_amount": "0.1",
@@ -304,7 +304,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     )
     assert btc_eur.status_code == 201, btc_eur.text
     eur_usd = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": alice_eur["id"],
             "from_amount": "1",
@@ -323,7 +323,7 @@ async def test_conflicting_direct_rates_latest_fallback_and_no_multihop(client):
     bob_vnd = await create_account(client, "Bob rate VND", "VND", "0")
     await create_account(client, "Bob held VND", "VND", "260000")
     bob_exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": bob_usd["id"],
             "from_amount": "1",
@@ -345,7 +345,7 @@ async def test_shared_account_never_discloses_owner_exchange_rate(client):
     usd = await create_account(client, "Owner USD", "USD", "10")
     shared = await create_account(client, "Shared exchange BTC", "BTC", "1")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "1",

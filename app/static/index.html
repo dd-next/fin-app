@@ -85,13 +85,13 @@
       <section id="view-transactions" class="app-view hidden" aria-labelledby="transactions-title">
         <div class="view-heading">
           <div><p class="eyebrow">Ledger</p><h2 id="transactions-title">Transactions</h2></div>
-          <button id="add-transaction">＋ Add transaction</button>
         </div>
         <form id="transaction-filters" class="filter-bar panel-subtle">
           <label>Account<select id="filter-account"><option value="">All accounts</option></select></label>
+          <label>Period<select id="filter-period"><option value="">All periods</option></select></label>
           <label>Type<select id="filter-type"><option value="">All types</option><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
           <label>Category<select id="filter-category"><option value="">All categories</option></select></label>
-          <label>Status<select id="filter-status"><option value="">All statuses</option><option value="posted">Posted</option><option value="unassigned">Unassigned</option><option value="voided">Voided</option></select></label>
+          <label>Status<select id="filter-status"><option value="">All statuses</option><option value="posted">Posted</option><option value="unassigned">Unassigned</option><option value="deleted">Deleted</option></select></label>
           <label>From<input id="filter-from" type="date"></label>
           <label>To<input id="filter-to" type="date"></label>
           <button type="submit" class="button-secondary">Apply</button>
@@ -100,8 +100,8 @@
         <div id="transaction-list" class="transaction-list"></div>
         <div id="transactions-empty" class="empty-state hidden">
           <div class="empty-icon">⇄</div><h3>No transactions yet</h3>
-          <p>Add an expense, income, transfer, exchange, or balance adjustment.</p>
-          <button id="empty-add-transaction">Add transaction</button>
+          <p>Create financial events from Operations. They will appear here.</p>
+          <button id="empty-open-operations">Open Operations</button>
         </div>
         <button id="load-more" class="button-secondary load-more hidden">Load more</button>
       </section>
@@ -284,9 +284,18 @@
     </div>
   </dialog>
 
+  <dialog id="transaction-detail-dialog" aria-labelledby="transaction-detail-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Ledger entry</p><h2 id="transaction-detail-title">Transaction details</h2></div><button type="button" class="icon-button" data-close="transaction-detail-dialog" aria-label="Close">×</button></div>
+      <div id="transaction-detail-body" class="detail-list"></div>
+      <p id="transaction-detail-hidden" class="notice warning hidden">Some movements are hidden because you only have access to part of this transaction.</p>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="transaction-detail-dialog">Close</button><button id="correct-transaction" type="button">Correct</button></div>
+    </div>
+  </dialog>
+
   <dialog id="transaction-dialog" class="wide-dialog" aria-labelledby="transaction-dialog-title">
     <form id="transaction-form" class="dialog-form">
-      <div class="dialog-heading"><div><p class="eyebrow">Ledger entry</p><h2 id="transaction-dialog-title">Add transaction</h2></div><button type="button" class="icon-button" data-close="transaction-dialog" aria-label="Close">×</button></div>
+      <div class="dialog-heading"><div><p class="eyebrow">Ledger entry</p><h2 id="transaction-dialog-title">Edit transaction</h2></div><button type="button" class="icon-button" data-close="transaction-dialog" aria-label="Close">×</button></div>
       <input id="transaction-id" type="hidden">
       <label>Type<select id="transaction-type"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
       <div id="single-fields" class="form-grid two-columns">

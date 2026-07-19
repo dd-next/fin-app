@@ -248,10 +248,10 @@ class TransactionOut(BaseModel):
     occurred_at: datetime
     local_date: date
     origin: Literal["manual", "operations"]
-    status: Literal["posted", "unassigned", "voided"]
+    status: Literal["posted", "unassigned", "deleted"]
     created_at: datetime
     updated_at: datetime
-    voided_at: datetime | None
+    deleted_at: datetime | None
     legs: list[TransactionLegOut]
     has_hidden_legs: bool = False
     plan_occurrence_id: int | None = None
@@ -459,9 +459,9 @@ class TransactionLinkPlanIn(BaseModel):
     occurrence_id: int
 
 
-class VoidTransactionIn(BaseModel):
+class DeleteTransactionIn(BaseModel):
     confirm_ended_period: bool = False
 
 
-class OperationsUndoIn(VoidTransactionIn):
+class OperationsUndoIn(DeleteTransactionIn):
     transaction_id: int

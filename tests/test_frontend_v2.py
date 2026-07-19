@@ -39,6 +39,10 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "reconcile-dialog",
         "sharing-dialog",
         "transaction-dialog",
+        "transaction-detail-dialog",
+        "transaction-detail-body",
+        "transaction-detail-hidden",
+        "correct-transaction",
         "categories-dialog",
         "plan-rule-dialog",
         "plan-link-dialog",
@@ -67,6 +71,7 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "period-history-dialog",
         "period-history-list",
         "filter-account",
+        "filter-period",
         "filter-type",
         "filter-category",
         "filter-status",
@@ -90,12 +95,12 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
         "/reconcile",
         "/invitations",
         "/account-invitations/${encodeURIComponent(pendingInvite)}/accept",
-        "/api/v1/transactions/${type}",
+        "/api/v1/transactions/${transaction.id}/delete",
         "/categories/${category.id}/archive",
         "/plan-rules/${rule.id}/archive",
         "/link-transaction",
         "/assign-account",
-        "/void",
+        "/delete",
         "/api/v1/operations/spend",
         "/api/v1/operations/add-funds",
         "/api/v1/operations/transfer",
@@ -111,6 +116,7 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert "/tracker/" not in javascript
     assert "/pay" not in javascript
     assert "/receive" not in javascript
+    assert "/api/v1/transactions/${type}" not in javascript
     assert "has_hidden_legs" in javascript
     assert "access_role" in javascript
     assert "state.categories.clear()" in javascript
@@ -133,6 +139,13 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert "loadOperationsUndoCandidate" in javascript
     assert "Operation undone" in javascript
     assert "transaction_id: transaction.id" in javascript
+    assert 'details.textContent = "Details"' in javascript
+    assert 'actions.append(details)' in javascript
+    assert 'transaction.has_hidden_legs' in javascript
+    assert 'state.transactionDeleteLoading = true' in javascript
+    assert 'row.setAttribute("aria-busy", "true")' in javascript
+    assert 'syncTransactionFilterPair("account")' in javascript
+    assert 'syncTransactionFilterPair("period")' in javascript
     assert not re.search(r"[А-Яа-яЁё]", javascript)
 
 

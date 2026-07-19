@@ -25,6 +25,7 @@ from app.ledger import (
 )
 from app.models import (
     Account,
+    AccountPeriod,
     Asset,
     ExchangeRate,
     PlanOccurrence,
@@ -37,11 +38,12 @@ from app.models import (
 from app.operations_undo import reindex_operations_root
 from app.periods import (
     enforce_transaction_period_impact,
+    require_private_period,
     transaction_period_impact,
 )
 from app.schemas import (
-    AdjustmentIn,
     AssignAccountIn,
+    DeleteTransactionIn,
     ExchangeIn,
     ExchangeRateOut,
     SingleTransactionIn,
@@ -49,7 +51,6 @@ from app.schemas import (
     TransactionPageOut,
     TransactionPatch,
     TransferIn,
-    VoidTransactionIn,
 )
 router = APIRouter(tags=["transactions"])
 
@@ -190,46 +191,6 @@ async def _create_single(
     return transaction
 
 
-@router.post("/transactions/expense", response_model=TransactionOut, status_code=201)
-async def create_expense(
-    body: SingleTransactionIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    transaction = await _create_single(session, user, "expense", body)
-    workspace = await session.get(Workspace, transaction.workspace_id)
-    assert workspace is not None
-    return await transaction_out(
-        session,
-        transaction,
-        visible_account_ids=(
-            None
-            if workspace.owner_user_id == user.id
-            else await visible_account_ids(session, user.id)
-        ),
-    )
-
-
-@router.post("/transactions/income", response_model=TransactionOut, status_code=201)
-async def create_income(
-    body: SingleTransactionIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    transaction = await _create_single(session, user, "income", body)
-    workspace = await session.get(Workspace, transaction.workspace_id)
-    assert workspace is not None
-    return await transaction_out(
-        session,
-        transaction,
-        visible_account_ids=(
-            None
-            if workspace.owner_user_id == user.id
-            else await visible_account_ids(session, user.id)
-        ),
-    )
-
-
 async def _create_transfer(
     session: AsyncSession,
     user: User,
@@ -287,17 +248,6 @@ async def _create_transfer(
         await session.commit()
         await session.refresh(transaction)
     return transaction
-
-
-@router.post("/transactions/transfer", response_model=TransactionOut, status_code=201)
-async def create_transfer(
-    body: TransferIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    return await transaction_out(
-        session, await _create_transfer(session, user, body)
-    )
 
 
 async def _replace_rates(
@@ -429,55 +379,6 @@ async def _create_exchange(
     return transaction
 
 
-@router.post("/transactions/exchange", response_model=TransactionOut, status_code=201)
-async def create_exchange(
-    body: ExchangeIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    return await transaction_out(
-        session, await _create_exchange(session, user, body)
-    )
-
-
-@router.post("/transactions/adjustment", response_model=TransactionOut, status_code=201)
-async def create_adjustment(
-    body: AdjustmentIn,
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    if body.category_id is not None:
-        raise HTTPException(status_code=422, detail="Adjustments cannot have a category")
-    account, _ = await require_account_action(
-        session, body.account_id, user.id, "owner"
-    )
-    workspace = await session.get(Workspace, account.workspace_id)
-    assert workspace is not None
-    delta = validate_amount(body.delta, account.asset)
-    occurred_at, local_date = financial_times(
-        workspace, body.occurred_at, body.local_date
-    )
-    transaction = _transaction(
-        workspace, user, "adjustment", occurred_at, local_date, note=body.note
-    )
-    transaction.legs.append(
-        TransactionLeg(account_id=account.id, asset_id=account.asset_id, amount=delta)
-    )
-    session.add(transaction)
-    await session.flush()
-    await _enforce_period_guard(
-        session,
-        transaction,
-        user,
-        workspace,
-        confirmed=body.confirm_ended_period,
-        legs=list(transaction.legs),
-    )
-    await session.commit()
-    await session.refresh(transaction)
-    return await transaction_out(session, transaction)
-
-
 async def _visible_transaction(
     session: AsyncSession, transaction_id: int, user: User
 ) -> tuple[Transaction, set[int] | None]:
@@ -536,12 +437,13 @@ async def _require_transaction_edit(
 async def list_transactions(
     workspace_id: int | None = None,
     account_id: int | None = None,
+    period_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     type: str | None = None,
     category_id: int | None = None,
     origin: str | None = None,
-    status: str | None = None,
+    status: str | None = Query(default=None, pattern="^(posted|unassigned|deleted)$"),
     created_by_user_id: int | None = None,
     cursor: int | None = None,
     limit: int = Query(default=50, ge=1, le=100),
@@ -550,6 +452,15 @@ async def list_transactions(
 ):
     workspace = await primary_workspace(session, user.id)
     visible_ids = await visible_account_ids(session, user.id)
+    period: AccountPeriod | None = None
+    if period_id is not None:
+        period, period_account = await require_private_period(
+            session, period_id, user.id
+        )
+        if account_id is not None and account_id != period_account.id:
+            raise HTTPException(
+                status_code=422, detail="Account filter does not match period"
+            )
     statement = (
         select(Transaction)
         .outerjoin(TransactionLeg)
@@ -572,6 +483,14 @@ async def list_transactions(
             session, account_id, user.id, "view", allow_archived=True
         )
         statement = statement.where(TransactionLeg.account_id == account_id)
+    if period is not None:
+        statement = statement.where(
+            TransactionLeg.account_id == period.account_id,
+            TransactionLeg.created_at > period.created_at,
+            Transaction.local_date >= period.start_date,
+            Transaction.local_date <= period.end_date,
+            Transaction.status == "posted",
+        )
     if date_from is not None:
         statement = statement.where(Transaction.local_date >= date_from)
     if date_to is not None:
@@ -583,7 +502,9 @@ async def list_transactions(
     if origin is not None:
         statement = statement.where(Transaction.origin == origin)
     if status is not None:
-        statement = statement.where(Transaction.status == status)
+        statement = statement.where(
+            Transaction.status == ("voided" if status == "deleted" else status)
+        )
     if created_by_user_id is not None:
         statement = statement.where(Transaction.created_by_user_id == created_by_user_id)
     if cursor is not None:
@@ -663,7 +584,7 @@ async def patch_transaction(
         session, transaction_id, user
     )
     if transaction.status == "voided":
-        raise HTTPException(status_code=409, detail="Voided transaction cannot be edited")
+        raise HTTPException(status_code=409, detail="Deleted transaction cannot be edited")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
     legs = await _transaction_legs(session, transaction.id)
@@ -917,18 +838,18 @@ async def assign_account(
     )
 
 
-async def _void_posted_transaction(
+async def _soft_delete_transaction(
     session: AsyncSession,
     transaction: Transaction,
     user: User,
     *,
     confirmed: bool,
 ) -> None:
-    """Soft-void one root and its children without committing the transaction."""
+    """Soft-delete one root and its children without committing the transaction."""
     if transaction.status == "voided":
-        raise HTTPException(status_code=409, detail="Transaction is already voided")
+        raise HTTPException(status_code=409, detail="Transaction is already deleted")
     if transaction.parent_transaction_id is not None:
-        raise HTTPException(status_code=409, detail="Child transaction cannot be voided alone")
+        raise HTTPException(status_code=409, detail="Child transaction cannot be deleted alone")
     original_status = transaction.status
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
@@ -953,7 +874,7 @@ async def _void_posted_transaction(
         .execution_options(synchronize_session=False)
     )
     if result.rowcount != 1:
-        raise HTTPException(status_code=409, detail="Transaction is already voided")
+        raise HTTPException(status_code=409, detail="Transaction is already deleted")
     transaction.status = "voided"
     transaction.voided_at = now
     await session.execute(
@@ -980,17 +901,17 @@ async def _void_posted_transaction(
         linked_occurrence.matched_at = None
 
 
-@router.post("/transactions/{transaction_id}/void", response_model=TransactionOut)
-async def void_transaction(
+@router.post("/transactions/{transaction_id}/delete", response_model=TransactionOut)
+async def delete_transaction(
     transaction_id: int,
-    body: VoidTransactionIn | None = None,
+    body: DeleteTransactionIn | None = None,
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
     transaction, visible_ids = await _require_transaction_edit(
         session, transaction_id, user
     )
-    await _void_posted_transaction(
+    await _soft_delete_transaction(
         session,
         transaction,
         user,

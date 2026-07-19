@@ -8,7 +8,7 @@ async def test_exchange_rate_lookup_is_isolated_between_workspaces(client):
     alice_usd = await create_account(client, "Alice USD", "USD", "1000")
     alice_btc = await create_account(client, "Alice BTC", "BTC", "0")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": alice_usd["id"],
             "from_amount": "100",
@@ -54,7 +54,7 @@ async def test_rates_and_account_summary_use_output_precision_boundaries(client)
     await create_account(client, "Whole VND", "VND", "7")
 
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "1",
@@ -97,7 +97,7 @@ async def test_account_summary_rounds_the_exact_aggregate_only_once(client):
     usd = await create_account(client, "Rate source USD", "USD", "1000")
     btc = await create_account(client, "Rate source BTC", "BTC", "0")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "1000",
@@ -129,7 +129,7 @@ async def test_unrepresentable_exchange_rate_is_rejected(client):
     eth = await create_account(client, "Manual ETH", "ETH", "1")
     usd = await create_account(client, "Tiny-rate USD", "USD", "1")
     tiny_exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "10000000000000000000",

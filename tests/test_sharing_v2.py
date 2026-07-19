@@ -65,7 +65,7 @@ async def test_invitation_lifecycle_visibility_categories_and_no_total_leakage(
     ).status_code == 404
     assert (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": shared["id"], "amount": "1"},
         )
     ).status_code == 403
@@ -101,19 +101,19 @@ async def test_role_capabilities_and_owner_access_management(client):
     assert (await client.get(f"/api/v1/accounts/{viewer['id']}")).status_code == 200
     assert (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": viewer["id"], "amount": "1"},
         )
     ).status_code == 403
 
     expense = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": contributor["id"], "amount": "2"},
     )
     assert expense.status_code == 201, expense.text
     assert (
         await client.post(
-            "/api/v1/transactions/income",
+            "/api/v1/operations/add-funds",
             json={"account_id": contributor["id"], "amount": "2"},
         )
     ).status_code == 403
@@ -123,14 +123,14 @@ async def test_role_capabilities_and_owner_access_management(client):
         )
     ).status_code == 403
     assert (
-        await client.post(f"/api/v1/transactions/{expense.json()['id']}/void")
+        await client.post(f"/api/v1/transactions/{expense.json()['id']}/delete")
     ).status_code == 403
     assert (
         await client.patch(f"/api/v1/accounts/{contributor['id']}", json={"name": "No"})
     ).status_code == 403
 
     income = await client.post(
-        "/api/v1/transactions/income",
+        "/api/v1/operations/add-funds",
         json={"account_id": editor_a["id"], "amount": "10"},
     )
     assert income.status_code == 201, income.text
@@ -153,11 +153,11 @@ async def test_role_capabilities_and_owner_access_management(client):
     assert edited_income.status_code == 200, edited_income.text
     assert edited_income.json()["note"] == "Corrected by editor"
     unconfirmed_void = await client.post(
-        f"/api/v1/transactions/{income.json()['id']}/void"
+        f"/api/v1/transactions/{income.json()['id']}/delete"
     )
     assert unconfirmed_void.status_code == 409
     confirmed_void = await client.post(
-        f"/api/v1/transactions/{income.json()['id']}/void",
+        f"/api/v1/transactions/{income.json()['id']}/delete",
         json={"confirm_ended_period": True},
     )
     assert confirmed_void.status_code == 200
@@ -166,7 +166,7 @@ async def test_role_capabilities_and_owner_access_management(client):
     ).status_code == 200
     assert (
         await client.post(
-            "/api/v1/transactions/transfer",
+            "/api/v1/operations/transfer",
             json={
                 "from_account_id": editor_a["id"],
                 "to_account_id": editor_b["id"],
@@ -176,7 +176,7 @@ async def test_role_capabilities_and_owner_access_management(client):
     ).status_code == 201
     assert (
         await client.post(
-            "/api/v1/transactions/transfer",
+            "/api/v1/operations/transfer",
             json={
                 "from_account_id": editor_a["id"],
                 "to_account_id": contributor["id"],
@@ -186,10 +186,10 @@ async def test_role_capabilities_and_owner_access_management(client):
     ).status_code == 403
     assert (
         await client.post(
-            "/api/v1/transactions/adjustment",
+            "/api/v1/operations/adjustment",
             json={"account_id": editor_a["id"], "delta": "1"},
         )
-    ).status_code == 403
+    ).status_code in {404, 405}
     assert (
         await client.post(
             f"/api/v1/accounts/{editor_a['id']}/reconcile",
@@ -224,13 +224,13 @@ async def test_hidden_legs_are_redacted_and_block_multi_account_mutation(client)
     private = await create_account(client, "Private USD", "USD", "0")
     private_expense = (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": private["id"], "amount": "1"},
         )
     ).json()
     transfer = (
         await client.post(
-            "/api/v1/transactions/transfer",
+            "/api/v1/operations/transfer",
             json={
                 "from_account_id": shared["id"],
                 "to_account_id": private["id"],
@@ -260,7 +260,7 @@ async def test_hidden_legs_are_redacted_and_block_multi_account_mutation(client)
         )
     ).status_code == 404
     assert (
-        await client.post(f"/api/v1/transactions/{transfer['id']}/void")
+        await client.post(f"/api/v1/transactions/{transfer['id']}/delete")
     ).status_code == 404
     filtered = (
         await client.get(f"/api/v1/transactions?account_id={shared['id']}")

@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.budget import compute_budget
-from tests.conftest import register
+from tests.conftest import register, seed_unassigned_transaction
 from tests.test_ledger_v2 import create_account
 from tests.test_sharing_v2 import accept, invitation, login
 
@@ -65,7 +65,7 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert period["remaining"] == "900"
 
     spent = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account["id"],
             "amount": "25",
@@ -86,7 +86,7 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert replayed["remaining"] == "860"
 
     voided = await client.post(
-        f"/api/v1/transactions/{spent.json()['id']}/void"
+        f"/api/v1/transactions/{spent.json()['id']}/delete"
     )
     assert voided.status_code == 200, voided.text
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
@@ -122,7 +122,7 @@ async def test_transfer_replays_signed_legs_in_both_account_periods(client):
     target_period = await create_period(client, target["id"], "100")
 
     transfer = await client.post(
-        "/api/v1/transactions/transfer",
+        "/api/v1/operations/transfer",
         json={
             "from_account_id": source["id"],
             "to_account_id": target["id"],
@@ -150,7 +150,7 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     today = local_today().isoformat()
 
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"],
             "from_amount": "100",
@@ -162,20 +162,20 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     )
     assert exchange.status_code == 201, exchange.text
     income = await client.post(
-        "/api/v1/transactions/income",
+        "/api/v1/operations/add-funds",
         json={"account_id": usd["id"], "amount": "20", "local_date": today},
     )
     assert income.status_code == 201, income.text
     positive = await client.post(
-        "/api/v1/transactions/adjustment",
-        json={"account_id": usd["id"], "delta": "10", "local_date": today},
+        f"/api/v1/accounts/{usd['id']}/reconcile",
+        json={"target_balance": "925"},
     )
-    assert positive.status_code == 201, positive.text
+    assert positive.status_code == 200, positive.text
     negative = await client.post(
-        "/api/v1/transactions/adjustment",
-        json={"account_id": usd["id"], "delta": "-15", "local_date": today},
+        f"/api/v1/accounts/{usd['id']}/reconcile",
+        json={"target_balance": "910"},
     )
-    assert negative.status_code == 201, negative.text
+    assert negative.status_code == 200, negative.text
 
     usd_out = (
         await client.get(f"/api/v1/account-periods/{usd_period['id']}")
@@ -187,7 +187,7 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     assert vnd_out["remaining"] == "2510000"
 
     voided = await client.post(
-        f"/api/v1/transactions/{exchange.json()['id']}/void"
+        f"/api/v1/transactions/{exchange.json()['id']}/delete"
     )
     assert voided.status_code == 200, voided.text
     usd_out = (
@@ -278,7 +278,7 @@ async def test_current_history_and_planned_is_informational(client):
     )
     assert skipped.status_code == 200, skipped.text
     paid = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": account["id"], "amount": "7"},
     )
     assert paid.status_code == 201, paid.text
@@ -418,7 +418,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     )
     historical_date = (today - timedelta(days=7)).isoformat()
     rejected_create = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account["id"],
             "amount": "10",
@@ -427,7 +427,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     )
     assert rejected_create.status_code == 409
     posted = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account["id"],
             "amount": "10",
@@ -454,10 +454,10 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
         await client.get(f"/api/v1/account-periods/{ended['id']}")
     ).json()["remaining"] == "80"
     assert (
-        await client.post(f"/api/v1/transactions/{transaction_id}/void")
+        await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     ).status_code == 409
     confirmed_void = await client.post(
-        f"/api/v1/transactions/{transaction_id}/void",
+        f"/api/v1/transactions/{transaction_id}/delete",
         json={"confirm_ended_period": True},
     )
     assert confirmed_void.status_code == 200, confirmed_void.text
@@ -469,7 +469,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
         client, account["id"], "100", today - timedelta(days=1), today + timedelta(days=1)
     )
     current_expense = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": account["id"], "amount": "10"},
     )
     assert current_expense.status_code == 201, current_expense.text
@@ -485,13 +485,13 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     ).status_code == 409
     assert (
         await client.post(
-            f"/api/v1/transactions/{closed_transaction_id}/void",
+            f"/api/v1/transactions/{closed_transaction_id}/delete",
             json={"confirm_ended_period": True},
         )
     ).status_code == 409
     assert (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={
                 "account_id": account["id"],
                 "amount": "5",
@@ -538,7 +538,7 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
         await client.post(f"/api/v1/account-periods/{period['id']}/close")
     ).status_code == 404
     hidden_guard = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": account["id"],
             "amount": "1",
@@ -609,7 +609,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     )
     historical = (today - timedelta(days=7)).isoformat()
     transaction = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": plain_account["id"], "amount": "10", "local_date": historical},
     )
     assert transaction.status_code == 201, transaction.text
@@ -646,7 +646,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     closed_account = await create_account(client, "Move closed USD", "USD")
     closed_period = await create_period(client, closed_account["id"], "100")
     inside_closed = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": closed_account["id"], "amount": "10"},
     )
     assert inside_closed.status_code == 201
@@ -654,7 +654,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
         await client.post(f"/api/v1/account-periods/{closed_period['id']}/close")
     ).status_code == 200
     outside = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": plain_account["id"], "amount": "3"},
     )
     assert outside.status_code == 201
@@ -691,12 +691,9 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         today - timedelta(days=5),
     )
     historical = (today - timedelta(days=7)).isoformat()
-    unassigned = await client.post(
-        "/api/v1/transactions/expense",
-        json={"asset_code": "USD", "amount": "5", "local_date": historical},
+    unassigned_id = await seed_unassigned_transaction(
+        client, amount="5", local_date=today - timedelta(days=7)
     )
-    assert unassigned.status_code == 201, unassigned.text
-    unassigned_id = unassigned.json()["id"]
     rejected_assign = await client.post(
         f"/api/v1/transactions/{unassigned_id}/assign-account",
         json={"account_id": guarded["id"]},
@@ -716,18 +713,14 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
     assert (
         await client.post(f"/api/v1/account-periods/{current_period['id']}/close")
     ).status_code == 200
-    closed_unassigned = await client.post(
-        "/api/v1/transactions/expense",
-        json={"asset_code": "USD", "amount": "3"},
-    )
-    assert closed_unassigned.status_code == 201
+    closed_unassigned_id = await seed_unassigned_transaction(client, amount="3")
     rejected_closed_assign = await client.post(
-        f"/api/v1/transactions/{closed_unassigned.json()['id']}/assign-account",
+        f"/api/v1/transactions/{closed_unassigned_id}/assign-account",
         json={"account_id": current_account["id"], "confirm_ended_period": True},
     )
     assert rejected_closed_assign.status_code == 409
     closed_assignment_state = (
-        await client.get(f"/api/v1/transactions/{closed_unassigned.json()['id']}")
+        await client.get(f"/api/v1/transactions/{closed_unassigned_id}")
     ).json()
     assert closed_assignment_state["status"] == "unassigned"
     assert closed_assignment_state["legs"][0]["account_id"] is None
@@ -753,30 +746,30 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         "fee": {"account_id": guarded["id"], "amount": "2"},
     }
     rejected_exchange = await client.post(
-        "/api/v1/transactions/exchange", json=exchange_body
+        "/api/v1/operations/exchange", json=exchange_body
     )
     assert rejected_exchange.status_code == 409
     assert Decimal(
         (await client.get(f"/api/v1/accounts/{source['id']}")).json()["balance"]
     ) == Decimal("1000")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={**exchange_body, "confirm_ended_period": True},
     )
     assert exchange.status_code == 201, exchange.text
     exchange_id = exchange.json()["id"]
     assert (
-        await client.post(f"/api/v1/transactions/{exchange_id}/void")
+        await client.post(f"/api/v1/transactions/{exchange_id}/delete")
     ).status_code == 409
     assert (await client.get(f"/api/v1/transactions/{exchange_id}")).json()["status"] == "posted"
     assert (
         await client.post(
-            f"/api/v1/transactions/{exchange_id}/void",
+            f"/api/v1/transactions/{exchange_id}/delete",
             json={"confirm_ended_period": True},
         )
     ).status_code == 200
     second_exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={**exchange_body, "confirm_ended_period": True},
     )
     assert second_exchange.status_code == 201, second_exchange.text
@@ -784,7 +777,7 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         await client.post(f"/api/v1/account-periods/{ended['id']}/close")
     ).status_code == 200
     rejected_closed_void = await client.post(
-        f"/api/v1/transactions/{second_exchange.json()['id']}/void",
+        f"/api/v1/transactions/{second_exchange.json()['id']}/delete",
         json={"confirm_ended_period": True},
     )
     assert rejected_closed_void.status_code == 409
@@ -795,7 +788,7 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         (await client.get(f"/api/v1/accounts/{source['id']}")).json()["balance"]
     )
     closed_exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={**exchange_body, "confirm_ended_period": True},
     )
     assert closed_exchange.status_code == 409
@@ -820,9 +813,8 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
         today - timedelta(days=5),
     )
     historical = (today - timedelta(days=7)).isoformat()
-    hidden_unassigned = await client.post(
-        "/api/v1/transactions/expense",
-        json={"asset_code": "USD", "amount": "4", "local_date": historical},
+    hidden_unassigned_id = await seed_unassigned_transaction(
+        client, amount="4", local_date=today - timedelta(days=7)
     )
     tokens = [
         await invitation(client, account["id"], "editor")
@@ -834,13 +826,13 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
         await accept(client, token)
     generic = "Transaction change requires explicit confirmation"
     rejected_create = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": fee_account["id"], "amount": "5", "local_date": historical},
     )
     assert rejected_create.status_code == 409
     assert rejected_create.json()["detail"] == generic
     shared_transaction = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": fee_account["id"],
             "amount": "5",
@@ -861,18 +853,18 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
             json={"amount": "6", "confirm_ended_period": True},
         )
     ).status_code == 200
-    rejected_void = await client.post(f"/api/v1/transactions/{transaction_id}/void")
+    rejected_void = await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     assert rejected_void.status_code == 409
     assert rejected_void.json()["detail"] == generic
     assert (
         await client.post(
-            f"/api/v1/transactions/{transaction_id}/void",
+            f"/api/v1/transactions/{transaction_id}/delete",
             json={"confirm_ended_period": True},
         )
     ).status_code == 200
     assert (
         await client.post(
-            f"/api/v1/transactions/{hidden_unassigned.json()['id']}/assign-account",
+            f"/api/v1/transactions/{hidden_unassigned_id}/assign-account",
             json={"account_id": fee_account["id"], "confirm_ended_period": True},
         )
     ).status_code == 404
@@ -886,13 +878,13 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
         "fee": {"account_id": fee_account["id"], "amount": "2"},
     }
     rejected_exchange = await client.post(
-        "/api/v1/transactions/exchange", json=exchange_body
+        "/api/v1/operations/exchange", json=exchange_body
     )
     assert rejected_exchange.status_code == 409
     assert rejected_exchange.json()["detail"] == generic
     assert (
         await client.post(
-            "/api/v1/transactions/transfer",
+            "/api/v1/operations/transfer",
             json={
                 "from_account_id": source["id"],
                 "to_account_id": unshared["id"],
@@ -903,7 +895,7 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     ).status_code == 404
     assert (
         await client.post(
-            "/api/v1/transactions/exchange",
+            "/api/v1/operations/exchange",
             json={
                 "from_account_id": source["id"],
                 "from_amount": "1",
@@ -920,7 +912,7 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     ).status_code == 200
     await login(client, "bob")
     closed_exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={**exchange_body, "confirm_ended_period": True},
     )
     assert closed_exchange.status_code == 409

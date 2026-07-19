@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from tests.conftest import register
+from tests.conftest import register, seed_unassigned_transaction
 
 
 async def create_account(
@@ -72,19 +72,19 @@ async def test_expense_income_and_category_rules(client):
         await client.post(route, json={"name": "Food", "kind": "expense"})
     ).json()
     expense = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={"account_id": account["id"], "amount": "25.50", "category_id": expense_category["id"]},
     )
     assert expense.status_code == 201
     assert Decimal(expense.json()["legs"][0]["amount"]) == Decimal("-25.50")
     income = await client.post(
-        "/api/v1/transactions/income",
+        "/api/v1/operations/add-funds",
         json={"account_id": account["id"], "amount": "100"},
     )
     assert income.status_code == 201
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("1074.50")
     wrong_category = await client.post(
-        "/api/v1/transactions/income",
+        "/api/v1/operations/add-funds",
         json={"account_id": account["id"], "amount": "1", "category_id": expense_category["id"]},
     )
     assert wrong_category.status_code == 422
@@ -96,7 +96,7 @@ async def test_transfer_is_neutral_and_requires_same_asset(client):
     cash = await create_account(client, "Cash USD", "USD", "0")
     vnd = await create_account(client, "Cash VND", "VND", "0")
     transfer = await client.post(
-        "/api/v1/transactions/transfer",
+        "/api/v1/operations/transfer",
         json={"from_account_id": bank["id"], "to_account_id": cash["id"], "amount": "120"},
     )
     assert transfer.status_code == 201
@@ -105,7 +105,7 @@ async def test_transfer_is_neutral_and_requires_same_asset(client):
     assert balances["Cash USD"] == Decimal("120")
     assert Decimal((await client.get("/api/v1/accounts/summary")).json()["net_worth"]) == Decimal("500")
     bad = await client.post(
-        "/api/v1/transactions/transfer",
+        "/api/v1/operations/transfer",
         json={"from_account_id": bank["id"], "to_account_id": vnd["id"], "amount": "1"},
     )
     assert bad.status_code == 422
@@ -116,7 +116,7 @@ async def test_exchange_derives_rate_values_accounts_and_fee_is_expense(client):
     usd = await create_account(client, "Bank USD", "USD", "1000")
     vnd = await create_account(client, "Cash VND", "VND", "0")
     exchange = await client.post(
-        "/api/v1/transactions/exchange",
+        "/api/v1/operations/exchange",
         json={
             "from_account_id": usd["id"], "from_amount": "100",
             "to_account_id": vnd["id"], "to_amount": "2600000",
@@ -134,7 +134,7 @@ async def test_exchange_derives_rate_values_accounts_and_fee_is_expense(client):
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert Decimal(summary["net_worth"]) == Decimal("998")
     assert summary["unvalued"] == []
-    assert (await client.post(f"/api/v1/transactions/{exchange.json()['id']}/void")).status_code == 200
+    assert (await client.post(f"/api/v1/transactions/{exchange.json()['id']}/delete")).status_code == 200
     summary = (await client.get("/api/v1/accounts/summary")).json()
     # The child fee is voided atomically with the exchange.
     assert Decimal(summary["net_worth"]) == Decimal("1000")
@@ -144,15 +144,13 @@ async def test_exchange_derives_rate_values_accounts_and_fee_is_expense(client):
 async def test_unassigned_operation_does_not_touch_balance_then_assigns(client):
     await register(client)
     account = await create_account(client, "Cash USD", "USD", "100")
-    expense = await client.post(
-        "/api/v1/transactions/expense",
-        json={"asset_code": "USD", "amount": "10", "note": "Wallet unknown"},
-    )
-    assert expense.status_code == 201
+    expense_id = await seed_unassigned_transaction(client, amount="10")
+    expense = await client.get(f"/api/v1/transactions/{expense_id}")
+    assert expense.status_code == 200
     assert expense.json()["status"] == "unassigned"
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("100")
     assigned = await client.post(
-        f"/api/v1/transactions/{expense.json()['id']}/assign-account",
+        f"/api/v1/transactions/{expense_id}/assign-account",
         json={"account_id": account["id"]},
     )
     assert assigned.status_code == 200
@@ -166,7 +164,7 @@ async def test_patch_void_filters_and_pagination(client):
     ids = []
     for amount in ("5", "6", "7"):
         response = await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": account["id"], "amount": amount},
         )
         ids.append(response.json()["id"])
@@ -180,7 +178,7 @@ async def test_patch_void_filters_and_pagination(client):
     )
     assert patched.status_code == 200, patched.text
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("72")
-    assert (await client.post(f"/api/v1/transactions/{ids[1]}/void")).status_code == 200
+    assert (await client.post(f"/api/v1/transactions/{ids[1]}/delete")).status_code == 200
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("78")
 
 
@@ -189,7 +187,7 @@ async def test_other_user_cannot_see_accounts_or_transactions(client):
     account = await create_account(client, "Private USD", "USD", "100")
     transaction = (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": account["id"], "amount": "1"},
         )
     ).json()

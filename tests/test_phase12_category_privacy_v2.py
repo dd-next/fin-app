@@ -24,7 +24,7 @@ async def test_archived_categories_follow_shared_transaction_visibility(client):
         categories[name] = response.json()
 
     visible = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": shared_account["id"],
             "amount": "10",
@@ -32,7 +32,7 @@ async def test_archived_categories_follow_shared_transaction_visibility(client):
         },
     )
     private = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": private_account["id"],
             "amount": "20",
@@ -40,7 +40,7 @@ async def test_archived_categories_follow_shared_transaction_visibility(client):
         },
     )
     voided = await client.post(
-        "/api/v1/transactions/expense",
+        "/api/v1/operations/spend",
         json={
             "account_id": shared_account["id"],
             "amount": "5",
@@ -49,7 +49,7 @@ async def test_archived_categories_follow_shared_transaction_visibility(client):
     )
     assert visible.status_code == private.status_code == voided.status_code == 201
     void_response = await client.post(
-        f"/api/v1/transactions/{voided.json()['id']}/void"
+        f"/api/v1/transactions/{voided.json()['id']}/delete"
     )
     assert void_response.status_code == 200, void_response.text
 

@@ -239,23 +239,49 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
     assert await account_balance(client, private_target["id"]) == Decimal("0")
 
 
-async def test_legacy_transaction_routes_still_create_manual_origin(client):
+async def test_transaction_creation_routes_are_absent_and_operations_set_origin(client):
     await register(client)
     usd = await create_account(client, "Manual source USD", "USD", "100")
     other_usd = await create_account(client, "Manual target USD", "USD", "0")
     vnd = await create_account(client, "Manual target VND", "VND", "0")
 
+    legacy_requests = [
+        ("expense", {"account_id": usd["id"], "amount": "1"}),
+        ("income", {"account_id": usd["id"], "amount": "1"}),
+        (
+            "transfer",
+            {
+                "from_account_id": usd["id"],
+                "to_account_id": other_usd["id"],
+                "amount": "1",
+            },
+        ),
+        (
+            "exchange",
+            {
+                "from_account_id": usd["id"],
+                "from_amount": "1",
+                "to_account_id": vnd["id"],
+                "to_amount": "25000",
+            },
+        ),
+        ("adjustment", {"account_id": usd["id"], "delta": "1"}),
+    ]
+    for route, body in legacy_requests:
+        response = await client.post(f"/api/v1/transactions/{route}", json=body)
+        assert response.status_code in {404, 405}
+
     responses = [
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": usd["id"], "amount": "1"},
         ),
         await client.post(
-            "/api/v1/transactions/income",
+            "/api/v1/operations/add-funds",
             json={"account_id": usd["id"], "amount": "1"},
         ),
         await client.post(
-            "/api/v1/transactions/transfer",
+            "/api/v1/operations/transfer",
             json={
                 "from_account_id": usd["id"],
                 "to_account_id": other_usd["id"],
@@ -263,7 +289,7 @@ async def test_legacy_transaction_routes_still_create_manual_origin(client):
             },
         ),
         await client.post(
-            "/api/v1/transactions/exchange",
+            "/api/v1/operations/exchange",
             json={
                 "from_account_id": usd["id"],
                 "from_amount": "1",
@@ -274,12 +300,16 @@ async def test_legacy_transaction_routes_still_create_manual_origin(client):
         ),
     ]
     assert [response.status_code for response in responses] == [201, 201, 201, 201]
-    assert {response.json()["origin"] for response in responses} == {"manual"}
+    assert {response.json()["origin"] for response in responses} == {"operations"}
     transactions = (await client.get("/api/v1/transactions?limit=20")).json()["items"]
-    manual_exchange = responses[-1].json()
+    operations_exchange = responses[-1].json()
     fee = next(
         item
         for item in transactions
-        if item["parent_transaction_id"] == manual_exchange["id"]
+        if item["parent_transaction_id"] == operations_exchange["id"]
     )
-    assert fee["origin"] == "manual"
+    assert fee["origin"] == "operations"
+
+    paths = (await client.get("/openapi.json")).json()["paths"]
+    for route, _ in legacy_requests:
+        assert f"/api/v1/transactions/{route}" not in paths

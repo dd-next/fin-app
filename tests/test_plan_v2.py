@@ -91,7 +91,7 @@ async def test_resolved_occurrences_survive_rule_edit_and_archive(client):
     completed, skipped = original[:2]
     expense = (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": account["id"], "amount": "90"},
         )
     ).json()
@@ -159,7 +159,7 @@ async def test_plan_is_link_and_skip_only_and_void_reopens_link(client):
     ))[0]
     transaction = (
         await client.post(
-            "/api/v1/transactions/expense",
+            "/api/v1/operations/spend",
             json={"account_id": account["id"], "amount": "22", "note": "Paid"},
         )
     ).json()
@@ -179,7 +179,7 @@ async def test_plan_is_link_and_skip_only_and_void_reopens_link(client):
     assert (await client.post(f"{base}/pay", json={})).status_code in {404, 405}
     assert (await client.post(f"{base}/receive", json={})).status_code in {404, 405}
 
-    voided = await client.post(f"/api/v1/transactions/{transaction['id']}/void")
+    voided = await client.post(f"/api/v1/transactions/{transaction['id']}/delete")
     assert voided.status_code == 200, voided.text
     reopened = (await occurrences_for_rule(
         client, workspace_id, linked_rule["id"]

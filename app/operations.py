@@ -33,7 +33,7 @@ from app.transactions import (
     _create_exchange,
     _create_single,
     _create_transfer,
-    _void_posted_transaction,
+    _soft_delete_transaction,
 )
 
 
@@ -302,7 +302,7 @@ async def undo(
     assert transaction is not None
     if transaction.id != body.transaction_id:
         raise HTTPException(status_code=409, detail="Undo candidate changed")
-    await _void_posted_transaction(
+    await _soft_delete_transaction(
         session,
         transaction,
         user,

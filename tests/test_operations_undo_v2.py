@@ -28,10 +28,10 @@ async def test_undo_candidate_survives_reads_ignores_manual_and_never_falls_back
     )
     assert older.status_code == 201, older.text
     manual = await client.post(
-        "/api/v1/transactions/income",
-        json={"account_id": account["id"], "amount": "5"},
+        f"/api/v1/accounts/{account['id']}/reconcile",
+        json={"target_balance": "95"},
     )
-    assert manual.status_code == 201, manual.text
+    assert manual.status_code == 200, manual.text
 
     first_read = await candidate(client, account["id"])
     reload_read = await candidate(client, account["id"])
@@ -41,7 +41,7 @@ async def test_undo_candidate_survives_reads_ignores_manual_and_never_falls_back
         json={"transaction_id": older.json()["id"]},
     )
     assert undone.status_code == 200, undone.text
-    assert undone.json()["status"] == "voided"
+    assert undone.json()["status"] == "deleted"
     assert await balance(client, account["id"]) == Decimal("105")
     assert await candidate(client, account["id"]) is None
     assert await candidate(client, account["id"]) is None
@@ -232,7 +232,7 @@ async def test_undo_voids_exchange_fee_but_keeps_fee_accounts_own_candidate(clie
     child = next(
         item for item in page if item["parent_transaction_id"] == exchange.json()["id"]
     )
-    assert child["status"] == "voided"
+    assert child["status"] == "deleted"
     assert (await client.get("/api/v1/exchange-rates")).json() == []
     assert await balance(client, source["id"]) == Decimal("100")
     assert await balance(client, target["id"]) == Decimal("0")

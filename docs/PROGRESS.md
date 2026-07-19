@@ -13,7 +13,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - [x] Phase 9 — Clean release schema
 - [x] Phase 10 — Financial correctness
 - [x] Phase 11 — Operations and account periods UI
-- [ ] Phase 12 — Transactions and Plan
+- [~] Phase 12 — Transactions and Plan
 - [ ] Phase 13 — Docker and release verification
 
 ## Starting point — 2026-07-19
@@ -245,6 +245,41 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - Decisions / assumptions: Operations confirmation copy is intentionally
   generic for every account so the browser cannot disclose owner-private
   period state.
+- Blocker: none.
+
+### Phase 12 — Transactions and Plan (2026-07-19)
+
+- Status: [~]
+- Completed: Block 1 aligns Transactions with its history-only boundary:
+  removed public transaction-creation routes and SPA controls; creation now
+  occurs through Operations only. Added the owner-private Period filter with
+  strict posted-leg snapshot/date membership for expense, income, transfer,
+  and exchange. Replaced the public Void contract with confirmed compact
+  `× Delete`, external `Deleted` status/`deleted_at`, and global Deleted
+  history while deleted movements no longer belong to periods. Retained
+  assignment and correction, and added read-only/redacted details for every
+  visible record. Account/Period filters synchronize, and Delete has a
+  duplicate-submit guard, disabled controls, and `aria-busy` state.
+- Reviewer blocks: Transactions history behavior → fresh
+  `/root/phase11_navigation_review/phase12_transactions_review` → P1 deleted
+  period membership and inaccessible read-only details, plus P2 conflicting
+  filters, Delete re-entry, and boundary/privacy coverage gaps → all fixed →
+  re-review APPROVED with no P0–P3. Pre-commit fresh reviewer
+  `phase12_block1_commit_review` independently re-verified the complete
+  Block 1 diff (boundary, privacy, delete replay, UI guards, OpenAPI, full
+  suite, JS check) → APPROVED with no P0–P3.
+- Tests: initial Block 1 targeted suite — **42 passed in 6.50s**; post-review
+  expanded Transactions/ledger/Operations/Undo/period/frontend/sharing suite —
+  **46 passed in 7.25s**; reviewer independent expanded suite — **63 passed in
+  10.17s**. `node --check app/static/app.js`, compileall, OpenAPI boundary, and
+  `git diff --check` passed.
+- Checks: OpenAPI has 42 paths; Transactions exposes list, detail/correction,
+  assignment, and Delete only. Legacy creation and Void paths/copy are absent;
+  the public status enum is `posted|unassigned|deleted`. Tests cover pre-period,
+  out-of-range, exact timestamp boundary, shared/foreign period privacy, all
+  required financial types, soft-delete replay, and global Deleted history.
+- Decisions / assumptions: `voided` and `voided_at` remain internal persistence
+  names only; the active public contract uses `deleted` and `deleted_at`.
 - Blocker: none.
 
 ## Required phase-entry template

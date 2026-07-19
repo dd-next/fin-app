@@ -9,6 +9,7 @@ const state = {
   summary: null,
   categories: new Map(),
   transactions: [],
+  transactionPeriods: [],
   nextCursor: null,
   planRules: [],
   planOccurrences: [],
@@ -28,7 +29,9 @@ const state = {
   activeView: "accounts",
   activeAccount: null,
   sharingAccount: null,
+  viewingTransaction: null,
   editingTransaction: null,
+  transactionDeleteLoading: false,
   toastTimer: null,
 };
 
@@ -196,6 +199,7 @@ async function showApp(context) {
     state.categories.clear();
     state.accounts = [];
     state.transactions = [];
+    state.transactionPeriods = [];
     state.planRules = [];
     state.planOccurrences = [];
     state.operationsAccountId = null;
@@ -242,6 +246,14 @@ async function refreshAll() {
       categoriesFor(state.context.workspace.id),
       ...workspaceIds.map((workspaceId) => categoriesFor(workspaceId)),
     ]);
+    const ownedAccounts = state.accounts.filter((account) => canUseAccount(account, "owner"));
+    const periodLists = await Promise.all(ownedAccounts.map(async (account) => ({
+      account,
+      periods: await api(`/api/v1/accounts/${account.id}/periods?scope=all`),
+    })));
+    state.transactionPeriods = periodLists.flatMap(({ account, periods }) => (
+      periods.map((period) => ({ ...period, account }))
+    ));
     renderAccounts();
     renderFilterOptions();
     renderTransactions();
@@ -871,8 +883,15 @@ function renderAccounts() {
 }
 
 function renderFilterOptions() {
+  const selectedAccount = $("filter-account").value;
+  const selectedPeriod = $("filter-period").value;
+  const selectedCategory = $("filter-category")?.value || "";
   const items = state.accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` }));
-  selectOptions($("filter-account"), items, { placeholder: "All accounts" });
+  selectOptions($("filter-account"), items, { placeholder: "All accounts", selected: selectedAccount });
+  selectOptions($("filter-period"), state.transactionPeriods.map((period) => ({
+    value: period.id,
+    label: `${period.account.name} · ${localDate(period.start_date)} – ${localDate(period.end_date)} · ${period.status}`,
+  })), { placeholder: "All periods", selected: selectedPeriod });
   const visibleWorkspaceIds = new Set([
     state.context.workspace.id,
     ...state.accounts.map((account) => account.workspace_id),
@@ -885,7 +904,23 @@ function renderFilterOptions() {
     selectOptions($("filter-category"), unique.map((category) => ({
       value: category.id,
       label: `${category.name}${category.archived_at ? " (archived)" : ""}`,
-    })), { placeholder: "All categories" });
+    })), { placeholder: "All categories", selected: selectedCategory });
+  }
+  if ($("filter-period").value) syncTransactionFilterPair("period");
+}
+
+function syncTransactionFilterPair(changed) {
+  const period = state.transactionPeriods.find(
+    (item) => item.id === Number($("filter-period").value),
+  );
+  if (changed === "period" && period) {
+    $("filter-account").value = String(period.account_id);
+  } else if (
+    changed === "account"
+    && period
+    && Number($("filter-account").value) !== period.account_id
+  ) {
+    $("filter-period").value = "";
   }
 }
 
@@ -937,6 +972,7 @@ async function accountDetailAction(action) {
   if (action === "history") {
     $("account-detail-dialog").close();
     $("filter-account").value = String(account.id);
+    syncTransactionFilterPair("account");
     await loadTransactions(false);
     switchView("transactions");
   }
@@ -1462,13 +1498,42 @@ function transactionAmount(transaction) {
 }
 
 function canEditTransaction(transaction) {
-  if (transaction.status === "voided" || transaction.has_hidden_legs) return false;
+  if (transaction.status === "deleted" || transaction.has_hidden_legs) return false;
   if (!transaction.legs.length) return false;
   return transaction.legs.every((leg) => {
     if (leg.account_id === null) return transaction.created_by_user_id === state.context.user.id;
     const account = accountById(leg.account_id);
     return transaction.type === "adjustment" ? canUseAccount(account, "owner") : canUseAccount(account, "edit");
   });
+}
+
+function openTransactionDetails(transaction) {
+  state.viewingTransaction = transaction;
+  const author = transaction.created_by_user_id === state.context.user.id
+    ? "You"
+    : `User #${transaction.created_by_user_id}`;
+  const movements = transaction.legs.length
+    ? transaction.legs.map((leg) => {
+      const account = accountById(leg.account_id);
+      const accountName = account ? account.name : leg.account_id === null ? "Unassigned" : "Accessible account";
+      return `<li><span>${escapeHtml(accountName)}</span><strong>${formatMoney(leg.amount, leg.asset.code)}</strong></li>`;
+    }).join("")
+    : "<li><span>No visible movements</span></li>";
+  $("transaction-detail-body").innerHTML = `
+    <dl class="transaction-detail-grid">
+      <div><dt>Status</dt><dd>${escapeHtml(transaction.status[0].toUpperCase() + transaction.status.slice(1))}</dd></div>
+      <div><dt>Type</dt><dd>${escapeHtml(transaction.type[0].toUpperCase() + transaction.type.slice(1))}</dd></div>
+      <div><dt>Financial date</dt><dd>${escapeHtml(localDate(transaction.local_date))}</dd></div>
+      <div><dt>Created by</dt><dd>${escapeHtml(author)}</dd></div>
+      <div><dt>Amount</dt><dd>${transactionAmount(transaction)}</dd></div>
+      <div><dt>Counterparty</dt><dd>${escapeHtml(transaction.counterparty || "—")}</dd></div>
+      <div class="span-two"><dt>Note</dt><dd>${escapeHtml(transaction.note || "—")}</dd></div>
+    </dl>
+    <h3>Visible movements</h3><ul class="transaction-detail-legs">${movements}</ul>`;
+  $("transaction-detail-hidden").classList.toggle("hidden", !transaction.has_hidden_legs);
+  $("correct-transaction").classList.toggle("hidden", !canEditTransaction(transaction));
+  $("correct-transaction").disabled = !canEditTransaction(transaction);
+  $("transaction-detail-dialog").showModal();
 }
 
 function renderTransactions() {
@@ -1483,6 +1548,11 @@ function renderTransactions() {
       <span class="transaction-amount">${transactionAmount(transaction)}</span>
       <span class="transaction-actions"></span>`;
     const actions = row.querySelector(".transaction-actions");
+    const details = document.createElement("button");
+    details.type = "button";
+    details.textContent = "Details";
+    details.addEventListener("click", () => openTransactionDetails(transaction));
+    actions.append(details);
     if (transaction.status === "unassigned" && transaction.created_by_user_id === state.context.user.id) {
       const assign = document.createElement("button");
       assign.type = "button";
@@ -1491,15 +1561,15 @@ function renderTransactions() {
       actions.append(assign);
     }
     if (canEditTransaction(transaction)) {
-      const edit = document.createElement("button");
-      edit.type = "button";
-      edit.textContent = "Edit";
-      edit.addEventListener("click", () => openTransactionForm(transaction));
-      const voidButton = document.createElement("button");
-      voidButton.type = "button";
-      voidButton.textContent = "Void";
-      voidButton.addEventListener("click", () => voidTransaction(transaction));
-      actions.append(edit, voidButton);
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "icon-button transaction-delete";
+      deleteButton.textContent = "×";
+      deleteButton.title = "Delete";
+      deleteButton.setAttribute("aria-label", `Delete ${transaction.type} transaction`);
+      deleteButton.disabled = state.transactionDeleteLoading;
+      deleteButton.addEventListener("click", () => deleteTransaction(transaction, deleteButton, row));
+      actions.append(deleteButton);
     }
     if (transaction.plan_occurrence_id) {
       const planBadge = document.createElement("span");
@@ -1520,7 +1590,7 @@ function renderTransactions() {
     if (transaction.status !== "posted") {
       const badge = document.createElement("span");
       badge.className = `badge ${transaction.status}`;
-      badge.textContent = transaction.status;
+      badge.textContent = transaction.status[0].toUpperCase() + transaction.status.slice(1);
       actions.prepend(badge);
     }
     return row;
@@ -1534,6 +1604,7 @@ function transactionQuery(cursor = null) {
   const query = new URLSearchParams({ limit: "50" });
   const values = {
     account_id: $("filter-account").value,
+    period_id: $("filter-period").value,
     type: $("filter-type").value,
     category_id: $("filter-category")?.value || "",
     status: $("filter-status")?.value || "",
@@ -1620,35 +1691,34 @@ async function updateTransactionFields({ preserve = true } = {}) {
 }
 
 async function openTransactionForm(transaction = null) {
+  if (!transaction) return;
   state.editingTransaction = transaction;
   $("transaction-form").reset();
   $("transaction-error").textContent = "";
   $("transaction-id").value = transaction ? transaction.id : "";
-  $("transaction-dialog-title").textContent = transaction ? "Edit transaction" : "Add transaction";
-  $("save-transaction").textContent = transaction ? "Save changes" : "Save transaction";
-  $("transaction-type").disabled = Boolean(transaction);
-  $("transaction-type").value = transaction ? transaction.type : "expense";
-  $("transaction-date").value = transaction ? transaction.local_date : todayValue();
+  $("transaction-dialog-title").textContent = "Transaction details";
+  $("save-transaction").textContent = "Save correction";
+  $("transaction-type").disabled = true;
+  $("transaction-type").value = transaction.type;
+  $("transaction-date").value = transaction.local_date;
   await updateTransactionFields({ preserve: false });
-  if (transaction) {
-    $("transaction-counterparty").value = transaction.counterparty || "";
-    $("transaction-note").value = transaction.note || "";
-    const negative = transaction.legs.find((leg) => String(leg.amount).startsWith("-"));
-    const positive = transaction.legs.find((leg) => !String(leg.amount).startsWith("-"));
-    if (["expense", "income", "adjustment"].includes(transaction.type)) {
-      const leg = transaction.legs[0];
-      $("transaction-account").value = leg.account_id === null ? "" : String(leg.account_id);
-      $("transaction-asset").value = leg.asset.code;
-      $("transaction-amount").value = transaction.type === "expense" ? String(leg.amount).replace("-", "") : leg.amount;
-      $("single-asset-field").classList.toggle("hidden", leg.account_id !== null || transaction.type === "adjustment");
-    } else if (negative && positive) {
-      $("transaction-from-account").value = String(negative.account_id);
-      $("transaction-to-account").value = String(positive.account_id);
-      $("transaction-from-amount").value = String(negative.amount).replace("-", "");
-      $("transaction-to-amount").value = positive.amount;
-    }
-    await updateTransactionCategories(transaction.category_id);
+  $("transaction-counterparty").value = transaction.counterparty || "";
+  $("transaction-note").value = transaction.note || "";
+  const negative = transaction.legs.find((leg) => String(leg.amount).startsWith("-"));
+  const positive = transaction.legs.find((leg) => !String(leg.amount).startsWith("-"));
+  if (["expense", "income", "adjustment"].includes(transaction.type)) {
+    const leg = transaction.legs[0];
+    $("transaction-account").value = leg.account_id === null ? "" : String(leg.account_id);
+    $("transaction-asset").value = leg.asset.code;
+    $("transaction-amount").value = transaction.type === "expense" ? String(leg.amount).replace("-", "") : leg.amount;
+    $("single-asset-field").classList.toggle("hidden", leg.account_id !== null || transaction.type === "adjustment");
+  } else if (negative && positive) {
+    $("transaction-from-account").value = String(negative.account_id);
+    $("transaction-to-account").value = String(positive.account_id);
+    $("transaction-from-amount").value = String(negative.amount).replace("-", "");
+    $("transaction-to-amount").value = positive.amount;
   }
+  await updateTransactionCategories(transaction.category_id);
   $("transaction-dialog").showModal();
 }
 
@@ -1662,6 +1732,7 @@ async function saveTransaction(event) {
   event.preventDefault();
   $("transaction-error").textContent = "";
   const transactionId = $("transaction-id").value;
+  if (!transactionId) return;
   const type = $("transaction-type").value;
   const body = {
     local_date: $("transaction-date").value || null,
@@ -1682,26 +1753,16 @@ async function saveTransaction(event) {
       body.to_account_id = Number(requiredValue("transaction-to-account", "To account"));
       if (type === "transfer") {
         const amount = requiredValue("transaction-from-amount", "Amount");
-        if (transactionId) {
-          body.from_amount = amount;
-          body.to_amount = amount;
-        } else {
-          body.amount = amount;
-        }
+        body.from_amount = amount;
+        body.to_amount = amount;
       } else {
         body.from_amount = requiredValue("transaction-from-amount", "From amount");
         body.to_amount = requiredValue("transaction-to-amount", "To amount");
-        if (!transactionId && $("transaction-has-fee").checked) {
-          body.fee = {
-            account_id: Number(requiredValue("transaction-fee-account", "Fee account")),
-            amount: requiredValue("transaction-fee-amount", "Fee amount"),
-          };
-        }
       }
     }
-    const route = transactionId ? `/api/v1/transactions/${transactionId}` : `/api/v1/transactions/${type}`;
+    const route = `/api/v1/transactions/${transactionId}`;
     try {
-      await apiCommand(route, transactionId ? "PATCH" : "POST", body);
+      await apiCommand(route, "PATCH", body);
     } catch (error) {
       if (
         error.status !== 409
@@ -1709,10 +1770,10 @@ async function saveTransaction(event) {
         || !window.confirm("This transaction correction requires confirmation. Continue?")
       ) throw error;
       body.confirm_ended_period = true;
-      await apiCommand(route, transactionId ? "PATCH" : "POST", body);
+      await apiCommand(route, "PATCH", body);
     }
     $("transaction-dialog").close();
-    toast(transactionId ? "Transaction updated" : "Transaction added");
+    toast("Transaction updated");
     await refreshAll();
   } catch (error) { $("transaction-error").textContent = error.message; }
 }
@@ -1730,25 +1791,35 @@ async function assignTransaction(transaction) {
   } catch (error) { toast(error.message); }
 }
 
-async function voidTransaction(transaction) {
-  if (!window.confirm(`Void this ${transaction.type}? Balances will be recalculated.`)) return;
+async function deleteTransaction(transaction, button, row) {
+  if (state.transactionDeleteLoading) return;
+  if (!window.confirm(`Delete this ${transaction.type}? It will remain in history as Deleted but will no longer affect balances or periods.`)) return;
+  state.transactionDeleteLoading = true;
+  document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = true; });
+  button.disabled = true;
+  row.setAttribute("aria-busy", "true");
   try {
     try {
-      await api(`/api/v1/transactions/${transaction.id}/void`, { method: "POST" });
+      await api(`/api/v1/transactions/${transaction.id}/delete`, { method: "POST" });
     } catch (error) {
       if (
         error.status !== 409
         || !String(error.message).includes("explicit confirmation")
-        || !window.confirm("Voiding this shared or historical transaction requires confirmation. Continue?")
+        || !window.confirm("Deleting this shared or historical transaction requires confirmation. Continue?")
       ) throw error;
-      await api(`/api/v1/transactions/${transaction.id}/void`, {
+      await api(`/api/v1/transactions/${transaction.id}/delete`, {
         method: "POST",
         body: JSON.stringify({ confirm_ended_period: true }),
       });
     }
-    toast("Transaction voided");
+    toast("Transaction deleted");
     await refreshAll();
   } catch (error) { toast(error.message); }
+  finally {
+    state.transactionDeleteLoading = false;
+    document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = false; });
+    if (row.isConnected) row.setAttribute("aria-busy", "false");
+  }
 }
 
 document.querySelectorAll("[data-close]").forEach((button) => {
@@ -1839,8 +1910,7 @@ $("account-form").addEventListener("submit", saveAccount);
 $("reconcile-form").addEventListener("submit", saveReconcile);
 $("invitation-form").addEventListener("submit", createInvitation);
 $("copy-invite").addEventListener("click", copyInvitation);
-$("add-transaction").addEventListener("click", () => openTransactionForm());
-$("empty-add-transaction").addEventListener("click", () => openTransactionForm());
+$("empty-open-operations").addEventListener("click", () => switchView("operations"));
 $("transaction-type").addEventListener("change", () => updateTransactionFields({ preserve: false }));
 $("transaction-account").addEventListener("change", async () => {
   $("single-asset-field").classList.toggle("hidden", Boolean($("transaction-account").value) || $("transaction-type").value === "adjustment");
@@ -1848,7 +1918,15 @@ $("transaction-account").addEventListener("change", async () => {
 });
 $("transaction-has-fee").addEventListener("change", () => $("fee-details").classList.toggle("hidden", !$("transaction-has-fee").checked));
 $("transaction-form").addEventListener("submit", saveTransaction);
+$("correct-transaction").addEventListener("click", () => {
+  const transaction = state.viewingTransaction;
+  if (!transaction || !canEditTransaction(transaction)) return;
+  $("transaction-detail-dialog").close();
+  void openTransactionForm(transaction);
+});
 $("transaction-filters").addEventListener("submit", (event) => { event.preventDefault(); loadTransactions(false); });
+$("filter-account").addEventListener("change", () => syncTransactionFilterPair("account"));
+$("filter-period").addEventListener("change", () => syncTransactionFilterPair("period"));
 $("clear-filters").addEventListener("click", () => { $("transaction-filters").reset(); loadTransactions(false); });
 $("load-more").addEventListener("click", () => loadTransactions(true));
 
