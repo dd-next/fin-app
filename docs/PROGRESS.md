@@ -413,6 +413,33 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   data survives a container restart; no embedded TLS/reverse proxy.
 - Decisions / assumptions: host port `8000` is published for an external TLS
   terminator; the compose healthcheck intentionally mirrors the image's.
+- Completed: Block 3 rewrites `README.md` as release documentation: a product
+  summary, local install/run/migrate/test with the runtime vs
+  `requirements-dev.txt` split, and a Docker section covering build, Compose
+  start/status/stop, persistent-volume behavior, and executable backup and
+  restore procedures. Restore was corrected to remove SQLite sidecar files,
+  copy the backup, and `chown 10001:10001` so the non-root app can write; a
+  note explains the `fin_app_` volume prefix. Stale prototype/"being reset"
+  wording is removed.
+- Reviewer blocks: operational documentation → fresh
+  `phase13_readme_review` verified every command/claim against the repo, the
+  requirements split, Compose semantics, backup/restore soundness, the restore
+  ownership fix (UID 10001, sidecar coverage), and removal of prototype
+  wording → APPROVED with one P3 volume-name-prefix note → closed by adding the
+  project-name/volume-prefix explanation to the README.
+- Tests: executed the README backup and restore procedures verbatim on the live
+  Compose stack — backup produced a 356352-byte file
+  (SHA-256 `4be17264e9f35c458983ce930889c9d0e3c424a81285049861decc3cf946e0c4`);
+  added a post-backup user, ran restore, and confirmed the post-backup user was
+  rolled back (login `401`) while the pre-backup user logged in `200` and could
+  write (`auth_session` INSERT succeeded), proving correct ownership after the
+  `chown` fix.
+- Checks: README documents install, run, migrate, test, Docker build/start,
+  persistent-volume behavior, backup, and restore; a container restart and a
+  down/up cycle preserve data (Block 2 evidence); backup/restore verified on a
+  scratch volume.
+- Decisions / assumptions: backup/restore use `busybox` with the full volume
+  name `fin_app_finapp-data`; the restore must re-own `finapp.db` to UID 10001.
 - Blocker: none.
 
 ## Required phase-entry template
