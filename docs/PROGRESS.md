@@ -269,6 +269,15 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   global future lists, `plan-status-filter`, and the separate rules section
   are removed; compact Open/Completed counters stay, and the open details
   dialog re-renders after every data refresh.
+- Completed: Block 3 aligns Link with its semantic contract: Link validates
+  semantic type only (income→income, expense kinds→expense,
+  reserve_transfer→transfer) and accepts different actual accounts and assets;
+  the rule-asset equality check is removed on both server and SPA. Linked
+  responses now return `actual_amount` plus new `actual_asset`, and the SPA
+  formats actuals with the actual asset. Foreign transactions are
+  indistinguishable from missing ones on both link routes (identical 404
+  status and detail, before and after occurrence resolution), and recurrence
+  materialization stays untouched and idempotent.
 - Reviewer blocks: Transactions history behavior → fresh
   `/root/phase11_navigation_review/phase12_transactions_review` → P1 deleted
   period membership and inaccessible read-only details, plus P2 conflicting
@@ -281,6 +290,13 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   date, nearest future earliest date), badge, details-only history,
   stale-dialog refresh, removed-id/XSS/accessibility checks → APPROVED with no
   P0–P3 (one non-blocking P3 observation on label/badge redundancy recorded).
+  Link + Skip contract → fresh `phase12_link_contract_review` → P2
+  reverse-route foreign-transaction 404-detail oracle and two P3 coverage gaps
+  (already-linked 409 branch, reverse-route detail equality) → fixed →
+  `phase12_link_contract_rereview` APPROVED with one residual P3
+  resolved-occurrence oracle → occurrence workspace check reordered before
+  `require_open_occurrence` with resolved foreign/missing equality test →
+  `phase12_link_contract_final_review` APPROVED with no findings.
 - Tests: initial Block 1 targeted suite — **42 passed in 6.50s**; post-review
   expanded Transactions/ledger/Operations/Undo/period/frontend/sharing suite —
   **46 passed in 7.25s**; reviewer independent expanded suite — **63 passed in
@@ -289,7 +305,12 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   (`tests/test_frontend_v2.py tests/test_plan_v2.py`) — **11 passed in
   0.87s**; full suite after Block 2 — **106 passed in 12.20s**; reviewer
   independently re-ran frontend tests, `node --check`, and `git diff --check`
-  — passed.
+  — passed. Block 3 targeted suite (`tests/test_plan_v2.py
+  tests/test_frontend_v2.py`) — **13 passed in 1.24s**; post-fix
+  `tests/test_plan_v2.py` — **6 passed in 1.23s**; full suite after Block 3 —
+  **108 passed in 11.61s**; both re-reviewers independently re-ran the plan
+  suite and full suite — passed; `node --check app/static/app.js` and
+  `git diff --check` — passed.
 - Checks: OpenAPI has 42 paths; Transactions exposes list, detail/correction,
   assignment, and Delete only. Legacy creation and Void paths/copy are absent;
   the public status enum is `posted|unassigned|deleted`. Tests cover pre-period,

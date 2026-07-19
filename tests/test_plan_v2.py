@@ -201,6 +201,268 @@ async def test_plan_is_link_and_skip_only_and_void_reopens_link(client):
     assert skipped.json()["status"] == "skipped"
 
 
+async def test_link_validates_semantic_type_and_allows_asset_account_differences(client):
+    context = await register(client)
+    workspace_id = context["workspace"]["id"]
+    usd = await create_account(client, "Main USD", "USD", "1000")
+    vnd = await create_account(client, "Cash VND", "VND", "5000000")
+    vnd_reserve = await create_account(client, "Reserve VND", "VND", "0")
+
+    expense_rule = (
+        await create_rule(
+            client,
+            workspace_id,
+            name="Rent USD",
+            amount="500",
+            default_from_account_id=usd["id"],
+        )
+    ).json()
+    expense_occurrence = (await occurrences_for_rule(
+        client, workspace_id, expense_rule["id"]
+    ))[0]
+    vnd_spend = (
+        await client.post(
+            "/api/v1/operations/spend",
+            json={"account_id": vnd["id"], "amount": "1200000"},
+        )
+    ).json()
+    linked = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{expense_occurrence['id']}/link-transaction",
+        json={"transaction_id": vnd_spend["id"]},
+    )
+    assert linked.status_code == 200, linked.text
+    body = linked.json()
+    assert body["status"] == "completed"
+    assert Decimal(body["actual_amount"]) == Decimal("1200000")
+    assert body["actual_asset"]["code"] == "VND"
+    assert body["rule"]["asset"]["code"] == "USD"
+
+    transfer_rule = (
+        await create_rule(
+            client,
+            workspace_id,
+            kind="reserve_transfer",
+            name="Reserve USD",
+            amount="100",
+            category_id=None,
+        )
+    ).json()
+    transfer_occurrence = (await occurrences_for_rule(
+        client, workspace_id, transfer_rule["id"]
+    ))[0]
+    vnd_transfer = (
+        await client.post(
+            "/api/v1/operations/transfer",
+            json={
+                "from_account_id": vnd["id"],
+                "to_account_id": vnd_reserve["id"],
+                "amount": "700000",
+            },
+        )
+    ).json()
+    linked_transfer = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{transfer_occurrence['id']}/link-transaction",
+        json={"transaction_id": vnd_transfer["id"]},
+    )
+    assert linked_transfer.status_code == 200, linked_transfer.text
+    assert Decimal(linked_transfer.json()["actual_amount"]) == Decimal("700000")
+    assert linked_transfer.json()["actual_asset"]["code"] == "VND"
+
+    income_rule = (
+        await create_rule(
+            client,
+            workspace_id,
+            kind="income",
+            name="Salary",
+            amount="900",
+            category_id=None,
+        )
+    ).json()
+    income_occurrence = (await occurrences_for_rule(
+        client, workspace_id, income_rule["id"]
+    ))[0]
+    income_link_route = (
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{income_occurrence['id']}/link-transaction"
+    )
+    another_spend = (
+        await client.post(
+            "/api/v1/operations/spend",
+            json={"account_id": usd["id"], "amount": "10"},
+        )
+    ).json()
+    wrong_type = await client.post(
+        income_link_route, json={"transaction_id": another_spend["id"]}
+    )
+    assert wrong_type.status_code == 422
+    assert "type" in wrong_type.json()["detail"].lower()
+
+    exchange = (
+        await client.post(
+            "/api/v1/operations/exchange",
+            json={
+                "from_account_id": vnd["id"],
+                "from_amount": "260000",
+                "to_account_id": usd["id"],
+                "to_amount": "10",
+            },
+        )
+    ).json()
+    open_transfer_rule = (
+        await create_rule(
+            client,
+            workspace_id,
+            kind="reserve_transfer",
+            name="Reserve again",
+            amount="50",
+            category_id=None,
+        )
+    ).json()
+    open_transfer_occurrence = (await occurrences_for_rule(
+        client, workspace_id, open_transfer_rule["id"]
+    ))[0]
+    exchange_to_transfer_rule = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{open_transfer_occurrence['id']}/link-transaction",
+        json={"transaction_id": exchange["id"]},
+    )
+    assert exchange_to_transfer_rule.status_code == 422
+    assert "type" in exchange_to_transfer_rule.json()["detail"].lower()
+
+    income = (
+        await client.post(
+            "/api/v1/operations/add-funds",
+            json={"account_id": usd["id"], "amount": "900"},
+        )
+    ).json()
+    deleted = await client.post(f"/api/v1/transactions/{income['id']}/delete")
+    assert deleted.status_code == 200
+    non_posted = await client.post(
+        income_link_route, json={"transaction_id": income["id"]}
+    )
+    assert non_posted.status_code == 422
+
+    relink = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{expense_occurrence['id']}/link-transaction",
+        json={"transaction_id": vnd_spend["id"]},
+    )
+    assert relink.status_code == 409
+
+    fresh_income = (
+        await client.post(
+            "/api/v1/operations/add-funds",
+            json={"account_id": usd["id"], "amount": "901"},
+        )
+    ).json()
+    wrong_type_linked = await client.post(
+        income_link_route, json={"transaction_id": vnd_spend["id"]}
+    )
+    assert wrong_type_linked.status_code == 422
+
+    second_expense_rule = (
+        await create_rule(
+            client, workspace_id, name="Second bill", amount="30"
+        )
+    ).json()
+    second_expense_occurrence = (await occurrences_for_rule(
+        client, workspace_id, second_expense_rule["id"]
+    ))[0]
+    already_linked = await client.post(
+        f"/api/v1/workspaces/{workspace_id}/plan-occurrences/"
+        f"{second_expense_occurrence['id']}/link-transaction",
+        json={"transaction_id": vnd_spend["id"]},
+    )
+    assert already_linked.status_code == 409
+    assert "already linked" in already_linked.json()["detail"]
+
+    linked_income = await client.post(
+        income_link_route, json={"transaction_id": fresh_income["id"]}
+    )
+    assert linked_income.status_code == 200, linked_income.text
+    assert linked_income.json()["actual_asset"]["code"] == "USD"
+
+
+async def test_link_hides_foreign_transactions(client):
+    alice = await register(client)
+    alice_workspace = alice["workspace"]["id"]
+    alice_account = await create_account(client, "Alice USD", "USD", "100")
+    alice_spend = (
+        await client.post(
+            "/api/v1/operations/spend",
+            json={"account_id": alice_account["id"], "amount": "5"},
+        )
+    ).json()
+
+    await client.post("/api/v1/auth/logout")
+    bob = await register(client, "bob")
+    bob_workspace = bob["workspace"]["id"]
+    await create_account(client, "Bob USD", "USD", "100")
+    bob_rule = (
+        await create_rule(client, bob_workspace, name="Bob bill", amount="5")
+    ).json()
+    bob_occurrence = (await occurrences_for_rule(
+        client, bob_workspace, bob_rule["id"]
+    ))[0]
+
+    foreign = await client.post(
+        f"/api/v1/workspaces/{bob_workspace}/plan-occurrences/"
+        f"{bob_occurrence['id']}/link-transaction",
+        json={"transaction_id": alice_spend["id"]},
+    )
+    assert foreign.status_code == 404
+    missing = await client.post(
+        f"/api/v1/workspaces/{bob_workspace}/plan-occurrences/"
+        f"{bob_occurrence['id']}/link-transaction",
+        json={"transaction_id": alice_spend["id"] + 100000},
+    )
+    assert missing.status_code == 404
+    assert foreign.json()["detail"] == missing.json()["detail"]
+
+    reverse_foreign = await client.post(
+        f"/api/v1/transactions/{alice_spend['id']}/link-plan",
+        json={"occurrence_id": bob_occurrence["id"]},
+    )
+    reverse_missing = await client.post(
+        f"/api/v1/transactions/{alice_spend['id'] + 100000}/link-plan",
+        json={"occurrence_id": bob_occurrence["id"]},
+    )
+    assert reverse_foreign.status_code == 404
+    assert reverse_missing.status_code == 404
+    assert reverse_foreign.json()["detail"] == reverse_missing.json()["detail"]
+
+    reverse_foreign_occurrence = await client.post(
+        f"/api/v1/transactions/{alice_spend['id']}/link-plan",
+        json={"occurrence_id": bob_occurrence["id"] + 100000},
+    )
+    assert reverse_foreign_occurrence.status_code == 404
+    assert (
+        reverse_foreign_occurrence.json()["detail"]
+        == "Plan occurrence not found"
+    )
+
+    resolved = await client.post(
+        f"/api/v1/workspaces/{bob_workspace}/plan-occurrences/"
+        f"{bob_occurrence['id']}/skip"
+    )
+    assert resolved.status_code == 200
+    resolved_foreign = await client.post(
+        f"/api/v1/workspaces/{bob_workspace}/plan-occurrences/"
+        f"{bob_occurrence['id']}/link-transaction",
+        json={"transaction_id": alice_spend["id"]},
+    )
+    resolved_missing = await client.post(
+        f"/api/v1/workspaces/{bob_workspace}/plan-occurrences/"
+        f"{bob_occurrence['id']}/link-transaction",
+        json={"transaction_id": alice_spend["id"] + 100000},
+    )
+    assert resolved_foreign.status_code == 404
+    assert resolved_missing.status_code == 404
+    assert resolved_foreign.json()["detail"] == resolved_missing.json()["detail"]
+
+
 async def test_plan_validation_and_permissions(client):
     alice = await register(client)
     workspace_id = alice["workspace"]["id"]

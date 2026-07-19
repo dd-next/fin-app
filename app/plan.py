@@ -71,27 +71,27 @@ async def plan_rule_out(session: AsyncSession, rule: PlanRule) -> PlanRuleOut:
     )
 
 
-async def actual_amount(
+async def actual_amount_and_asset(
     session: AsyncSession, transaction_id: int | None
-) -> Decimal | None:
+) -> tuple[Decimal | None, Asset | None]:
     if transaction_id is None:
-        return None
-    amounts = list(
+        return None, None
+    legs = list(
         (
             await session.execute(
-                select(TransactionLeg.amount).where(
+                select(TransactionLeg).where(
                     TransactionLeg.transaction_id == transaction_id
                 )
             )
         ).scalars()
     )
-    if not amounts:
-        return None
-    negatives = [
-        decimal_absolute(value) for value in amounts if Decimal(value) < 0
-    ]
-    positives = [Decimal(value) for value in amounts if Decimal(value) > 0]
-    return (negatives or positives or [Decimal("0")])[0]
+    if not legs:
+        return None, None
+    outgoing = [leg for leg in legs if Decimal(leg.amount) < 0]
+    incoming = [leg for leg in legs if Decimal(leg.amount) > 0]
+    leg = (outgoing or incoming or legs)[0]
+    asset = await session.get(Asset, leg.asset_id)
+    return decimal_absolute(leg.amount), asset
 
 
 async def plan_occurrence_out(
@@ -99,6 +99,9 @@ async def plan_occurrence_out(
 ) -> PlanOccurrenceOut:
     rule = await session.get(PlanRule, occurrence.plan_rule_id)
     assert rule is not None
+    amount, asset = await actual_amount_and_asset(
+        session, occurrence.transaction_id
+    )
     return PlanOccurrenceOut(
         id=occurrence.id,
         plan_rule_id=occurrence.plan_rule_id,
@@ -106,7 +109,8 @@ async def plan_occurrence_out(
         planned_amount=occurrence.planned_amount,
         status=occurrence.status,
         transaction_id=occurrence.transaction_id,
-        actual_amount=await actual_amount(session, occurrence.transaction_id),
+        actual_amount=amount,
+        actual_asset=AssetOut.model_validate(asset) if asset else None,
         matched_at=occurrence.matched_at,
         created_at=occurrence.created_at,
         rule=await plan_rule_out(session, rule),
@@ -516,10 +520,11 @@ async def link_occurrence_transaction(
     rule: PlanRule,
     transaction: Transaction,
 ) -> PlanOccurrenceOut:
+    if transaction.workspace_id != rule.workspace_id:
+        raise HTTPException(status_code=404, detail="Transaction not found")
     require_open_occurrence(occurrence)
     if (
-        transaction.workspace_id != rule.workspace_id
-        or transaction.status != "posted"
+        transaction.status != "posted"
         or transaction.parent_transaction_id is not None
     ):
         raise HTTPException(status_code=422, detail="Transaction cannot fulfill this occurrence")
@@ -541,17 +546,6 @@ async def link_occurrence_transaction(
     ).scalar_one_or_none()
     if linked is not None:
         raise HTTPException(status_code=409, detail="Transaction is already linked to Plan")
-    legs = list(
-        (
-            await session.execute(
-                select(TransactionLeg).where(
-                    TransactionLeg.transaction_id == transaction.id
-                )
-            )
-        ).scalars()
-    )
-    if not legs or any(leg.asset_id != rule.asset_id for leg in legs):
-        raise HTTPException(status_code=422, detail="Transaction asset does not match plan occurrence")
     occurrence.status = "completed"
     occurrence.transaction_id = transaction.id
     occurrence.matched_at = utcnow()
@@ -592,18 +586,19 @@ async def link_plan_from_transaction(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
-    transaction = await session.get(Transaction, transaction_id)
     occurrence = await session.get(PlanOccurrence, body.occurrence_id)
     rule = await session.get(PlanRule, occurrence.plan_rule_id) if occurrence else None
     workspace = await session.get(Workspace, rule.workspace_id) if rule else None
     if (
-        transaction is None
-        or occurrence is None
+        occurrence is None
         or rule is None
         or workspace is None
         or workspace.owner_user_id != user.id
     ):
         raise HTTPException(status_code=404, detail="Plan occurrence not found")
+    transaction = await session.get(Transaction, transaction_id)
+    if transaction is None:
+        raise HTTPException(status_code=404, detail="Transaction not found")
     return await link_occurrence_transaction(
         session,
         occurrence,

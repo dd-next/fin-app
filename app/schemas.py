@@ -446,6 +446,7 @@ class PlanOccurrenceOut(BaseModel):
     status: Literal["planned", "completed", "skipped", "overdue"]
     transaction_id: int | None
     actual_amount: Decimal | None
+    actual_asset: AssetOut | None
     matched_at: datetime | None
     created_at: datetime
     rule: PlanRuleOut

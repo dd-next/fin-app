@@ -1220,7 +1220,7 @@ function planOccurrenceNode(occurrence, { label = null, overdueCount = 0 } = {})
   row.className = `plan-item ${occurrence.status}`;
   const actual = occurrence.actual_amount === null
     ? ""
-    : `<small>Planned ${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)} · actual ${formatMoney(occurrence.actual_amount, occurrence.rule.asset.code)}</small>`;
+    : `<small>Planned ${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)} · actual ${formatMoney(occurrence.actual_amount, (occurrence.actual_asset ?? occurrence.rule.asset).code)}</small>`;
   const badge = overdueCount > 1
     ? ` <span class="badge overdue">${overdueCount} overdue</span>`
     : "";
@@ -1480,9 +1480,7 @@ function transactionMatchesOccurrence(transaction, occurrence) {
   const expected = occurrence.rule.kind === "income" ? "income" : occurrence.rule.kind === "reserve_transfer" ? "transfer" : "expense";
   return transaction.type === expected
     && transaction.status === "posted"
-    && !transaction.plan_occurrence_id
-    && transaction.legs.length > 0
-    && transaction.legs.every((leg) => leg.asset.code === occurrence.rule.asset.code);
+    && !transaction.plan_occurrence_id;
 }
 
 async function openPlanLink({ occurrence = null, transaction = null }) {
