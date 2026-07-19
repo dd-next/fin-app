@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    image: finapp-v2
+    # Exactly one application replica; scaling is not supported for local SQLite.
+    deploy:
+      replicas: 1
+    ports:
+      - "8000:8000"
+    environment:
+      # SQLite lives on the persistent volume mounted at /data.
+      DATABASE_URL: sqlite+aiosqlite:////data/finapp.db
+      # Set to true only behind external TLS so auth cookies keep the Secure flag.
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+    volumes:
+      - finapp-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  finapp-data:

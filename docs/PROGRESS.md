@@ -391,6 +391,28 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   `/data/finapp.db` on a persistent volume.
 - Decisions / assumptions: `COOKIE_SECURE` stays unset in the image because the
   container serves plain HTTP and TLS/reverse proxy are external per spec §11.
+- Completed: Block 2 adds `compose.yaml` with a single `app` service
+  (`deploy.replicas: 1`), a named `finapp-data` volume mounted at `/data`,
+  `DATABASE_URL=sqlite+aiosqlite:////data/finapp.db`, an overridable
+  `COOKIE_SECURE` defaulting to `false`, `restart: unless-stopped`, a `/health`
+  healthcheck, and no TLS/reverse-proxy or extra services.
+- Reviewer blocks: compose persistence → fresh
+  `phase13_compose_persistence_review` verified one replica, absolute-path
+  named-volume storage, safe overridable env, absence of forbidden services,
+  and that the DB cannot land on an anonymous volume or image layer → APPROVED
+  with no findings.
+- Tests: `docker compose config` — renders one `app` service, replicas 1, named
+  volume `finapp-data`→`/data`, correct `DATABASE_URL`/`COOKIE_SECURE`,
+  healthcheck present; `docker compose up -d` on a clean volume — container
+  reached `healthy`, `/health` returned `{"status":"ok"}`; registered a user,
+  `docker compose restart`, then login returned HTTP 200 → data persisted
+  across restart; `docker compose down` removed container/network but retained
+  volume `fin_app_finapp-data`.
+- Checks: exactly one replica; SQLite persists on the named volume at
+  `/data/finapp.db`; fresh volume migrates and `/health` is healthy; created
+  data survives a container restart; no embedded TLS/reverse proxy.
+- Decisions / assumptions: host port `8000` is published for an external TLS
+  terminator; the compose healthcheck intentionally mirrors the image's.
 - Blocker: none.
 
 ## Required phase-entry template
