@@ -13,7 +13,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - [x] Phase 9 — Clean release schema
 - [x] Phase 10 — Financial correctness
 - [x] Phase 11 — Operations and account periods UI
-- [~] Phase 12 — Transactions and Plan
+- [x] Phase 12 — Transactions and Plan
 - [ ] Phase 13 — Docker and release verification
 
 ## Starting point — 2026-07-19
@@ -249,7 +249,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 
 ### Phase 12 — Transactions and Plan (2026-07-19)
 
-- Status: [~]
+- Status: [x]
 - Completed: Block 1 aligns Transactions with its history-only boundary:
   removed public transaction-creation routes and SPA controls; creation now
   occurs through Operations only. Added the owner-private Period filter with
@@ -311,6 +311,13 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   blindness, and the OpenAPI whitelist against app code, and confirmed the
   combined Phase 12 suites satisfy every build-plan phase check → APPROVED
   with no P0–P2 (two non-blocking P3 notes recorded, no change required).
+  Phase commit gate → fresh `phase12_commit_gate_review` independently re-ran
+  the full gate commands, verified the combined `92d685f..HEAD` diff contains
+  only Phase 12 work, confirmed all five build-plan phase checks are
+  code/test-evidenced, and validated this ledger entry against reality →
+  APPROVED (commit-ready) with one P3 dead `AdjustmentIn` schema → removed
+  (its only consumer, the adjustment creation route, left in Block 1); full
+  suite re-run green after removal.
 - Tests: initial Block 1 targeted suite — **42 passed in 6.50s**; post-review
   expanded Transactions/ledger/Operations/Undo/period/frontend/sharing suite —
   **46 passed in 7.25s**; reviewer independent expanded suite — **63 passed in
@@ -327,8 +334,24 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   `git diff --check` — passed. Block 4 targeted suite
   (`tests/test_phase12_privacy_v2.py`) — **3 passed in 0.74s**; full suite
   after Block 4 — **111 passed in 12.17s**; reviewer independently re-ran the
-  Block 4 suite — **3 passed in 0.77s**.
-- Checks: OpenAPI has 42 paths; Transactions exposes list, detail/correction,
+  Block 4 suite — **3 passed in 0.77s**. Phase gate: `env -u DATABASE_URL
+  PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider -q`
+  — **111 passed in 11.73s**; `node --check app/static/app.js`,
+  `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m compileall -q app tests`,
+  `.venv/bin/pip check`, and `git diff --check` — passed/no broken
+  requirements; `env -u DATABASE_URL .venv/bin/alembic check` — no new upgrade
+  operations.
+- Checks: scratch-database browser verification used migrated DB
+  `phase12/verify.db` (fresh `alembic upgrade head` to `0001_release_v2`);
+  `/health` returned `{"status":"ok"}`. Real UI checks at desktop and ~721px
+  widths covered: one card per rule with nearest overdue (latest overdue date)
+  plus `2 overdue` badge and nearest future occurrence; Show details dialog
+  with full history and all/open/completed/skipped filter; Link dialog
+  end-to-end (occurrence preselected, eligible transaction listed, submit) —
+  Completed counter moved 0→1, the card re-rendered with the remaining single
+  overdue row and no badge, and the completed occurrence showed
+  `Planned 500.00 USD · actual 450.00 USD`; browser console had no errors.
+  OpenAPI has 42 paths; Transactions exposes list, detail/correction,
   assignment, and Delete only. Legacy creation and Void paths/copy are absent;
   the public status enum is `posted|unassigned|deleted`. Tests cover pre-period,
   out-of-range, exact timestamp boundary, shared/foreign period privacy, all

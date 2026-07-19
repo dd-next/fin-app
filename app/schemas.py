@@ -303,11 +303,6 @@ class ExchangeIn(TransactionCommon):
     fee: FeeIn | None = None
 
 
-class AdjustmentIn(TransactionCommon):
-    account_id: int
-    delta: DecimalAmount
-
-
 class AssignAccountIn(BaseModel):
     account_id: int
     confirm_ended_period: bool = False
