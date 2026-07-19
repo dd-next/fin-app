@@ -14,7 +14,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - [x] Phase 10 — Financial correctness
 - [x] Phase 11 — Operations and account periods UI
 - [x] Phase 12 — Transactions and Plan
-- [~] Phase 13 — Docker and release verification
+- [x] Phase 13 — Docker and release verification
 
 ## Starting point — 2026-07-19
 
@@ -362,7 +362,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 
 ### Phase 13 — Docker and release verification (2026-07-19)
 
-- Status: [~]
+- Status: [x]
 - Completed: Block 1 adds the single-container release image. `Dockerfile`
   builds a non-root (`uid 10001 finapp`) `python:3.12-slim` container, installs
   only runtime dependencies, copies just `alembic.ini`, `alembic/`, and `app/`,
@@ -440,6 +440,60 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   scratch volume.
 - Decisions / assumptions: backup/restore use `busybox` with the full volume
   name `fin_app_finapp-data`; the restore must re-own `finapp.db` to UID 10001.
+- Completed: Block 4 ran full release acceptance against the container. A clean
+  named volume migrated to `0001_release_v2` and reported `healthy`; a fresh
+  scratch migration seeded exactly the eight assets and zero users; the
+  VND/USD regression rendered live in the seeded demo workspace (15,258,400
+  VND → 580.34 USD valued balance; that workspace's Total capital/Available
+  totalled 1,760.34 USD — a demo figure, not the automated regression dataset,
+  whose 580.34 balance reproduces exactly in `tests/test_valuation_v2.py`). Browser acceptance at 1280×900 and 480×900
+  confirmed Operations opens on Spend with the fixed selector order and no
+  history, the 480px layout has 44px selector tabs and roving ArrowRight focus,
+  Analytics and Scan are stable `Coming soon` (no OCR), UI copy is English with
+  no Cyrillic, and neither width scrolls horizontally.
+- Reviewer blocks: release acceptance / phase commit gate → fresh
+  `phase13_release_acceptance_review` re-ran the gate commands (matching 111
+  passed, alembic single head, 8 assets / 0 users), independently mapped every
+  spec §12 criterion to real code/tests, and confirmed all four Phase 13 blocks
+  have recorded reviewer passes with P0–P2 closed and no forbidden scope →
+  APPROVED (phase commit-ready) with one non-blocking P3 (the 1,760.34 demo
+  total is browser-only, not from the regression dataset — clarified above).
+- Tests: `docker compose down -v` then `up -d` on a clean volume — migration to
+  `0001_release_v2`, container `healthy`, `/health` `{"status":"ok"}`; fresh
+  scratch `alembic upgrade head` — 8 assets `BTC,ETH,EUR,RUB,TRX,USD,USDT,VND`,
+  0 users; `docker build -t finapp-v2 .` — image built (190MB); `docker compose
+  config` — valid; host `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1
+  .venv/bin/python -m pytest -p no:cacheprovider -q` — **111 passed in 11.19s**;
+  `node --check app/static/app.js`, `compileall`, `.venv/bin/pip check`,
+  `env -u DATABASE_URL .venv/bin/alembic check` (no new upgrade operations), and
+  `git diff --check` — all passed.
+- Checks: `docker build` and `docker compose config` pass; a fresh volume
+  migrates and `/health` is healthy; created data survives a container restart
+  (Block 2) and a down/up cycle; backup/restore executed on a scratch volume
+  (Block 3); full suite, JS check, fresh migration, browser acceptance at
+  480×900 and 1280×900, keyboard/focus, English UI, and no horizontal scroll
+  all pass.
+- Acceptance criteria (spec §12): (1) Main currency + isolated manual rates
+  with override/delete/fallback and `ROUND_HALF_UP` — valuation suite; (2)
+  Total capital/Available/valued balances use only permitted rates, VND/USD
+  example passes live; (3) Operations opens on Spend, preserves selector/account
+  locally, correct order, all actions without a period, no history — browser +
+  suite; (4) server-persistent creator/account Undo, soft void, reload-safe, no
+  older fallback — undo suite; (5) snapshot funding and signed-leg replay,
+  same-account overlap rejected/cross-account allowed — period suite; (6)
+  transfers/exchanges update both periods, internal transfer neutral, no
+  pre-period double-count — period suite; (7) Transactions filtering/details/
+  correction/assignment and soft `× Delete` with `Deleted`, no add flow —
+  Phase 12 suite; (8) one card per rule, overdue+next only, Link/Skip only,
+  cross-asset/account semantic linking, no Pay/Receive — Phase 12 suite; (9)
+  sharing keeps account permissions, no owner-private Plan/period leakage —
+  sharing/privacy suites; (10) Scan and Analytics stable `Coming soon` —
+  browser; (11) every logical block has an independent reviewer pass — this
+  ledger; (12) full tests, JS check, fresh migration, phone/desktop browser
+  acceptance, Docker persistence, and documented backup/restore all pass —
+  above.
+- Decisions / assumptions: acceptance used a scratch Compose volume and a
+  seeded demo workspace; both were removed afterward (`docker compose down -v`).
 - Blocker: none.
 
 ## Required phase-entry template
