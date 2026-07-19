@@ -10,7 +10,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 ## Current release plan
 
 - [x] Phase 8 — Documentation and specification reset
-- [ ] Phase 9 — Clean release schema
+- [x] Phase 9 — Clean release schema
 - [ ] Phase 10 — Financial correctness
 - [ ] Phase 11 — Operations and account periods UI
 - [ ] Phase 12 — Transactions and Plan
@@ -57,6 +57,47 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   correction/soft void require confirmation; closed periods are read-only.
   Only same-asset internal transfers are required to stay neutral to Total
   capital; cross-asset exchange valuation follows active rates.
+- Blocker: none.
+
+### Phase 9 — Clean release schema (2026-07-19)
+
+- Status: [x]
+- Completed: created and independently restored the timestamped legacy backup;
+  replaced the five-revision prototype history with clean head
+  `0001_release_v2`; introduced workspace/manual rates, workspace exchange
+  rates, strict `Transaction.origin`, immutable leg timestamps,
+  account-specific periods, and persisted Operations Undo state. Removed
+  Tracker/commitment/frozen-valuation models, routes, clients, and obsolete
+  Plan Pay/Receive; seeded exactly eight release assets and created a clean
+  runtime `finapp.db` with zero users.
+- Reviewer blocks: backup/reset → `phase9_backup_review` → APPROVED, no P0–P3;
+  schema/migration → `phase9_schema_review` → P1 unrestricted origin fixed
+  with DB constraint → `phase9_schema_rereview` APPROVED; runtime cleanup →
+  `phase9_runtime_cleanup_review` → APPROVED; legacy SPA clients →
+  `phase9_legacy_client_review` → P3 stale wording fixed; migration/regression
+  tests → `phase9_regression_review` → three P2 coverage gaps fixed →
+  `phase9_regression_rereview` APPROVED with all P2 closed.
+- Tests: `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m
+  pytest -p no:cacheprovider -q` — **66 passed**; targeted Phase 9 regression
+  set — **18 passed in 2.15s**; `node --check app/static/app.js` — passed;
+  `PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m compileall -q app tests` —
+  passed; `.venv/bin/pip check` — no broken requirements; `env -u DATABASE_URL
+  .venv/bin/alembic check` — no new upgrade operations; `git diff --check` —
+  passed.
+- Checks: backup SHA-256
+  `f2441becb810355345dce10370c6c96a8a8373a416f383dc65f96baaa74b748a`;
+  source `.backups/finapp-pre-v2-20260719T035114Z.db` and byte-identical
+  scratch restore at
+  `/private/tmp/finapp-phase9-restore-20260719T035114Z.db` both report
+  `PRAGMA integrity_check` — `ok`, legacy head `0005_v2`, 3 users, and 25
+  financial transactions. Fresh migration and runtime DB pass integrity at
+  `0001_release_v2`, contain the exact release tables/assets and no users;
+  application lifespan and `/health` pass; OpenAPI contains no Tracker,
+  commitment, Pay, or Receive routes.
+- Decisions / assumptions: retained both the SQLite online backup and exact
+  original file for recoverability; Git history retains the removed migration
+  chain. The Operations placeholder is intentionally transitional and is
+  replaced by the functional Phase 11 surface.
 - Blocker: none.
 
 ## Required phase-entry template

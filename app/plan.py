@@ -12,7 +12,6 @@ from app.access import require_workspace_owner
 from app.auth import require_user
 from app.db import get_session
 from app.ledger import (
-    financial_times,
     require_asset_code,
     require_category,
     validate_amount,
@@ -20,7 +19,6 @@ from app.ledger import (
 from app.models import (
     Account,
     Asset,
-    BudgetCommitment,
     PlanOccurrence,
     PlanRule,
     Transaction,
@@ -32,16 +30,13 @@ from app.models import (
 from app.recurrence import horizon_date, occurrence_dates
 from app.schemas import (
     AssetOut,
-    PlanExecuteIn,
     PlanLinkTransactionIn,
     PlanOccurrenceOut,
-    PeriodProposalOut,
     PlanRuleCreate,
     PlanRuleOut,
     PlanRulePatch,
     TransactionLinkPlanIn,
 )
-from app.tracker_service import build_period_proposal, sync_plan_fulfillment
 
 
 router = APIRouter(tags=["plan"])
@@ -183,18 +178,6 @@ async def materialize_rule(
     reset_schedule: bool = False,
     update_amount: bool = False,
 ) -> None:
-    protected_occurrence_ids = set(
-        (
-            await session.execute(
-                select(BudgetCommitment.plan_occurrence_id)
-                .join(
-                    PlanOccurrence,
-                    PlanOccurrence.id == BudgetCommitment.plan_occurrence_id,
-                )
-                .where(PlanOccurrence.plan_rule_id == rule.id)
-            )
-        ).scalars()
-    )
     if not rule.is_active:
         open_items = list(
             (
@@ -208,8 +191,6 @@ async def materialize_rule(
         )
         now = utcnow()
         for item in open_items:
-            if item.id in protected_occurrence_ids:
-                continue
             item.status = "skipped"
             item.matched_at = now
         return
@@ -225,8 +206,7 @@ async def materialize_rule(
             ).scalars()
         )
         for item in reset_items:
-            if item.id not in protected_occurrence_ids:
-                await session.delete(item)
+            await session.delete(item)
         await session.flush()
     today = workspace_today(workspace)
     existing = {
@@ -239,10 +219,7 @@ async def materialize_rule(
     }
     if update_amount:
         for item in existing.values():
-            if (
-                item.status in OPEN_STATUSES
-                and item.id not in protected_occurrence_ids
-            ):
+            if item.status in OPEN_STATUSES:
                 item.planned_amount = rule.amount
     for due_date in occurrence_dates(
         rule.first_due_date, rule.recurrence, horizon_date(today)
@@ -510,147 +487,6 @@ def require_open_occurrence(occurrence: PlanOccurrence) -> None:
         raise HTTPException(status_code=409, detail="Plan occurrence is already resolved")
 
 
-async def execute_occurrence(
-    session: AsyncSession,
-    workspace: Workspace,
-    user: User,
-    occurrence: PlanOccurrence,
-    rule: PlanRule,
-    body: PlanExecuteIn,
-) -> PlanOccurrenceOut:
-    require_open_occurrence(occurrence)
-    asset = await session.get(Asset, rule.asset_id)
-    assert asset is not None
-    amount = validate_amount(body.amount or occurrence.planned_amount, asset)
-    occurred_at, local_date = financial_times(workspace, body.occurred_at, body.local_date)
-    transaction = Transaction(
-        workspace_id=workspace.id,
-        created_by_user_id=user.id,
-        type=(
-            "income"
-            if rule.kind == "income"
-            else "transfer"
-            if rule.kind == "reserve_transfer"
-            else "expense"
-        ),
-        category_id=rule.category_id,
-        counterparty=body.counterparty,
-        note=body.note or rule.name,
-        occurred_at=occurred_at,
-        local_date=local_date,
-        source="planned",
-        status="posted",
-    )
-    if rule.kind == "income":
-        account_id = body.account_id or body.to_account_id or rule.default_to_account_id
-        account = await require_plan_account(
-            session, account_id, workspace.id, asset.id, label="target"
-        )
-        if account is None:
-            raise HTTPException(status_code=422, detail="Income target account is required")
-        transaction.legs.append(
-            TransactionLeg(account_id=account.id, asset_id=asset.id, amount=amount)
-        )
-    elif rule.kind in EXPENSE_KINDS:
-        account_id = body.account_id or body.from_account_id or rule.default_from_account_id
-        account = await require_plan_account(
-            session, account_id, workspace.id, asset.id, label="source"
-        )
-        if account is None:
-            raise HTTPException(status_code=422, detail="Expense source account is required")
-        transaction.legs.append(
-            TransactionLeg(account_id=account.id, asset_id=asset.id, amount=-amount)
-        )
-    else:
-        source = await require_plan_account(
-            session,
-            body.from_account_id or rule.default_from_account_id,
-            workspace.id,
-            asset.id,
-            label="source",
-        )
-        target = await require_plan_account(
-            session,
-            body.to_account_id or rule.default_to_account_id,
-            workspace.id,
-            asset.id,
-            label="target",
-        )
-        if source is None or target is None:
-            raise HTTPException(status_code=422, detail="Both reserve transfer accounts are required")
-        if source.id == target.id:
-            raise HTTPException(status_code=422, detail="Reserve transfer accounts must differ")
-        transaction.category_id = None
-        transaction.legs.extend(
-            [
-                TransactionLeg(account_id=source.id, asset_id=asset.id, amount=-amount),
-                TransactionLeg(account_id=target.id, asset_id=asset.id, amount=amount),
-            ]
-        )
-    session.add(transaction)
-    await session.flush()
-    occurrence.status = "completed"
-    occurrence.transaction_id = transaction.id
-    occurrence.matched_at = utcnow()
-    await sync_plan_fulfillment(
-        session,
-        occurrence,
-        transaction,
-        body.base_amount,
-        confirm_ended_period=body.confirm_ended_period,
-        is_new_transaction=True,
-    )
-    await session.commit()
-    await session.refresh(occurrence)
-    rendered = await plan_occurrence_out(session, occurrence)
-    if rule.kind == "income":
-        rendered.period_proposal = PeriodProposalOut.model_validate(
-            await build_period_proposal(
-                session,
-                workspace,
-                transaction,
-                opening_occurrence_id=occurrence.id,
-            )
-        )
-    return rendered
-
-
-@router.post(
-    "/workspaces/{workspace_id}/plan-occurrences/{occurrence_id}/pay",
-    response_model=PlanOccurrenceOut,
-)
-async def pay_occurrence(
-    workspace_id: int,
-    occurrence_id: int,
-    body: PlanExecuteIn,
-    workspace: Workspace = Depends(require_workspace_owner),
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    occurrence, rule = await owned_occurrence(session, workspace_id, occurrence_id)
-    if rule.kind == "income":
-        raise HTTPException(status_code=422, detail="Use receive for income occurrences")
-    return await execute_occurrence(session, workspace, user, occurrence, rule, body)
-
-
-@router.post(
-    "/workspaces/{workspace_id}/plan-occurrences/{occurrence_id}/receive",
-    response_model=PlanOccurrenceOut,
-)
-async def receive_occurrence(
-    workspace_id: int,
-    occurrence_id: int,
-    body: PlanExecuteIn,
-    workspace: Workspace = Depends(require_workspace_owner),
-    user: User = Depends(require_user),
-    session: AsyncSession = Depends(get_session),
-):
-    occurrence, rule = await owned_occurrence(session, workspace_id, occurrence_id)
-    if rule.kind != "income":
-        raise HTTPException(status_code=422, detail="Only income occurrences can be received")
-    return await execute_occurrence(session, workspace, user, occurrence, rule, body)
-
-
 @router.post(
     "/workspaces/{workspace_id}/plan-occurrences/{occurrence_id}/skip",
     response_model=PlanOccurrenceOut,
@@ -676,9 +512,6 @@ async def link_occurrence_transaction(
     occurrence: PlanOccurrence,
     rule: PlanRule,
     transaction: Transaction,
-    supplied_base_amount: Decimal | None = None,
-    *,
-    confirm_ended_period: bool = False,
 ) -> PlanOccurrenceOut:
     require_open_occurrence(occurrence)
     if (
@@ -719,28 +552,9 @@ async def link_occurrence_transaction(
     occurrence.status = "completed"
     occurrence.transaction_id = transaction.id
     occurrence.matched_at = utcnow()
-    await sync_plan_fulfillment(
-        session,
-        occurrence,
-        transaction,
-        supplied_base_amount,
-        confirm_ended_period=confirm_ended_period,
-    )
     await session.commit()
     await session.refresh(occurrence)
-    rendered = await plan_occurrence_out(session, occurrence)
-    if rule.kind == "income":
-        workspace = await session.get(Workspace, rule.workspace_id)
-        assert workspace is not None
-        rendered.period_proposal = PeriodProposalOut.model_validate(
-            await build_period_proposal(
-                session,
-                workspace,
-                transaction,
-                opening_occurrence_id=occurrence.id,
-            )
-        )
-    return rendered
+    return await plan_occurrence_out(session, occurrence)
 
 
 @router.post(
@@ -763,8 +577,6 @@ async def link_transaction_to_occurrence(
         occurrence,
         rule,
         transaction,
-        body.base_amount,
-        confirm_ended_period=body.confirm_ended_period,
     )
 
 
@@ -794,6 +606,4 @@ async def link_plan_from_transaction(
         occurrence,
         rule,
         transaction,
-        body.base_amount,
-        confirm_ended_period=body.confirm_ended_period,
     )

@@ -189,6 +189,7 @@ async def latest_rate(
             select(ExchangeRate)
             .join(Transaction, Transaction.id == ExchangeRate.source_transaction_id)
             .where(
+                ExchangeRate.workspace_id == workspace_id,
                 ExchangeRate.base_asset_id == base_asset_id,
                 ExchangeRate.quote_asset_id == quote_asset_id,
                 Transaction.workspace_id == workspace_id,
@@ -305,6 +306,7 @@ async def transaction_out(
                 account_id=leg.account_id,
                 asset=AssetOut.model_validate(asset),
                 amount=leg.amount,
+                created_at=leg.created_at,
             )
         )
     plan_occurrence_id = None
@@ -316,28 +318,19 @@ async def transaction_out(
                 )
             )
         ).scalar_one_or_none()
-    private_details = visible_account_ids is None
     return TransactionOut(
         id=transaction.id,
         workspace_id=transaction.workspace_id,
         created_by_user_id=transaction.created_by_user_id,
         type=transaction.type,
         category_id=transaction.category_id,
-        budget_period_id=(transaction.budget_period_id if private_details else None),
         parent_transaction_id=transaction.parent_transaction_id,
         counterparty=transaction.counterparty,
         note=transaction.note,
         occurred_at=transaction.occurred_at,
         local_date=transaction.local_date,
-        source=(transaction.source if private_details else "manual"),
+        origin=transaction.origin,
         status=transaction.status,
-        base_amount=(transaction.base_amount if private_details else None),
-        base_rate=(
-            quantize_exchange_rate(transaction.base_rate)
-            if private_details and transaction.base_rate is not None
-            else None
-        ),
-        rate_source=(transaction.rate_source if private_details else None),
         created_at=transaction.created_at,
         updated_at=transaction.updated_at,
         voided_at=transaction.voided_at,

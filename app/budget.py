@@ -1,4 +1,4 @@
-"""Pure budget math for the daily-budget tracker.
+"""Pure daily-budget math for account periods.
 
 No database, no framework imports. Functions take plain values / Decimals
 and return Decimals, so this module can be unit-tested in isolation.

@@ -49,7 +49,7 @@
       <nav class="primary-nav" aria-label="Primary">
         <button data-view="accounts" class="active"><span aria-hidden="true">◫</span>Accounts</button>
         <button data-view="transactions"><span aria-hidden="true">⇄</span>Transactions</button>
-        <button data-view="tracker"><span aria-hidden="true">◎</span>Tracker</button>
+        <button data-view="operations"><span aria-hidden="true">◎</span>Operations</button>
         <button data-view="plan"><span aria-hidden="true">◇</span>Plan</button>
         <button data-view="analytics"><span aria-hidden="true">⌁</span>Analytics</button>
       </nav>
@@ -106,41 +106,9 @@
         <button id="load-more" class="button-secondary load-more hidden">Load more</button>
       </section>
 
-      <section id="view-tracker" class="app-view hidden" aria-labelledby="tracker-title">
-        <div class="view-heading"><div><p class="eyebrow">Daily pace</p><h2 id="tracker-title">Tracker</h2></div><button id="add-budget-period">＋ New period</button></div>
-        <div id="tracker-empty" class="empty-state panel hidden"><div class="empty-icon">◎</div><h3>Start a spending period</h3><p>Set the money available until your next income. Required spending and reserve transfers from Plan will be set aside first.</p><button id="empty-add-budget-period">Start a period</button></div>
-        <div id="tracker-content" class="hidden">
-          <div class="tracker-summary-grid">
-            <article class="metric-card tracker-today-card"><span>Available today</span><strong id="tracker-available" aria-live="polite">—</strong><small id="tracker-today-detail">Daily budget after spending</small></article>
-            <article class="metric-card"><span>Remaining period</span><strong id="tracker-remaining">—</strong><small id="tracker-days-left">—</small></article>
-            <article class="metric-card"><span>Commitments</span><strong id="tracker-commitments-total">—</strong><small>Reserved or fulfilled</small></article>
-          </div>
-          <div id="tracker-savings-prompt" class="tracker-prompt panel-subtle hidden">
-            <div><strong>Yesterday left money for today</strong><span id="tracker-carry-copy"></span></div>
-            <div class="tracker-prompt-actions"><button id="tracker-keep-carry" class="button-secondary">Keep for today</button><button id="tracker-redistribute">Spread across remaining days</button></div>
-          </div>
-          <div class="tracker-layout">
-            <section class="panel tracker-main-panel">
-              <div class="group-heading"><h3 id="tracker-period-heading">Current period</h3><span id="tracker-period-range">—</span></div>
-              <div id="tracker-pace" class="tracker-pace"></div>
-              <form id="quick-expense-form" class="quick-expense">
-                <div class="group-heading"><h3>Quick expense</h3><span id="quick-preview">Enter an amount</span></div>
-                <div class="quick-expense-grid">
-                  <label>Amount<input id="quick-expense-amount" inputmode="decimal" required placeholder="0"></label>
-                  <label>Account<select id="quick-expense-account" required></select></label>
-                  <label>Category<select id="quick-expense-category"><option value="">Uncategorized</option></select></label>
-                  <label>Note<input id="quick-expense-note" maxlength="2000" placeholder="Optional"></label>
-                  <button type="submit">Add expense</button>
-                </div>
-                <p id="quick-expense-error" class="form-error" role="alert"></p>
-              </form>
-            </section>
-            <aside class="tracker-side">
-              <section class="panel-subtle"><div class="group-heading"><h3>Commitments</h3><span id="tracker-commitment-count">0</span></div><div id="tracker-commitment-list" class="commitment-list"></div><p id="tracker-no-commitments" class="muted">No required items in this period.</p></section>
-              <section class="panel-subtle"><label>Period history<select id="tracker-period-select"></select></label><div class="tracker-history-actions"><button id="tracker-view-transactions" class="button-secondary">View transactions</button><button id="tracker-close-period" class="button-danger">Close period</button></div></section>
-            </aside>
-          </div>
-        </div>
+      <section id="view-operations" class="app-view hidden" aria-labelledby="operations-title">
+        <div class="view-heading"><div><p class="eyebrow">Financial actions</p><h2 id="operations-title">Operations</h2></div></div>
+        <div class="placeholder panel"><span>◎</span><h3>Operations</h3><p>Spend, add funds, transfer, and account-period controls are being prepared on the clean release schema.</p></div>
       </section>
 
       <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
@@ -151,7 +119,7 @@
         </div>
         <div class="plan-toolbar panel-subtle"><label>Show<select id="plan-status-filter"><option value="open">Open plan</option><option value="all">All occurrences</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></label></div>
         <div id="plan-occurrence-groups" class="plan-groups"></div>
-        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Add expected income, required expenses, subscriptions, and reserve transfers. Nothing changes a real balance until you confirm it.</p><button id="empty-add-plan-rule">Add rule</button></div>
+        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Add expected income, required expenses, subscriptions, and reserve transfers. Plan never changes real balances; link a posted transaction when it happens.</p><button id="empty-add-plan-rule">Add rule</button></div>
         <section id="plan-rules-section" class="rules-section"><div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div><div id="plan-rule-list" class="rule-list"></div></section>
       </section>
 
@@ -267,27 +235,12 @@
         <label>Repeats<select id="plan-rule-recurrence"><option value="once">Once</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
         <label>First due date<input id="plan-rule-date" type="date" required></label>
         <label id="plan-rule-category-field">Category<select id="plan-rule-category"><option value="">Uncategorized</option></select></label>
-        <label id="plan-rule-from-field">From account<select id="plan-rule-from-account"><option value="">Choose when paying</option></select></label>
-        <label id="plan-rule-to-field">To account<select id="plan-rule-to-account"><option value="">Choose when receiving</option></select></label>
-        <label class="check-row span-two"><input id="plan-rule-required" type="checkbox"><span>Treat as required in Tracker</span></label>
+        <label id="plan-rule-from-field">From account<select id="plan-rule-from-account"><option value="">Choose source</option></select></label>
+        <label id="plan-rule-to-field">To account<select id="plan-rule-to-account"><option value="">Choose target</option></select></label>
+        <label class="check-row span-two"><input id="plan-rule-required" type="checkbox"><span>Mark as required spending</span></label>
       </div>
       <p id="plan-rule-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-rule-dialog">Cancel</button><button id="save-plan-rule" type="submit">Save rule</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="plan-action-dialog" aria-labelledby="plan-action-title">
-    <form id="plan-action-form" class="dialog-form">
-      <div class="dialog-heading"><div><p class="eyebrow">Confirm actual</p><h2 id="plan-action-title">Complete item</h2></div><button type="button" class="icon-button" data-close="plan-action-dialog" aria-label="Close">×</button></div>
-      <input id="plan-action-occurrence-id" type="hidden">
-      <label>Actual amount<input id="plan-action-amount" inputmode="decimal" required></label>
-      <label id="plan-action-account-field">Account<select id="plan-action-account"></select></label>
-      <label id="plan-action-from-field">From account<select id="plan-action-from-account"></select></label>
-      <label id="plan-action-to-field">To account<select id="plan-action-to-account"></select></label>
-      <label>Financial date<input id="plan-action-date" type="date" required></label>
-      <label>Note<input id="plan-action-note" maxlength="2000" placeholder="Optional"></label>
-      <p id="plan-action-error" class="form-error" role="alert"></p>
-      <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-action-dialog">Cancel</button><button id="complete-plan-item" type="submit">Confirm</button></div>
     </form>
   </dialog>
 
@@ -296,27 +249,9 @@
       <div class="dialog-heading"><div><p class="eyebrow">Plan vs actual</p><h2 id="plan-link-title">Link transaction</h2></div><button type="button" class="icon-button" data-close="plan-link-dialog" aria-label="Close">×</button></div>
       <label>Plan item<select id="plan-link-occurrence" required></select></label>
       <label>Existing transaction<select id="plan-link-transaction" required></select></label>
-      <p class="muted">Only matching posted transactions in the same asset are shown.</p>
+      <p class="muted">Only eligible posted transactions are shown.</p>
       <p id="plan-link-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-link-dialog">Cancel</button><button type="submit">Link transaction</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="budget-period-dialog" class="wide-dialog" aria-labelledby="budget-period-title">
-    <form id="budget-period-form" class="dialog-form">
-      <div class="dialog-heading"><div><p class="eyebrow">Tracker period</p><h2 id="budget-period-title">Start a period</h2></div><button type="button" class="icon-button" data-close="budget-period-dialog" aria-label="Close">×</button></div>
-      <input id="budget-opening-transaction" type="hidden">
-      <input id="budget-opening-occurrence" type="hidden">
-      <div id="budget-proposal-notice" class="notice hidden" role="status"></div>
-      <div class="form-grid two-columns">
-        <label>Start date<input id="budget-start-date" type="date" required></label>
-        <label>End date<input id="budget-end-date" type="date" required></label>
-        <label class="span-two">Funding amount · <span id="budget-base-code">USD</span><input id="budget-funding-amount" inputmode="decimal" required></label>
-      </div>
-      <section id="budget-proposal-commitments" class="proposal-commitments hidden"><div class="group-heading"><h3>Commitments snapshot</h3><span>Planned in this period</span></div><div id="budget-proposal-commitment-list" class="commitment-list"></div></section>
-      <p class="muted">Creating a period is always explicit. The opening income is funding and will not be counted a second time.</p>
-      <p id="budget-period-error" class="form-error" role="alert"></p>
-      <div class="form-actions"><button type="button" class="button-secondary" data-close="budget-period-dialog">Cancel</button><button type="submit">Confirm period</button></div>
     </form>
   </dialog>
 

@@ -24,7 +24,7 @@ def test_spa_has_five_sections_and_financial_dialogs():
     html = (STATIC / "index.html").read_text()
     parser = DomSmokeParser()
     parser.feed(html)
-    assert parser.views == {"accounts", "transactions", "tracker", "plan", "analytics"}
+    assert parser.views == {"accounts", "transactions", "operations", "plan", "analytics"}
     assert {
         "auth-form",
         "account-groups",
@@ -36,24 +36,20 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "transaction-dialog",
         "categories-dialog",
         "plan-rule-dialog",
-        "plan-action-dialog",
         "plan-link-dialog",
         "plan-occurrence-groups",
-        "tracker-content",
-        "quick-expense-form",
-        "tracker-period-select",
-        "budget-period-dialog",
+        "operations-title",
         "filter-account",
         "filter-type",
         "filter-category",
         "filter-status",
     } <= parser.ids
     assert "Coming soon" in html
-    assert 'aria-labelledby="tracker-title"' in html
+    assert 'aria-labelledby="operations-title"' in html
     assert 'aria-labelledby="plan-title"' in html
     assert 'aria-labelledby="analytics-title"' in html
-    assert 'id="tracker-available" aria-live="polite"' in html
-    assert 'id="budget-proposal-notice" class="notice hidden" role="status"' in html
+    assert "Tracker" not in html
+    assert "Commitments" not in html
     assert not re.search(r"[А-Яа-яЁё]", html)
 
 
@@ -68,15 +64,15 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
         "/api/v1/transactions/${type}",
         "/categories/${category.id}/archive",
         "/plan-rules/${rule.id}/archive",
-        "/plan-occurrences/${occurrence.id}/${action}",
         "/link-transaction",
-        "/budget-periods/${periodId}",
-        "/tracker/preview?pending=",
-        "/tracker/savings-decision",
         "/assign-account",
         "/void",
     ):
         assert route in javascript
+    assert "/budget-periods" not in javascript
+    assert "/tracker/" not in javascript
+    assert "/pay" not in javascript
+    assert "/receive" not in javascript
     assert "has_hidden_legs" in javascript
     assert "access_role" in javascript
     assert "state.categories.clear()" in javascript
@@ -88,7 +84,6 @@ def test_spa_keeps_archived_categories_for_history_but_not_new_choices():
     assert "/categories?include_archived=true" in javascript
     assert 'category.archived_at ? " (archived)" : ""' in javascript
     assert ".filter((category) => !category.archived_at)" in javascript
-    assert '!item.archived_at && ["expense", "both"].includes(item.kind)' in javascript
     assert "disabled: Boolean(category.archived_at)" in javascript
 
 

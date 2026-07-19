@@ -279,7 +279,7 @@ def test_decimal_exactness_no_float_drift():
     assert per_day(D("10"), 3) == D("3.33")
 
 
-def test_base_asset_quantum_controls_tracker_display_precision():
+def test_base_asset_quantum_controls_daily_budget_display_precision():
     vnd = compute_budget(
         D("100"),
         date(2026, 7, 1),

@@ -1,24 +1,9 @@
-from datetime import date, timedelta
 from decimal import Decimal
 
 from tests.conftest import register
 from tests.test_ledger_v2 import create_account
 
-
-async def create_period(client, workspace_id: int):
-    today = date.today()
-    return await client.post(
-        f"/api/v1/workspaces/{workspace_id}/budget-periods",
-        json={
-            "start_date": today.isoformat(),
-            "end_date": (today + timedelta(days=9)).isoformat(),
-            "funding_amount": "1000",
-            "confirmed": True,
-        },
-    )
-
-
-async def test_exchange_rate_lookup_is_isolated_for_accounts_and_tracker(client):
+async def test_exchange_rate_lookup_is_isolated_between_workspaces(client):
     await register(client, "alice")
     alice_usd = await create_account(client, "Alice USD", "USD", "1000")
     alice_btc = await create_account(client, "Alice BTC", "BTC", "0")
@@ -34,8 +19,12 @@ async def test_exchange_rate_lookup_is_isolated_for_accounts_and_tracker(client)
     assert exchange.status_code == 201, exchange.text
 
     await client.post("/api/v1/auth/logout")
-    bob = await register(client, "bob")
+    await register(client, "bob")
     bob_btc = await create_account(client, "Bob BTC", "BTC", "1")
+
+    rates = await client.get("/api/v1/exchange-rates")
+    assert rates.status_code == 200, rates.text
+    assert rates.json() == []
 
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert summary["net_worth"] == "0.00"
@@ -54,16 +43,6 @@ async def test_exchange_rate_lookup_is_isolated_for_accounts_and_tracker(client)
             "total": "1.00000000",
         }
     ]
-
-    period = await create_period(client, bob["workspace"]["id"])
-    assert period.status_code == 201, period.text
-    expense = await client.post(
-        "/api/v1/transactions/expense",
-        json={"account_id": bob_btc["id"], "amount": "0.01"},
-    )
-    assert expense.status_code == 422
-    assert "base_amount in USD is required" in expense.json()["detail"]
-
 
 async def test_rates_and_account_summary_use_output_precision_boundaries(client):
     await register(client)
@@ -145,25 +124,9 @@ async def test_account_summary_rounds_the_exact_aggregate_only_once(client):
     assert summary["available"] == "1000.01"
 
 
-async def test_manual_base_rate_is_quantized_and_unrepresentable_rate_is_rejected(client):
-    context = await register(client)
-    workspace_id = context["workspace"]["id"]
+async def test_unrepresentable_exchange_rate_is_rejected(client):
+    await register(client)
     eth = await create_account(client, "Manual ETH", "ETH", "1")
-    period = await create_period(client, workspace_id)
-    assert period.status_code == 201, period.text
-
-    expense = await client.post(
-        "/api/v1/transactions/expense",
-        json={
-            "account_id": eth["id"],
-            "amount": "0.03",
-            "base_amount": "50",
-        },
-    )
-    assert expense.status_code == 201, expense.text
-    assert expense.json()["base_rate"] == "1666.666666666666666667"
-    assert max(-Decimal(expense.json()["base_rate"]).as_tuple().exponent, 0) == 18
-
     usd = await create_account(client, "Tiny-rate USD", "USD", "1")
     tiny_exchange = await client.post(
         "/api/v1/transactions/exchange",

@@ -23,7 +23,6 @@ from app.ledger import (
 from app.models import (
     Account,
     Asset,
-    BudgetPeriod,
     ExchangeRate,
     PlanOccurrence,
     Transaction,
@@ -44,15 +43,6 @@ from app.schemas import (
     TransferIn,
     VoidTransactionIn,
 )
-from app.tracker_service import (
-    attach_transaction_to_tracker,
-    budget_period_status,
-    reopen_plan_commitment,
-    sync_plan_fulfillment,
-    workspace_today,
-)
-
-
 router = APIRouter(tags=["transactions"])
 
 
@@ -79,7 +69,7 @@ def _transaction(
         note=note,
         occurred_at=occurred_at,
         local_date=local_date,
-        source="manual",
+        origin="manual",
         status=status,
     )
 
@@ -150,14 +140,6 @@ async def _create_single(
     )
     session.add(transaction)
     await session.flush()
-    await attach_transaction_to_tracker(
-        session,
-        transaction,
-        body.base_amount,
-        actor_user_id=user.id,
-        confirm_ended_period=body.confirm_ended_period,
-        is_new_transaction=True,
-    )
     await session.commit()
     await session.refresh(transaction)
     return transaction
@@ -261,6 +243,7 @@ async def _replace_rates(
     session.add_all(
         [
             ExchangeRate(
+                workspace_id=transaction.workspace_id,
                 source_transaction_id=transaction.id,
                 base_asset_id=source.asset_id,
                 quote_asset_id=target.asset_id,
@@ -268,6 +251,7 @@ async def _replace_rates(
                 captured_at=transaction.occurred_at,
             ),
             ExchangeRate(
+                workspace_id=transaction.workspace_id,
                 source_transaction_id=transaction.id,
                 base_asset_id=target.asset_id,
                 quote_asset_id=source.asset_id,
@@ -344,15 +328,6 @@ async def create_exchange(
             )
         )
         session.add(fee)
-        await session.flush()
-        await attach_transaction_to_tracker(
-            session,
-            fee,
-            body.fee.base_amount,
-            actor_user_id=user.id,
-            confirm_ended_period=body.confirm_ended_period,
-            is_new_transaction=True,
-        )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -449,7 +424,7 @@ async def list_transactions(
     date_to: date | None = None,
     type: str | None = None,
     category_id: int | None = None,
-    source: str | None = None,
+    origin: str | None = None,
     status: str | None = None,
     created_by_user_id: int | None = None,
     cursor: int | None = None,
@@ -489,8 +464,8 @@ async def list_transactions(
         statement = statement.where(Transaction.type == type)
     if category_id is not None:
         statement = statement.where(Transaction.category_id == category_id)
-    if source is not None:
-        statement = statement.where(Transaction.source == source)
+    if origin is not None:
+        statement = statement.where(Transaction.origin == origin)
     if status is not None:
         statement = statement.where(Transaction.status == status)
     if created_by_user_id is not None:
@@ -575,11 +550,6 @@ async def patch_transaction(
         raise HTTPException(status_code=409, detail="Voided transaction cannot be edited")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
-    existing_period = (
-        await session.get(BudgetPeriod, transaction.budget_period_id)
-        if transaction.budget_period_id is not None
-        else None
-    )
     legs = await _transaction_legs(session, transaction.id)
     original_financial_state = _financial_state(transaction, legs)
     original_metadata = (
@@ -587,7 +557,6 @@ async def patch_transaction(
         transaction.counterparty,
         transaction.note,
     )
-    original_base_amount = transaction.base_amount
     exchange_rate_inputs: tuple[Account, Decimal, Account, Decimal] | None = None
     if "note" in body.model_fields_set:
         transaction.note = body.note
@@ -712,13 +681,7 @@ async def patch_transaction(
         positive.account_id, positive.asset_id, positive.amount = target.id, target.asset_id, to_amount
         if transaction.type == "exchange":
             exchange_rate_inputs = (source, from_amount, target, to_amount)
-    has_financial_change = (
-        _financial_state(transaction, legs) != original_financial_state
-        or (
-            "base_amount" in body.model_fields_set
-            and body.base_amount != original_base_amount
-        )
-    )
+    has_financial_change = _financial_state(transaction, legs) != original_financial_state
     has_persisted_change = has_financial_change or original_metadata != (
         transaction.category_id,
         transaction.counterparty,
@@ -733,57 +696,8 @@ async def patch_transaction(
             status_code=409,
             detail="Shared transaction correction requires explicit confirmation",
         )
-    if (
-        has_persisted_change
-        and existing_period is not None
-        and budget_period_status(existing_period, workspace_today(workspace)) == "ended"
-        and not body.confirm_ended_period
-    ):
-        detail = (
-            "Shared transaction correction requires explicit confirmation"
-            if user.id != workspace.owner_user_id
-            else "Ended period correction requires explicit confirmation"
-        )
-        raise HTTPException(
-            status_code=409,
-            detail=detail,
-        )
     if exchange_rate_inputs is not None and has_financial_change:
         await _replace_rates(session, transaction, *exchange_rate_inputs)
-    await session.flush()
-    linked_occurrence = (
-        await session.execute(
-            select(PlanOccurrence).where(
-                PlanOccurrence.transaction_id == transaction.id
-            )
-        )
-    ).scalar_one_or_none()
-    if linked_occurrence is not None and has_financial_change:
-        await sync_plan_fulfillment(
-            session,
-            linked_occurrence,
-            transaction,
-            body.base_amount,
-            actor_user_id=user.id,
-            confirm_ended_period=body.confirm_ended_period,
-        )
-    elif (
-        linked_occurrence is None
-        and transaction.type in {"expense", "income"}
-        and has_financial_change
-    ):
-        await attach_transaction_to_tracker(
-            session,
-            transaction,
-            body.base_amount,
-            actor_user_id=user.id,
-            confirm_ended_period=body.confirm_ended_period,
-        )
-    elif transaction.type not in {"expense", "income"} and linked_occurrence is None:
-        transaction.budget_period_id = None
-        transaction.base_amount = None
-        transaction.base_rate = None
-        transaction.rate_source = None
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -841,23 +755,6 @@ async def void_transaction(
         raise HTTPException(status_code=409, detail="Transaction is already voided")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
-    affected_periods = list(
-        (
-            await session.execute(
-                select(BudgetPeriod)
-                .join(
-                    Transaction,
-                    Transaction.budget_period_id == BudgetPeriod.id,
-                )
-                .where(
-                    or_(
-                        Transaction.id == transaction.id,
-                        Transaction.parent_transaction_id == transaction.id,
-                    )
-                )
-            )
-        ).scalars().unique()
-    )
     if (
         user.id != workspace.owner_user_id
         and not (body and body.confirm_ended_period)
@@ -866,20 +763,6 @@ async def void_transaction(
             status_code=409,
             detail="Shared transaction correction requires explicit confirmation",
         )
-    if any(
-        budget_period_status(period, workspace_today(workspace)) == "ended"
-        for period in affected_periods
-    ):
-        if not (body and body.confirm_ended_period):
-            detail = (
-                "Shared transaction correction requires explicit confirmation"
-                if user.id != workspace.owner_user_id
-                else "Ended period correction requires explicit confirmation"
-            )
-            raise HTTPException(
-                status_code=409,
-                detail=detail,
-            )
     now = utcnow()
     transaction.status = "voided"
     transaction.voided_at = now
@@ -905,7 +788,6 @@ async def void_transaction(
         )
         linked_occurrence.transaction_id = None
         linked_occurrence.matched_at = None
-        await reopen_plan_commitment(session, linked_occurrence)
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -925,6 +807,7 @@ async def list_exchange_rates(
                 select(ExchangeRate)
                 .join(Transaction, Transaction.id == ExchangeRate.source_transaction_id)
                 .where(
+                    ExchangeRate.workspace_id == workspace.id,
                     Transaction.workspace_id == workspace.id,
                     Transaction.status == "posted",
                 )

@@ -13,12 +13,6 @@ const state = {
   planRules: [],
   planOccurrences: [],
   planLinkTransactions: [],
-  trackerPeriods: [],
-  trackerSummary: null,
-  trackerPrompt: null,
-  selectedTrackerPeriodId: null,
-  periodProposal: null,
-  quickPreviewTimer: null,
   activeView: "accounts",
   activeAccount: null,
   sharingAccount: null,
@@ -184,10 +178,6 @@ async function showApp(context) {
     state.transactions = [];
     state.planRules = [];
     state.planOccurrences = [];
-    state.trackerPeriods = [];
-    state.trackerSummary = null;
-    state.trackerPrompt = null;
-    state.selectedTrackerPeriodId = null;
   }
   state.lastUserId = context.user.id;
   state.context = context;
@@ -207,12 +197,11 @@ async function refreshAll() {
   try {
     if (!state.assets.length) state.assets = await api("/api/v1/assets");
     const workspaceId = state.context.workspace.id;
-    const [summary, page, planRules, planOccurrences, trackerPeriods] = await Promise.all([
+    const [summary, page, planRules, planOccurrences] = await Promise.all([
       api("/api/v1/accounts/summary"),
       api("/api/v1/transactions?limit=50"),
       api(`/api/v1/workspaces/${workspaceId}/plan-rules`),
       api(`/api/v1/workspaces/${workspaceId}/plan-occurrences`),
-      api(`/api/v1/workspaces/${workspaceId}/budget-periods`),
     ]);
     state.summary = summary;
     state.accounts = summary.accounts;
@@ -220,18 +209,6 @@ async function refreshAll() {
     state.nextCursor = page.next_cursor;
     state.planRules = planRules;
     state.planOccurrences = planOccurrences;
-    state.trackerPeriods = trackerPeriods;
-    const knownTrackerIds = new Set(trackerPeriods.map((period) => period.id));
-    if (!knownTrackerIds.has(Number(state.selectedTrackerPeriodId))) {
-      state.selectedTrackerPeriodId = trackerPeriods.find((period) => period.status === "current")?.id || trackerPeriods[0]?.id || null;
-    }
-    state.trackerSummary = state.selectedTrackerPeriodId
-      ? await api(`/api/v1/workspaces/${workspaceId}/budget-periods/${state.selectedTrackerPeriodId}`)
-      : null;
-    const selectedCurrent = state.trackerSummary?.period.status === "current";
-    state.trackerPrompt = selectedCurrent
-      ? await api(`/api/v1/workspaces/${workspaceId}/tracker/savings-prompt`)
-      : null;
     const workspaceIds = [...new Set(state.accounts.map((account) => account.workspace_id))];
     await Promise.all([
       categoriesFor(state.context.workspace.id),
@@ -241,7 +218,6 @@ async function refreshAll() {
     renderFilterOptions();
     renderTransactions();
     renderPlan();
-    renderTracker();
   } catch (error) {
     toast(error.message);
   } finally {
@@ -250,7 +226,7 @@ async function refreshAll() {
 }
 
 function switchView(view, updateUrl = true) {
-  const allowed = ["accounts", "transactions", "tracker", "plan", "analytics"];
+  const allowed = ["accounts", "transactions", "operations", "plan", "analytics"];
   state.activeView = allowed.includes(view) ? view : "accounts";
   document.querySelectorAll(".app-view").forEach((section) => section.classList.add("hidden"));
   $(`view-${state.activeView}`).classList.remove("hidden");
@@ -650,10 +626,6 @@ function planOccurrenceNode(occurrence) {
     <div class="plan-item-actions"></div>`;
   const actions = row.querySelector(".plan-item-actions");
   if (["planned", "overdue"].includes(occurrence.status)) {
-    const complete = document.createElement("button");
-    complete.type = "button";
-    complete.textContent = occurrence.rule.kind === "income" ? "Receive" : "Pay";
-    complete.addEventListener("click", () => openPlanAction(occurrence));
     const link = document.createElement("button");
     link.type = "button";
     link.className = "button-secondary";
@@ -664,7 +636,7 @@ function planOccurrenceNode(occurrence) {
     skip.className = "button-quiet";
     skip.textContent = "Skip";
     skip.addEventListener("click", () => skipPlanOccurrence(occurrence));
-    actions.append(complete, link, skip);
+    actions.append(link, skip);
   } else {
     const badge = document.createElement("span");
     badge.className = `badge ${occurrence.status}`;
@@ -730,229 +702,22 @@ function renderPlan() {
   $("plan-rules-section").classList.toggle("hidden", state.planRules.length === 0);
 }
 
-function renderTracker() {
-  const summary = state.trackerSummary;
-  $("tracker-empty").classList.toggle("hidden", Boolean(summary));
-  $("tracker-content").classList.toggle("hidden", !summary);
-  if (!summary) return;
-  const period = summary.period;
-  const code = period.base_asset.code;
-  $("tracker-available").textContent = formatMoney(summary.available_today, code);
-  $("tracker-remaining").textContent = formatMoney(summary.remaining_money, code);
-  $("tracker-commitments-total").textContent = formatMoney(period.commitments_total, code);
-  $("tracker-days-left").textContent = `${summary.days_remaining} ${summary.days_remaining === 1 ? "day" : "days"} left · ${formatMoney(summary.spent_total, code)} spent`;
-  $("tracker-today-detail").textContent = `${formatMoney(summary.spent_today, code)} spent today · ${formatMoney(summary.budget_today, code)} budget`;
-  $("tracker-period-heading").textContent = `${period.status[0].toUpperCase()}${period.status.slice(1)} period`;
-  $("tracker-period-range").textContent = `${localDate(period.start_date)} – ${localDate(period.end_date)}`;
-  $("tracker-pace").innerHTML = `
-    <article><span>Daily base</span><strong>${formatMoney(summary.daily_base, code)}</strong></article>
-    <article><span>Daily pool</span><strong>${formatMoney(period.daily_pool, code)}</strong></article>
-    <article><span>Tomorrow now</span><strong>${formatMoney(summary.next_daily, code)}</strong></article>`;
-
-  const commitmentNodes = period.commitments.map((commitment) => {
-    const card = document.createElement("article");
-    card.className = `commitment-card ${commitment.status}`;
-    const comparison = commitment.status === "fulfilled"
-      ? `Planned ${formatMoney(commitment.planned_amount, code)} · actual ${formatMoney(commitment.actual_amount, code)}`
-      : `${localDate(commitment.due_date)} · ${commitment.status}`;
-    card.innerHTML = `<div><strong>${escapeHtml(commitment.name)}</strong><span>${comparison}</span></div><strong>${formatMoney(commitment.effective_amount, code)}</strong>`;
-    return card;
-  });
-  $("tracker-commitment-list").replaceChildren(...commitmentNodes);
-  $("tracker-commitment-count").textContent = String(period.commitments.length);
-  $("tracker-no-commitments").classList.toggle("hidden", period.commitments.length > 0);
-
-  selectOptions($("tracker-period-select"), state.trackerPeriods.map((item) => ({
-    value: item.id,
-    label: `${localDate(item.start_date)} – ${localDate(item.end_date)} · ${item.status}`,
-  })), { selected: period.id });
-  const current = period.status === "current";
-  $("quick-expense-form").classList.toggle("hidden", !current);
-  $("tracker-close-period").classList.toggle("hidden", period.status === "ended");
-  const prompt = state.trackerPrompt;
-  $("tracker-savings-prompt").classList.toggle("hidden", !current || !prompt?.required);
-  if (prompt?.required) {
-    $("tracker-carry-copy").textContent = `${formatMoney(prompt.carry_amount, code)} can stay available today or be redistributed.`;
-  }
-  if (current) {
-    const accounts = ownedPlanAccounts().filter((account) => canUseAccount(account, "expense"));
-    selectOptions($("quick-expense-account"), accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` })), { placeholder: "Choose account" });
-    updateQuickExpenseCategories();
-  }
-}
-
-async function updateQuickExpenseCategories() {
-  const account = accountById($("quick-expense-account").value);
-  const workspaceId = account?.workspace_id || state.context.workspace.id;
-  const categories = (state.categories.get(workspaceId) || []).filter((item) => (
-    !item.archived_at && ["expense", "both"].includes(item.kind)
-  ));
-  selectOptions($("quick-expense-category"), categories.map((item) => ({ value: item.id, label: item.name })), { placeholder: "Uncategorized" });
-}
-
-async function selectTrackerPeriod(periodId) {
-  if (!periodId) return;
-  setLoading(true);
-  try {
-    const workspaceId = state.context.workspace.id;
-    state.selectedTrackerPeriodId = Number(periodId);
-    state.trackerSummary = await api(`/api/v1/workspaces/${workspaceId}/budget-periods/${periodId}`);
-    state.trackerPrompt = state.trackerSummary.period.status === "current"
-      ? await api(`/api/v1/workspaces/${workspaceId}/tracker/savings-prompt`)
-      : null;
-    renderTracker();
-  } catch (error) { toast(error.message); }
-  finally { setLoading(false); }
-}
-
-function openBudgetPeriod(proposal = null) {
-  state.periodProposal = proposal;
-  $("budget-period-form").reset();
-  $("budget-period-error").textContent = "";
-  $("budget-opening-transaction").value = proposal?.opening_transaction_id || "";
-  $("budget-opening-occurrence").value = proposal?.opening_plan_occurrence_id || "";
-  $("budget-start-date").value = proposal?.start_date || todayValue();
-  $("budget-end-date").value = proposal?.end_date || "";
-  $("budget-funding-amount").value = proposal?.funding_amount || "";
-  $("budget-base-code").textContent = proposal?.base_asset.code || state.context.workspace.base_asset.code;
-  $("budget-period-title").textContent = proposal?.opening_transaction_id ? "Confirm income period" : "Start a period";
-  $("budget-proposal-notice").classList.toggle("hidden", !proposal?.opening_transaction_id);
-  if (proposal?.opening_transaction_id) {
-    $("budget-proposal-notice").className = "notice warning";
-    $("budget-proposal-notice").textContent = proposal.needs_end_date
-      ? "Income received. Choose an end date because no later expected income is planned."
-      : `Income received. The suggested period ends on ${localDate(proposal.end_date)}, before the next planned income.`;
-  }
-  const commitments = proposal?.commitments || [];
-  const nodes = commitments.map((item) => {
-    const card = document.createElement("article");
-    card.className = "commitment-card";
-    const amount = item.planned_amount === null ? "Needs equivalent" : formatMoney(item.planned_amount, proposal.base_asset.code);
-    card.innerHTML = `<div><strong>${escapeHtml(item.name)}</strong><span>${localDate(item.due_date)} · ${escapeHtml(item.type.replaceAll("_", " "))}</span></div><strong>${amount}</strong>`;
-    if (item.needs_base_amount) {
-      const label = document.createElement("label");
-      label.innerHTML = `${proposal.base_asset.code} equivalent<input inputmode="decimal" required data-commitment-base="${item.plan_occurrence_id}">`;
-      card.append(label);
-    }
-    return card;
-  });
-  $("budget-proposal-commitment-list").replaceChildren(...nodes);
-  $("budget-proposal-commitments").classList.toggle("hidden", commitments.length === 0);
-  $("budget-period-dialog").showModal();
-}
-
-async function saveBudgetPeriod(event) {
-  event.preventDefault();
-  $("budget-period-error").textContent = "";
-  const body = {
-    start_date: $("budget-start-date").value,
-    end_date: $("budget-end-date").value,
-    funding_amount: $("budget-funding-amount").value,
-    confirmed: true,
-    commitment_base_amounts: {},
-  };
-  if ($("budget-opening-transaction").value) body.opening_transaction_id = Number($("budget-opening-transaction").value);
-  if ($("budget-opening-occurrence").value) body.opening_plan_occurrence_id = Number($("budget-opening-occurrence").value);
-  $("budget-proposal-commitment-list").querySelectorAll("[data-commitment-base]").forEach((input) => {
-    body.commitment_base_amounts[input.dataset.commitmentBase] = input.value;
-  });
-  try {
-    const result = await api(`/api/v1/workspaces/${state.context.workspace.id}/budget-periods`, { method: "POST", body: JSON.stringify(body) });
-    state.selectedTrackerPeriodId = result.period.id;
-    $("budget-period-dialog").close();
-    toast("Tracker period created");
-    await refreshAll();
-    switchView("tracker");
-  } catch (error) { $("budget-period-error").textContent = error.message; }
-}
-
-async function apiWithBaseAmount(path, method, body) {
-  try {
-    return await api(path, { method, body: JSON.stringify(body) });
-  } catch (error) {
-    if (error.status !== 422 || !String(error.message).includes("base_amount in")) throw error;
-    const equivalent = window.prompt(`${error.message}. Enter the Tracker equivalent:`);
-    if (!equivalent) throw error;
-    body.base_amount = equivalent;
-    return api(path, { method, body: JSON.stringify(body) });
-  }
+async function apiCommand(path, method, body) {
+  return api(path, { method, body: JSON.stringify(body) });
 }
 
 async function apiWithEndedPeriodConfirmation(path, method, body) {
   try {
-    return await apiWithBaseAmount(path, method, body);
+    return await apiCommand(path, method, body);
   } catch (error) {
     if (
       error.status !== 409
       || !String(error.message).includes("explicit confirmation")
-      || !window.confirm("This changes an ended Tracker period. Continue and recompute its history?")
+      || !window.confirm("This changes an ended account period. Continue and recompute its history?")
     ) throw error;
     body.confirm_ended_period = true;
-    return apiWithBaseAmount(path, method, body);
+    return apiCommand(path, method, body);
   }
-}
-
-async function updateQuickPreview() {
-  clearTimeout(state.quickPreviewTimer);
-  const amount = $("quick-expense-amount").value.trim();
-  if (!amount || !state.trackerSummary || state.trackerSummary.period.status !== "current") {
-    $("quick-preview").textContent = "Enter an amount";
-    return;
-  }
-  state.quickPreviewTimer = setTimeout(async () => {
-    try {
-      const result = await api(`/api/v1/workspaces/${state.context.workspace.id}/tracker/preview?pending=${encodeURIComponent(amount)}`);
-      $("quick-preview").textContent = `${formatMoney(result.available_after, result.period.base_asset.code)} left today`;
-    } catch (error) { $("quick-preview").textContent = error.message; }
-  }, 180);
-}
-
-async function saveQuickExpense(event) {
-  event.preventDefault();
-  $("quick-expense-error").textContent = "";
-  const body = {
-    account_id: Number(requiredValue("quick-expense-account", "Account")),
-    amount: requiredValue("quick-expense-amount", "Amount"),
-    category_id: $("quick-expense-category").value ? Number($("quick-expense-category").value) : null,
-    note: $("quick-expense-note").value.trim() || null,
-    local_date: todayValue(),
-  };
-  try {
-    await apiWithBaseAmount("/api/v1/transactions/expense", "POST", body);
-    $("quick-expense-form").reset();
-    $("quick-preview").textContent = "Enter an amount";
-    toast("Expense added");
-    await refreshAll();
-    switchView("tracker");
-  } catch (error) { $("quick-expense-error").textContent = error.message; }
-}
-
-async function trackerSavingsDecision(choice) {
-  try {
-    await api(`/api/v1/workspaces/${state.context.workspace.id}/tracker/savings-decision`, { method: "POST", body: JSON.stringify({ choice }) });
-    toast(choice === "keep" ? "Carry kept for today" : "Carry spread across the remaining days");
-    await refreshAll();
-    switchView("tracker");
-  } catch (error) { toast(error.message); }
-}
-
-async function closeTrackerPeriod() {
-  const period = state.trackerSummary?.period;
-  if (!period || !window.confirm("Close this period now? Its history will remain available.")) return;
-  try {
-    await api(`/api/v1/workspaces/${state.context.workspace.id}/budget-periods/${period.id}/close`, { method: "POST" });
-    toast("Period closed");
-    await refreshAll();
-  } catch (error) { toast(error.message); }
-}
-
-async function showTrackerTransactions() {
-  const period = state.trackerSummary?.period;
-  if (!period) return;
-  $("filter-from").value = period.start_date;
-  $("filter-to").value = period.end_date;
-  await loadTransactions(false);
-  switchView("transactions");
 }
 
 function ownedPlanAccounts(assetCode = null) {
@@ -968,11 +733,11 @@ async function updatePlanRuleFields(rule = null) {
   const assetCode = $("plan-rule-asset").value;
   const accounts = ownedPlanAccounts(assetCode).map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` }));
   selectOptions($("plan-rule-from-account"), accounts, {
-    placeholder: "Choose when paying",
+    placeholder: "Choose source",
     selected: rule?.default_from_account_id ?? $("plan-rule-from-account").value,
   });
   selectOptions($("plan-rule-to-account"), accounts, {
-    placeholder: "Choose when receiving",
+    placeholder: "Choose target",
     selected: rule?.default_to_account_id ?? $("plan-rule-to-account").value,
   });
   const selectedCategoryId = Number(rule?.category_id ?? $("plan-rule-category").value);
@@ -1042,62 +807,12 @@ async function savePlanRule(event) {
 }
 
 async function archivePlanRule(rule) {
-  if (!window.confirm(`Archive ${rule.name}? Uncommitted open items will be skipped; Tracker history stays available.`)) return;
+  if (!window.confirm(`Archive ${rule.name}? Open items will be skipped.`)) return;
   try {
     await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
     toast("Plan rule archived");
     await refreshAll();
   } catch (error) { toast(error.message); }
-}
-
-function openPlanAction(occurrence) {
-  const rule = occurrence.rule;
-  const accounts = ownedPlanAccounts(rule.asset.code).map((account) => ({ value: account.id, label: account.name }));
-  $("plan-action-occurrence-id").value = occurrence.id;
-  $("plan-action-title").textContent = rule.kind === "income" ? `Receive ${rule.name}` : `Pay ${rule.name}`;
-  $("complete-plan-item").textContent = rule.kind === "income" ? "Confirm income" : "Confirm payment";
-  $("plan-action-amount").value = occurrence.planned_amount;
-  $("plan-action-date").value = todayValue();
-  $("plan-action-note").value = "";
-  $("plan-action-error").textContent = "";
-  selectOptions($("plan-action-account"), accounts, { placeholder: "Choose account", selected: rule.kind === "income" ? rule.default_to_account_id : rule.default_from_account_id });
-  selectOptions($("plan-action-from-account"), accounts, { placeholder: "Choose source", selected: rule.default_from_account_id });
-  selectOptions($("plan-action-to-account"), accounts, { placeholder: "Choose target", selected: rule.default_to_account_id });
-  $("plan-action-account-field").classList.toggle("hidden", rule.kind === "reserve_transfer");
-  $("plan-action-from-field").classList.toggle("hidden", rule.kind !== "reserve_transfer");
-  $("plan-action-to-field").classList.toggle("hidden", rule.kind !== "reserve_transfer");
-  $("plan-action-dialog").showModal();
-}
-
-async function completePlanOccurrence(event) {
-  event.preventDefault();
-  $("plan-action-error").textContent = "";
-  const occurrence = planOccurrenceById($("plan-action-occurrence-id").value);
-  const reserve = occurrence.rule.kind === "reserve_transfer";
-  const body = {
-    amount: $("plan-action-amount").value,
-    local_date: $("plan-action-date").value,
-    note: $("plan-action-note").value.trim() || null,
-  };
-  if (reserve) {
-    body.from_account_id = Number($("plan-action-from-account").value);
-    body.to_account_id = Number($("plan-action-to-account").value);
-  } else {
-    body.account_id = Number($("plan-action-account").value);
-  }
-  const action = occurrence.rule.kind === "income" ? "receive" : "pay";
-  try {
-    const result = await apiWithEndedPeriodConfirmation(
-      `/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/${action}`,
-      "POST",
-      body,
-    );
-    $("plan-action-dialog").close();
-    toast(action === "receive" ? "Income received" : "Plan item paid");
-    await refreshAll();
-    switchView("plan");
-    if (result.period_proposal) openBudgetPeriod(result.period_proposal);
-  } catch (error) { $("plan-action-error").textContent = error.message; }
 }
 
 async function skipPlanOccurrence(occurrence) {
@@ -1142,7 +857,7 @@ async function linkPlanTransaction(event) {
     return;
   }
   try {
-    const result = await apiWithEndedPeriodConfirmation(
+    await apiWithEndedPeriodConfirmation(
       `/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrenceId}/link-transaction`,
       "POST",
       { transaction_id: Number(transactionId) },
@@ -1150,7 +865,6 @@ async function linkPlanTransaction(event) {
     $("plan-link-dialog").close();
     toast("Transaction linked to Plan");
     await refreshAll();
-    if (result.period_proposal) openBudgetPeriod(result.period_proposal);
   } catch (error) { $("plan-link-error").textContent = error.message; }
 }
 
@@ -1417,7 +1131,7 @@ async function saveTransaction(event) {
     }
     const route = transactionId ? `/api/v1/transactions/${transactionId}` : `/api/v1/transactions/${type}`;
     try {
-      await apiWithBaseAmount(route, transactionId ? "PATCH" : "POST", body);
+      await apiCommand(route, transactionId ? "PATCH" : "POST", body);
     } catch (error) {
       if (
         error.status !== 409
@@ -1425,7 +1139,7 @@ async function saveTransaction(event) {
         || !window.confirm("This transaction correction requires confirmation. Continue?")
       ) throw error;
       body.confirm_ended_period = true;
-      await apiWithBaseAmount(route, transactionId ? "PATCH" : "POST", body);
+      await apiCommand(route, transactionId ? "PATCH" : "POST", body);
     }
     $("transaction-dialog").close();
     toast(transactionId ? "Transaction updated" : "Transaction added");
@@ -1509,20 +1223,8 @@ $("empty-add-plan-rule").addEventListener("click", () => openPlanRule());
 $("plan-rule-kind").addEventListener("change", () => updatePlanRuleFields());
 $("plan-rule-asset").addEventListener("change", () => updatePlanRuleFields());
 $("plan-rule-form").addEventListener("submit", savePlanRule);
-$("plan-action-form").addEventListener("submit", completePlanOccurrence);
 $("plan-link-form").addEventListener("submit", linkPlanTransaction);
 $("plan-status-filter").addEventListener("change", renderPlan);
-$("add-budget-period").addEventListener("click", () => openBudgetPeriod());
-$("empty-add-budget-period").addEventListener("click", () => openBudgetPeriod());
-$("budget-period-form").addEventListener("submit", saveBudgetPeriod);
-$("tracker-period-select").addEventListener("change", () => selectTrackerPeriod($("tracker-period-select").value));
-$("quick-expense-account").addEventListener("change", updateQuickExpenseCategories);
-$("quick-expense-amount").addEventListener("input", updateQuickPreview);
-$("quick-expense-form").addEventListener("submit", saveQuickExpense);
-$("tracker-keep-carry").addEventListener("click", () => trackerSavingsDecision("keep"));
-$("tracker-redistribute").addEventListener("click", () => trackerSavingsDecision("redistribute"));
-$("tracker-view-transactions").addEventListener("click", showTrackerTransactions);
-$("tracker-close-period").addEventListener("click", closeTrackerPeriod);
 
 $("add-account").addEventListener("click", () => openAccountForm());
 $("empty-add-account").addEventListener("click", () => openAccountForm());

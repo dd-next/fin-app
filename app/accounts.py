@@ -72,7 +72,7 @@ async def create_account(
                 note="Opening balance",
                 occurred_at=occurred_at,
                 local_date=local_date,
-                source="manual",
+                origin="manual",
                 status="posted",
             )
             transaction.legs.append(
@@ -255,7 +255,7 @@ async def reconcile_account(
         note=body.note or "Balance reconciliation",
         occurred_at=occurred_at,
         local_date=local_date,
-        source="manual",
+        origin="manual",
         status="posted",
     )
     transaction.legs.append(
