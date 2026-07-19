@@ -278,6 +278,15 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   indistinguishable from missing ones on both link routes (identical 404
   status and detail, before and after occurrence resolution), and recurrence
   materialization stays untouched and idempotent.
+- Completed: Block 4 adds cross-cutting privacy/regression coverage in
+  `tests/test_phase12_privacy_v2.py`: deleting a linked transfer replays both
+  affected account periods and reopens the occurrence with cleared actual
+  amount/asset; linking never moves a transaction between periods; a shared
+  account editor sees the transaction but receives 404 on every Plan surface
+  (reads, skip, link routes) with the redacted detail; OpenAPI exposes exactly
+  `skip`/`link-transaction` occurrence actions and
+  `delete`/`assign-account`/`link-plan` transaction actions, with no Pay,
+  Receive, Void, Tracker, or creation routes.
 - Reviewer blocks: Transactions history behavior → fresh
   `/root/phase11_navigation_review/phase12_transactions_review` → P1 deleted
   period membership and inaccessible read-only details, plus P2 conflicting
@@ -296,7 +305,12 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   `phase12_link_contract_rereview` APPROVED with one residual P3
   resolved-occurrence oracle → occurrence workspace check reordered before
   `require_open_occurrence` with resolved foreign/missing equality test →
-  `phase12_link_contract_final_review` APPROVED with no findings.
+  `phase12_link_contract_final_review` APPROVED with no findings. Privacy and
+  regressions → fresh `phase12_privacy_regressions_review` traced deletion
+  replay, occurrence reopen, membership stability, shared-editor Plan
+  blindness, and the OpenAPI whitelist against app code, and confirmed the
+  combined Phase 12 suites satisfy every build-plan phase check → APPROVED
+  with no P0–P2 (two non-blocking P3 notes recorded, no change required).
 - Tests: initial Block 1 targeted suite — **42 passed in 6.50s**; post-review
   expanded Transactions/ledger/Operations/Undo/period/frontend/sharing suite —
   **46 passed in 7.25s**; reviewer independent expanded suite — **63 passed in
@@ -310,7 +324,10 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   `tests/test_plan_v2.py` — **6 passed in 1.23s**; full suite after Block 3 —
   **108 passed in 11.61s**; both re-reviewers independently re-ran the plan
   suite and full suite — passed; `node --check app/static/app.js` and
-  `git diff --check` — passed.
+  `git diff --check` — passed. Block 4 targeted suite
+  (`tests/test_phase12_privacy_v2.py`) — **3 passed in 0.74s**; full suite
+  after Block 4 — **111 passed in 12.17s**; reviewer independently re-ran the
+  Block 4 suite — **3 passed in 0.77s**.
 - Checks: OpenAPI has 42 paths; Transactions exposes list, detail/correction,
   assignment, and Delete only. Legacy creation and Void paths/copy are absent;
   the public status enum is `posted|unassigned|deleted`. Tests cover pre-period,
