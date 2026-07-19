@@ -1199,7 +1199,7 @@ async function createCategory(event) {
 
 function planKindLabel(kind) {
   return {
-    income: "Upcoming income",
+    income: "Expected income",
     required_expense: "Required spending",
     subscription: "Subscriptions",
     reserve_transfer: "Reserve transfers",
@@ -1215,14 +1215,17 @@ function planOccurrenceById(id) {
   return state.planOccurrences.find((item) => item.id === Number(id));
 }
 
-function planOccurrenceNode(occurrence) {
+function planOccurrenceNode(occurrence, { label = null, overdueCount = 0 } = {}) {
   const row = document.createElement("article");
   row.className = `plan-item ${occurrence.status}`;
   const actual = occurrence.actual_amount === null
     ? ""
     : `<small>Planned ${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)} · actual ${formatMoney(occurrence.actual_amount, occurrence.rule.asset.code)}</small>`;
+  const badge = overdueCount > 1
+    ? ` <span class="badge overdue">${overdueCount} overdue</span>`
+    : "";
   row.innerHTML = `
-    <div class="plan-item-main"><strong>${escapeHtml(occurrence.rule.name)}</strong><span>${localDate(occurrence.due_date)} · ${escapeHtml(planKindLabel(occurrence.rule.kind))} · ${escapeHtml(occurrence.status)}</span></div>
+    <div class="plan-item-main"><strong>${escapeHtml(label ?? occurrence.rule.name)}</strong><span>${localDate(occurrence.due_date)} · ${escapeHtml(occurrence.status)}${badge}</span></div>
     <div class="plan-item-amount"><strong>${formatMoney(occurrence.planned_amount, occurrence.rule.asset.code)}</strong>${actual}</div>
     <div class="plan-item-actions"></div>`;
   const actions = row.querySelector(".plan-item-actions");
@@ -1239,12 +1242,70 @@ function planOccurrenceNode(occurrence) {
     skip.addEventListener("click", () => skipPlanOccurrence(occurrence));
     actions.append(link, skip);
   } else {
-    const badge = document.createElement("span");
-    badge.className = `badge ${occurrence.status}`;
-    badge.textContent = occurrence.status;
-    actions.append(badge);
+    const badgeNode = document.createElement("span");
+    badgeNode.className = `badge ${occurrence.status}`;
+    badgeNode.textContent = occurrence.status;
+    actions.append(badgeNode);
   }
   return row;
+}
+
+function ruleOccurrences(rule) {
+  return state.planOccurrences.filter((item) => item.plan_rule_id === rule.id);
+}
+
+function nearestRuleOccurrences(rule) {
+  const occurrences = ruleOccurrences(rule);
+  const overdue = occurrences
+    .filter((item) => item.status === "overdue")
+    .sort((a, b) => (a.due_date < b.due_date ? 1 : -1));
+  const future = occurrences
+    .filter((item) => item.status === "planned")
+    .sort((a, b) => (a.due_date > b.due_date ? 1 : -1));
+  return { nearestOverdue: overdue[0] ?? null, overdueCount: overdue.length, nearestFuture: future[0] ?? null };
+}
+
+function planRuleCardNode(rule) {
+  const card = document.createElement("article");
+  card.className = "rule-card plan-rule-card";
+  card.innerHTML = `
+    <div class="plan-rule-head">
+      <div><strong>${escapeHtml(rule.name)}</strong><span>${planKindIcon(rule.kind)} ${escapeHtml(planKindLabel(rule.kind))} · ${formatMoney(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)}</span></div>
+      <div class="rule-actions"></div>
+    </div>
+    <div class="plan-card-rows"></div>`;
+  const actions = card.querySelector(".rule-actions");
+  const show = document.createElement("button");
+  show.type = "button";
+  show.className = "button-quiet";
+  show.textContent = "Show";
+  show.title = "Show occurrence history";
+  show.addEventListener("click", () => openPlanRuleDetail(rule));
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "button-quiet";
+  edit.textContent = "Edit";
+  edit.title = "Edit rule";
+  edit.addEventListener("click", () => openPlanRule(rule));
+  const archive = document.createElement("button");
+  archive.type = "button";
+  archive.className = "button-quiet";
+  archive.textContent = "×";
+  archive.title = "Archive rule";
+  archive.setAttribute("aria-label", `Archive ${rule.name}`);
+  archive.addEventListener("click", () => archivePlanRule(rule));
+  actions.append(show, edit, archive);
+  const rows = card.querySelector(".plan-card-rows");
+  const { nearestOverdue, overdueCount, nearestFuture } = nearestRuleOccurrences(rule);
+  if (nearestOverdue) rows.append(planOccurrenceNode(nearestOverdue, { label: "Overdue", overdueCount }));
+  if (nearestFuture) rows.append(planOccurrenceNode(nearestFuture, { label: "Next" }));
+  if (!nearestOverdue && !nearestFuture) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No open occurrences";
+    rows.append(empty);
+  }
+  return card;
 }
 
 function renderPlan() {
@@ -1253,54 +1314,39 @@ function renderPlan() {
   $("plan-open-count").textContent = String(open.length);
   $("plan-completed-count").textContent = String(completed.length);
   $("plan-rule-count").textContent = `${state.planRules.length} active`;
-  const filter = $("plan-status-filter").value;
-  let visible = state.planOccurrences;
-  if (filter === "open") visible = open;
-  if (filter === "completed") visible = completed;
-  if (filter === "skipped") visible = state.planOccurrences.filter((item) => item.status === "skipped");
-
-  const groups = [
-    ["Overdue", visible.filter((item) => item.status === "overdue"), "!"],
-    ...["income", "required_expense", "subscription", "reserve_transfer", "other_expense"].map((kind) => [
-      planKindLabel(kind),
-      visible.filter((item) => !["overdue", "completed", "skipped"].includes(item.status) && item.rule.kind === kind),
-      planKindIcon(kind),
-    ]),
-    ["Completed", visible.filter((item) => item.status === "completed"), "✓"],
-    ["Skipped", visible.filter((item) => item.status === "skipped"), "−"],
-  ];
-  const sections = groups.filter(([, items]) => items.length).map(([title, items, icon]) => {
-    const section = document.createElement("section");
-    section.className = "plan-group";
-    section.innerHTML = `<h3><span>${icon}</span>${escapeHtml(title)}</h3><div class="plan-list"></div>`;
-    const list = section.querySelector(".plan-list");
-    for (const occurrence of items) list.append(planOccurrenceNode(occurrence));
-    return section;
-  });
-  $("plan-occurrence-groups").replaceChildren(...sections);
+  $("plan-rule-cards").replaceChildren(...state.planRules.map((rule) => planRuleCardNode(rule)));
   $("plan-empty").classList.toggle("hidden", state.planRules.length > 0);
-  $("plan-occurrence-groups").classList.toggle("hidden", sections.length === 0);
+  $("plan-rule-cards").classList.toggle("hidden", state.planRules.length === 0);
+  if ($("plan-rule-detail-dialog").open) renderPlanRuleDetail();
+}
 
-  const ruleNodes = state.planRules.map((rule) => {
-    const card = document.createElement("article");
-    card.className = "rule-card";
-    card.innerHTML = `<div><strong>${escapeHtml(rule.name)}</strong><span>${formatMoney(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)} · from ${localDate(rule.first_due_date)}</span></div><div class="rule-actions"></div>`;
-    const actions = card.querySelector(".rule-actions");
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.textContent = "Edit";
-    edit.title = "Edit rule";
-    edit.addEventListener("click", () => openPlanRule(rule));
-    const archive = document.createElement("button");
-    archive.type = "button";
-    archive.textContent = "×";
-    archive.title = "Archive rule";
-    archive.addEventListener("click", () => archivePlanRule(rule));
-    actions.append(edit, archive);
-    return card;
-  });
-  $("plan-rule-list").replaceChildren(...ruleNodes);
-  $("plan-rules-section").classList.toggle("hidden", state.planRules.length === 0);
+let planDetailRuleId = null;
+
+function openPlanRuleDetail(rule) {
+  planDetailRuleId = rule.id;
+  $("plan-rule-detail-title").textContent = rule.name;
+  $("plan-rule-detail-summary").textContent = `${planKindLabel(rule.kind)} · ${formatMoney(rule.amount, rule.asset.code)} · ${rule.recurrence} · from ${localDate(rule.first_due_date)}`;
+  $("plan-detail-filter").value = "all";
+  renderPlanRuleDetail();
+  $("plan-rule-detail-dialog").showModal();
+}
+
+function renderPlanRuleDetail() {
+  if (planDetailRuleId === null) return;
+  const filter = $("plan-detail-filter").value;
+  let items = state.planOccurrences.filter((item) => item.plan_rule_id === planDetailRuleId);
+  if (filter === "open") items = items.filter((item) => ["planned", "overdue"].includes(item.status));
+  if (filter === "completed") items = items.filter((item) => item.status === "completed");
+  if (filter === "skipped") items = items.filter((item) => item.status === "skipped");
+  items.sort((a, b) => (a.due_date > b.due_date ? 1 : a.due_date < b.due_date ? -1 : a.id - b.id));
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No occurrences for this filter";
+    $("plan-rule-detail-list").replaceChildren(empty);
+    return;
+  }
+  $("plan-rule-detail-list").replaceChildren(...items.map((item) => planOccurrenceNode(item)));
 }
 
 async function apiCommand(path, method, body) {
@@ -1902,7 +1948,7 @@ $("plan-rule-kind").addEventListener("change", () => updatePlanRuleFields());
 $("plan-rule-asset").addEventListener("change", () => updatePlanRuleFields());
 $("plan-rule-form").addEventListener("submit", savePlanRule);
 $("plan-link-form").addEventListener("submit", linkPlanTransaction);
-$("plan-status-filter").addEventListener("change", renderPlan);
+$("plan-detail-filter").addEventListener("change", renderPlanRuleDetail);
 
 $("add-account").addEventListener("click", () => openAccountForm());
 $("empty-add-account").addEventListener("click", () => openAccountForm());

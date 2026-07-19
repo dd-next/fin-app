@@ -260,6 +260,15 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   assignment and correction, and added read-only/redacted details for every
   visible record. Account/Period filters synchronize, and Delete has a
   duplicate-submit guard, disabled controls, and `aria-busy` state.
+- Completed: Block 2 replaces the global Plan occurrence lists with one card
+  per rule. Each card shows at most the overdue occurrence closest to today
+  (with an `N overdue` badge when several are overdue) and the nearest future
+  occurrence; completed, skipped, remaining overdue, and other future
+  occurrences moved to a per-rule details dialog with a compact
+  all/open/completed/skipped `Show` filter. The old `Upcoming income` and
+  global future lists, `plan-status-filter`, and the separate rules section
+  are removed; compact Open/Completed counters stay, and the open details
+  dialog re-renders after every data refresh.
 - Reviewer blocks: Transactions history behavior → fresh
   `/root/phase11_navigation_review/phase12_transactions_review` → P1 deleted
   period membership and inaccessible read-only details, plus P2 conflicting
@@ -267,12 +276,20 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   re-review APPROVED with no P0–P3. Pre-commit fresh reviewer
   `phase12_block1_commit_review` independently re-verified the complete
   Block 1 diff (boundary, privacy, delete replay, UI guards, OpenAPI, full
-  suite, JS check) → APPROVED with no P0–P3.
+  suite, JS check) → APPROVED with no P0–P3. Plan list/details design → fresh
+  `phase12_plan_cards_review` verified card boundary (nearest overdue latest
+  date, nearest future earliest date), badge, details-only history,
+  stale-dialog refresh, removed-id/XSS/accessibility checks → APPROVED with no
+  P0–P3 (one non-blocking P3 observation on label/badge redundancy recorded).
 - Tests: initial Block 1 targeted suite — **42 passed in 6.50s**; post-review
   expanded Transactions/ledger/Operations/Undo/period/frontend/sharing suite —
   **46 passed in 7.25s**; reviewer independent expanded suite — **63 passed in
   10.17s**. `node --check app/static/app.js`, compileall, OpenAPI boundary, and
-  `git diff --check` passed.
+  `git diff --check` passed. Block 2 targeted suite
+  (`tests/test_frontend_v2.py tests/test_plan_v2.py`) — **11 passed in
+  0.87s**; full suite after Block 2 — **106 passed in 12.20s**; reviewer
+  independently re-ran frontend tests, `node --check`, and `git diff --check`
+  — passed.
 - Checks: OpenAPI has 42 paths; Transactions exposes list, detail/correction,
   assignment, and Delete only. Legacy creation and Void paths/copy are absent;
   the public status enum is `posted|unassigned|deleted`. Tests cover pre-period,

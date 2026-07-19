@@ -180,9 +180,12 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .plan-summary .metric-card strong { font-size: 2.45rem; }
 .plan-toolbar { display: flex; justify-content: flex-end; margin-bottom: 24px; }
 .plan-toolbar label { width: min(220px, 100%); }
-.plan-groups { display: grid; gap: 28px; }
-.plan-group h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; font-size: 1.05rem; }
-.plan-group h3 span { display: grid; width: 26px; height: 26px; place-items: center; border-radius: 8px; background: var(--accent-soft); color: var(--accent); }
+.plan-rule-cards { display: grid; gap: 12px; margin-bottom: 24px; }
+.plan-rule-card { grid-template-columns: minmax(0, 1fr); background: var(--surface); }
+.plan-rule-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.plan-card-rows { display: grid; gap: 8px; }
+.plan-card-rows .plan-item { padding: 12px; border-radius: 12px; }
+.badge.overdue { margin-left: 6px; border-color: rgba(255,125,130,.35); color: var(--red); text-transform: none; }
 .plan-list { display: grid; gap: 8px; }
 .plan-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 17px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
 .plan-item.overdue { border-color: rgba(255,125,130,.35); background: linear-gradient(100deg, rgba(255,125,130,.07), var(--surface) 38%); }
@@ -192,8 +195,6 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .plan-item-amount strong, .plan-item-amount small { display: block; }
 .plan-item-actions { display: flex; gap: 6px; }
 .plan-item-actions button { padding: 0 12px; }
-.rules-section { margin-top: 42px; padding-top: 26px; border-top: 1px solid var(--border); }
-.rule-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .rule-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface-soft); }
 .rule-card strong, .rule-card span { display: block; }
 .rule-card span { margin-top: 4px; color: var(--muted); font-size: .76rem; }
@@ -269,7 +270,6 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .detail-hero { align-items: flex-start; flex-direction: column; }
   .plan-item { grid-template-columns: minmax(0, 1fr) auto; }
   .plan-item-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 6px; border-top: 1px solid var(--border); }
-  .rule-list { grid-template-columns: 1fr; }
   .invite-row, .category-form, .copy-box { grid-template-columns: 1fr; }
   .access-row { grid-template-columns: minmax(0, 1fr) auto; }
   .access-row select { grid-column: 1 / -1; }

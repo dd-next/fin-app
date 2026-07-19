@@ -46,7 +46,10 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "categories-dialog",
         "plan-rule-dialog",
         "plan-link-dialog",
-        "plan-occurrence-groups",
+        "plan-rule-cards",
+        "plan-rule-detail-dialog",
+        "plan-rule-detail-list",
+        "plan-detail-filter",
         "operations-title",
         "operations-account",
         "operations-selector",
@@ -171,6 +174,42 @@ def test_money_formatting_uses_explicit_asset_precision():
     assert "assetByCode(code)?.decimals" in javascript
     assert 'fraction.padEnd(precision, "0")' in javascript
     assert "formatMoney(account.valued_balance, base)" in javascript
+
+
+def test_plan_renders_one_card_per_rule_with_nearest_occurrences_only():
+    html = (STATIC / "index.html").read_text()
+    javascript = (STATIC / "app.js").read_text()
+    # One card per rule; global occurrence groups and the long lists are gone.
+    assert "plan-occurrence-groups" not in html
+    assert "plan-occurrence-groups" not in javascript
+    assert "plan-status-filter" not in html
+    assert "plan-rules-section" not in html
+    assert "Upcoming income" not in javascript
+    assert "Upcoming income" not in html
+    assert "planRuleCardNode" in javascript
+    assert "state.planRules.map((rule) => planRuleCardNode(rule))" in javascript
+    # Card shows only nearest overdue and nearest future occurrence.
+    assert "nearestRuleOccurrences" in javascript
+    assert 'item.status === "overdue"' in javascript
+    assert 'item.status === "planned"' in javascript
+    assert "overdue[0] ?? null" in javascript
+    assert "future[0] ?? null" in javascript
+    assert 'planOccurrenceNode(nearestOverdue, { label: "Overdue", overdueCount })' in javascript
+    assert 'planOccurrenceNode(nearestFuture, { label: "Next" })' in javascript
+    # Multiple overdue → badge with the total overdue count.
+    assert "overdueCount > 1" in javascript
+    assert "${overdueCount} overdue" in javascript
+    # History is available only in rule details, with a compact Show control.
+    assert 'show.textContent = "Show"' in javascript
+    assert "openPlanRuleDetail(rule)" in javascript
+    assert "renderPlanRuleDetail" in javascript
+    assert 'id="plan-rule-detail-dialog"' in html
+    assert 'id="plan-detail-filter"' in html
+    for option in ("all", "open", "completed", "skipped"):
+        assert f'<option value="{option}"' in html
+    # Compact Open/Completed summary stays.
+    assert 'id="plan-open-count"' in html
+    assert 'id="plan-completed-count"' in html
 
 
 def test_operations_accessibility_and_loading_contract():

@@ -196,10 +196,9 @@
           <article class="metric-card"><span>Open items</span><strong id="plan-open-count">0</strong><small>Planned and overdue</small></article>
           <article class="metric-card"><span>Completed</span><strong id="plan-completed-count">0</strong><small>Linked to real transactions</small></article>
         </div>
-        <div class="plan-toolbar panel-subtle"><label>Show<select id="plan-status-filter"><option value="open">Open plan</option><option value="all">All occurrences</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></label></div>
-        <div id="plan-occurrence-groups" class="plan-groups"></div>
+        <div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div>
+        <div id="plan-rule-cards" class="plan-rule-cards"></div>
         <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Add expected income, required expenses, subscriptions, and reserve transfers. Plan never changes real balances; link a posted transaction when it happens.</p><button id="empty-add-plan-rule">Add rule</button></div>
-        <section id="plan-rules-section" class="rules-section"><div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div><div id="plan-rule-list" class="rule-list"></div></section>
       </section>
 
       <section id="view-analytics" class="app-view hidden" aria-labelledby="analytics-title">
@@ -356,6 +355,16 @@
       <p id="plan-rule-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-rule-dialog">Cancel</button><button id="save-plan-rule" type="submit">Save rule</button></div>
     </form>
+  </dialog>
+
+  <dialog id="plan-rule-detail-dialog" class="wide-dialog" aria-labelledby="plan-rule-detail-title">
+    <div class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Rule details</p><h2 id="plan-rule-detail-title">Rule</h2></div><button type="button" class="icon-button" data-close="plan-rule-detail-dialog" aria-label="Close">×</button></div>
+      <p id="plan-rule-detail-summary" class="muted"></p>
+      <div class="plan-toolbar"><label>Show<select id="plan-detail-filter"><option value="all">All occurrences</option><option value="open">Open</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></label></div>
+      <div id="plan-rule-detail-list" class="plan-list" aria-live="polite"></div>
+      <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-rule-detail-dialog">Close</button></div>
+    </div>
   </dialog>
 
   <dialog id="plan-link-dialog" aria-labelledby="plan-link-title">
