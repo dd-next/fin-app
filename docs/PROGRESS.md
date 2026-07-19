@@ -14,7 +14,7 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
 - [x] Phase 10 — Financial correctness
 - [x] Phase 11 — Operations and account periods UI
 - [x] Phase 12 — Transactions and Plan
-- [ ] Phase 13 — Docker and release verification
+- [~] Phase 13 — Docker and release verification
 
 ## Starting point — 2026-07-19
 
@@ -358,6 +358,39 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   required financial types, soft-delete replay, and global Deleted history.
 - Decisions / assumptions: `voided` and `voided_at` remain internal persistence
   names only; the active public contract uses `deleted` and `deleted_at`.
+- Blocker: none.
+
+### Phase 13 — Docker and release verification (2026-07-19)
+
+- Status: [~]
+- Completed: Block 1 adds the single-container release image. `Dockerfile`
+  builds a non-root (`uid 10001 finapp`) `python:3.12-slim` container, installs
+  only runtime dependencies, copies just `alembic.ini`, `alembic/`, and `app/`,
+  sets `DATABASE_URL=sqlite+aiosqlite:////data/finapp.db`, owns `/data` for the
+  volume, declares `VOLUME ["/data"]`, uses a `/health` urllib HEALTHCHECK, and
+  runs `alembic upgrade head && exec uvicorn ...` so migration failure blocks
+  startup. Test-only dependencies (`pytest`, `pytest-asyncio`, `httpx`) moved
+  from `requirements.txt` to a new `requirements-dev.txt` that includes
+  `-r requirements.txt`; `.dockerignore` keeps the database, backups, venv,
+  git, tests, and docs out of the build context.
+- Reviewer blocks: container build → fresh `phase13_container_build_review`
+  verified non-root/3.12, minimal-used-deps (every requirement imported by
+  `app/` or alembic), migration-before-uvicorn with failure blocking startup,
+  `/health` healthcheck semantics, `/data` volume ownership, and
+  `.dockerignore`/COPY scope → APPROVED with no findings.
+- Tests: `docker build -t finapp-v2 .` — succeeded; fresh named-volume
+  `docker run` — migration reached `0001_release_v2`, `/health` returned
+  `{"status":"ok"}`, container healthcheck `healthy`, `id`=`uid 10001(finapp)`,
+  `/data/finapp.db` owned by `finapp`; unwritable-`DATABASE_URL` run —
+  `state=exited exit=1` with alembic `OperationalError`, uvicorn never started;
+  host `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest
+  -p no:cacheprovider -q` — **111 passed in 13.21s**; `.venv/bin/pip check` —
+  no broken requirements.
+- Checks: image runs as the non-root `finapp` user; migration precedes Uvicorn
+  and its failure prevents startup; `/health` is the healthcheck; SQLite is at
+  `/data/finapp.db` on a persistent volume.
+- Decisions / assumptions: `COOKIE_SECURE` stays unset in the image because the
+  container serves plain HTTP and TLS/reverse proxy are external per spec §11.
 - Blocker: none.
 
 ## Required phase-entry template

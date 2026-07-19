@@ -1,0 +1,14 @@
+.git
+.venv
+.backups
+__pycache__
+**/__pycache__
+*.pyc
+finapp.db
+tests
+docs
+*.md
+.claude
+.dockerignore
+Dockerfile
+compose.yaml
