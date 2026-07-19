@@ -83,6 +83,22 @@ class WorkspacePatch(BaseModel):
         return value.strip().upper() if value is not None else None
 
 
+class ManualValuationRateUpsert(BaseModel):
+    displayed_rate: PositiveAmount
+
+
+class ManualValuationRateOut(BaseModel):
+    id: int
+    workspace_id: int
+    main_asset: AssetOut
+    asset: AssetOut
+    displayed_rate: Decimal
+    effective_valuation_rate: Decimal
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class AuthContextOut(BaseModel):
     user: UserOut
     workspace: WorkspaceOut
@@ -179,6 +195,39 @@ class AccountSummaryOut(BaseModel):
     unvalued: list[UnvaluedAssetOut]
 
 
+class AccountPeriodCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_date: date
+    end_date: date
+    funding_amount: DecimalAmount
+
+
+class AccountPeriodPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start_date: date | None = None
+    end_date: date | None = None
+    funding_amount: DecimalAmount | None = None
+    confirm_ended_period: bool = False
+
+
+class AccountPeriodOut(BaseModel):
+    id: int
+    account_id: int
+    asset: AssetOut
+    created_by_user_id: int
+    start_date: date
+    end_date: date
+    funding_amount: Decimal
+    available_today: Decimal
+    remaining: Decimal
+    planned: Decimal
+    status: Literal["upcoming", "current", "ended", "closed"]
+    created_at: datetime
+    closed_at: datetime | None
+
+
 class TransactionLegOut(BaseModel):
     id: int
     account_id: int | None
@@ -256,6 +305,7 @@ class AdjustmentIn(TransactionCommon):
 
 class AssignAccountIn(BaseModel):
     account_id: int
+    confirm_ended_period: bool = False
 
 
 class TransactionPatch(BaseModel):

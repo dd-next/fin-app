@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal, localcontext
+from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -14,6 +15,7 @@ from app.models import (
     Asset,
     Category,
     ExchangeRate,
+    ManualValuationRate,
     PlanOccurrence,
     Transaction,
     TransactionLeg,
@@ -31,12 +33,63 @@ from app.schemas import (
 ZERO = Decimal("0")
 RATE_DECIMALS = 18
 MAX_INTEGER_DIGITS = 20
+CALCULATION_PRECISION = 100
 
 
 @dataclass(frozen=True)
 class AccountValues:
     balance: Decimal
     valued_balance: Decimal | None
+
+
+def decimal_sum(values: Iterable[Decimal]) -> Decimal:
+    """Sum finite financial Decimals without the default 28-digit truncation."""
+    items = [Decimal(value) for value in values]
+    if not items:
+        return ZERO
+    nonzero = [value for value in items if value]
+    if not nonzero:
+        return ZERO
+    most_significant = max(value.adjusted() for value in nonzero)
+    least_exponent = min(value.as_tuple().exponent for value in nonzero)
+    exact_digits = most_significant - least_exponent + len(str(len(items))) + 2
+    with localcontext() as context:
+        context.prec = max(CALCULATION_PRECISION, exact_digits)
+        total = ZERO
+        for value in items:
+            total += value
+        return total
+
+
+def decimal_product(left: Decimal, right: Decimal) -> Decimal:
+    """Multiply stored/rate Decimals with enough precision for an exact product."""
+    left, right = Decimal(left), Decimal(right)
+    exact_digits = len(left.as_tuple().digits) + len(right.as_tuple().digits) + 2
+    with localcontext() as context:
+        context.prec = max(CALCULATION_PRECISION, exact_digits)
+        return left * right
+
+
+def decimal_absolute(value: Decimal) -> Decimal:
+    """Return a magnitude without applying the ambient Decimal context."""
+    return Decimal(value).copy_abs()
+
+
+def decimal_negate(value: Decimal) -> Decimal:
+    """Flip a sign without applying the ambient Decimal context."""
+    return Decimal(value).copy_negate()
+
+
+def decimal_difference(left: Decimal, right: Decimal) -> Decimal:
+    """Subtract exact financial values through the context-safe sum path."""
+    return decimal_sum((Decimal(left), decimal_negate(right)))
+
+
+def decimal_quotient(numerator: Decimal, denominator: Decimal) -> Decimal:
+    """Divide financial Decimals at the shared high calculation precision."""
+    with localcontext() as context:
+        context.prec = CALCULATION_PRECISION
+        return Decimal(numerator) / Decimal(denominator)
 
 
 def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
@@ -52,6 +105,11 @@ def quantize_decimal(value: Decimal, decimals: int) -> Decimal:
 
 def quantize_asset_amount(value: Decimal, asset: Asset | AssetOut) -> Decimal:
     return quantize_decimal(value, asset.decimals)
+
+
+def quantize_main_amount(value: Decimal, main_asset: Asset | AssetOut) -> Decimal:
+    """Round a derived valuation only at the Main-currency API boundary."""
+    return quantize_asset_amount(value, main_asset)
 
 
 def quantize_exchange_rate(value: Decimal) -> Decimal:
@@ -174,7 +232,7 @@ async def account_balance(session: AsyncSession, account_id: int) -> Decimal:
             )
         )
     ).scalars()
-    return sum((Decimal(value) for value in amounts), ZERO)
+    return decimal_sum(Decimal(value) for value in amounts)
 
 
 async def latest_rate(
@@ -204,22 +262,34 @@ async def latest_rate(
 async def valued_balance(
     session: AsyncSession,
     balance: Decimal,
-    workspace_id: int,
+    valuation_workspace_id: int,
     asset_id: int,
     base_asset: Asset,
 ) -> Decimal | None:
     if asset_id == base_asset.id:
         valued = balance
     else:
-        rate = await latest_rate(
-            session,
-            workspace_id=workspace_id,
-            base_asset_id=asset_id,
-            quote_asset_id=base_asset.id,
-        )
-        if rate is None:
-            return None
-        valued = balance * rate.rate
+        manual_rate = (
+            await session.execute(
+                select(ManualValuationRate).where(
+                    ManualValuationRate.workspace_id == valuation_workspace_id,
+                    ManualValuationRate.main_asset_id == base_asset.id,
+                    ManualValuationRate.asset_id == asset_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if manual_rate is not None:
+            valued = decimal_quotient(balance, manual_rate.displayed_rate)
+        else:
+            rate = await latest_rate(
+                session,
+                workspace_id=valuation_workspace_id,
+                base_asset_id=asset_id,
+                quote_asset_id=base_asset.id,
+            )
+            if rate is None:
+                return None
+            valued = decimal_product(balance, rate.rate)
     return valued
 
 
@@ -227,6 +297,7 @@ async def account_values(
     session: AsyncSession,
     account: Account,
     base_asset: Asset,
+    valuation_workspace_id: int,
 ) -> AccountValues:
     """Return exact derived values; API callers decide where to round."""
     balance = await account_balance(session, account.id)
@@ -235,7 +306,7 @@ async def account_values(
         valued_balance=await valued_balance(
             session,
             balance,
-            account.workspace_id,
+            valuation_workspace_id,
             account.asset_id,
             base_asset,
         ),
@@ -246,6 +317,7 @@ async def account_out(
     session: AsyncSession,
     account: Account,
     base_asset_id: int,
+    valuation_workspace_id: int,
     *,
     access_role: str = "owner",
     values: AccountValues | None = None,
@@ -253,7 +325,9 @@ async def account_out(
     await session.refresh(account, attribute_names=["asset"])
     base_asset = await session.get(Asset, base_asset_id)
     assert base_asset is not None
-    values = values or await account_values(session, account, base_asset)
+    values = values or await account_values(
+        session, account, base_asset, valuation_workspace_id
+    )
     return AccountOut(
         id=account.id,
         workspace_id=account.workspace_id,
@@ -266,7 +340,7 @@ async def account_out(
         include_in_available=account.include_in_available,
         balance=quantize_asset_amount(values.balance, account.asset),
         valued_balance=(
-            quantize_asset_amount(values.valued_balance, base_asset)
+            quantize_main_amount(values.valued_balance, base_asset)
             if values.valued_balance is not None
             else None
         ),

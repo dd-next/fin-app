@@ -12,7 +12,10 @@ from app.auth import primary_workspace, require_user
 from app.access import require_account_action, visible_account_ids
 from app.db import get_session
 from app.ledger import (
+    decimal_absolute,
+    decimal_negate,
     financial_times,
+    decimal_quotient,
     quantize_exchange_rate,
     rate_out,
     require_asset_code,
@@ -31,6 +34,10 @@ from app.models import (
     Workspace,
     utcnow,
 )
+from app.periods import (
+    enforce_transaction_period_impact,
+    transaction_period_impact,
+)
 from app.schemas import (
     AdjustmentIn,
     AssignAccountIn,
@@ -44,6 +51,29 @@ from app.schemas import (
     VoidTransactionIn,
 )
 router = APIRouter(tags=["transactions"])
+
+
+async def _enforce_period_guard(
+    session: AsyncSession,
+    transaction: Transaction,
+    user: User,
+    workspace: Workspace,
+    *,
+    confirmed: bool,
+    legs: list[TransactionLeg] | None = None,
+    include_children: bool = False,
+) -> None:
+    impact = await transaction_period_impact(
+        session,
+        transaction,
+        legs=legs,
+        include_children=include_children,
+    )
+    enforce_transaction_period_impact(
+        impact,
+        confirmed=confirmed,
+        workspace_owner=workspace.owner_user_id == user.id,
+    )
 
 
 def _transaction(
@@ -130,7 +160,7 @@ async def _create_single(
         note=body.note,
         status="posted" if account else "unassigned",
     )
-    signed = -amount if transaction_type == "expense" else amount
+    signed = decimal_negate(amount) if transaction_type == "expense" else amount
     transaction.legs.append(
         TransactionLeg(
             account_id=account.id if account else None,
@@ -140,6 +170,14 @@ async def _create_single(
     )
     session.add(transaction)
     await session.flush()
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=body.confirm_ended_period,
+        legs=list(transaction.legs),
+    )
     await session.commit()
     await session.refresh(transaction)
     return transaction
@@ -217,11 +255,24 @@ async def create_transfer(
     )
     transaction.legs.extend(
         [
-            TransactionLeg(account_id=source.id, asset_id=source.asset_id, amount=-amount),
+            TransactionLeg(
+                account_id=source.id,
+                asset_id=source.asset_id,
+                amount=decimal_negate(amount),
+            ),
             TransactionLeg(account_id=target.id, asset_id=target.asset_id, amount=amount),
         ]
     )
     session.add(transaction)
+    await session.flush()
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=body.confirm_ended_period,
+        legs=list(transaction.legs),
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -247,7 +298,9 @@ async def _replace_rates(
                 source_transaction_id=transaction.id,
                 base_asset_id=source.asset_id,
                 quote_asset_id=target.asset_id,
-                rate=quantize_exchange_rate(target_amount / source_amount),
+                rate=quantize_exchange_rate(
+                    decimal_quotient(target_amount, source_amount)
+                ),
                 captured_at=transaction.occurred_at,
             ),
             ExchangeRate(
@@ -255,7 +308,9 @@ async def _replace_rates(
                 source_transaction_id=transaction.id,
                 base_asset_id=target.asset_id,
                 quote_asset_id=source.asset_id,
-                rate=quantize_exchange_rate(source_amount / target_amount),
+                rate=quantize_exchange_rate(
+                    decimal_quotient(source_amount, target_amount)
+                ),
                 captured_at=transaction.occurred_at,
             ),
         ]
@@ -293,7 +348,11 @@ async def create_exchange(
     )
     transaction.legs.extend(
         [
-            TransactionLeg(account_id=source.id, asset_id=source.asset_id, amount=-from_amount),
+            TransactionLeg(
+                account_id=source.id,
+                asset_id=source.asset_id,
+                amount=decimal_negate(from_amount),
+            ),
             TransactionLeg(account_id=target.id, asset_id=target.asset_id, amount=to_amount),
         ]
     )
@@ -324,10 +383,20 @@ async def create_exchange(
             TransactionLeg(
                 account_id=fee_account.id,
                 asset_id=fee_account.asset_id,
-                amount=-fee_amount,
+                amount=decimal_negate(fee_amount),
             )
         )
         session.add(fee)
+    await session.flush()
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=body.confirm_ended_period,
+        legs=list(transaction.legs),
+        include_children=True,
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -357,6 +426,15 @@ async def create_adjustment(
         TransactionLeg(account_id=account.id, asset_id=account.asset_id, amount=delta)
     )
     session.add(transaction)
+    await session.flush()
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=body.confirm_ended_period,
+        legs=list(transaction.legs),
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -551,6 +629,9 @@ async def patch_transaction(
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
     legs = await _transaction_legs(session, transaction.id)
+    original_period_impact = await transaction_period_impact(
+        session, transaction, legs=legs
+    )
     original_financial_state = _financial_state(transaction, legs)
     original_metadata = (
         transaction.category_id,
@@ -639,10 +720,17 @@ async def patch_transaction(
                     raise HTTPException(status_code=422, detail="Asset does not match account")
                 asset = requested_asset
             assert asset is not None
-            amount = validate_amount(body.amount if body.amount is not None else abs(leg.amount), asset)
+            amount = validate_amount(
+                body.amount
+                if body.amount is not None
+                else decimal_absolute(leg.amount),
+                asset,
+            )
             leg.account_id = account.id if account else None
             leg.asset_id = asset.id
-            leg.amount = -amount if transaction.type == "expense" else amount
+            leg.amount = (
+                decimal_negate(amount) if transaction.type == "expense" else amount
+            )
             transaction.status = "posted" if account else "unassigned"
     else:
         negative = next(leg for leg in legs if leg.amount < 0)
@@ -670,14 +758,18 @@ async def patch_transaction(
         if transaction.type == "exchange" and source.asset_id == target.asset_id:
             raise HTTPException(status_code=422, detail="Exchange assets must differ")
         from_amount = validate_amount(
-            body.from_amount or abs(negative.amount), source.asset
+            body.from_amount or decimal_absolute(negative.amount), source.asset
         )
         to_amount = validate_amount(
             body.to_amount or positive.amount, target.asset
         )
         if transaction.type == "transfer" and from_amount != to_amount:
             raise HTTPException(status_code=422, detail="Transfer amounts must match")
-        negative.account_id, negative.asset_id, negative.amount = source.id, source.asset_id, -from_amount
+        negative.account_id, negative.asset_id, negative.amount = (
+            source.id,
+            source.asset_id,
+            decimal_negate(from_amount),
+        )
         positive.account_id, positive.asset_id, positive.amount = target.id, target.asset_id, to_amount
         if transaction.type == "exchange":
             exchange_rate_inputs = (source, from_amount, target, to_amount)
@@ -687,6 +779,15 @@ async def patch_transaction(
         transaction.counterparty,
         transaction.note,
     )
+    if has_financial_change:
+        changed_period_impact = await transaction_period_impact(
+            session, transaction, legs=legs
+        )
+        enforce_transaction_period_impact(
+            original_period_impact.merge(changed_period_impact),
+            confirmed=body.confirm_ended_period,
+            workspace_owner=workspace.owner_user_id == user.id,
+        )
     if (
         has_persisted_change
         and user.id != workspace.owner_user_id
@@ -734,6 +835,15 @@ async def assign_account(
         raise HTTPException(status_code=422, detail="Account asset does not match transaction")
     legs[0].account_id = account.id
     transaction.status = "posted"
+    await session.flush()
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=body.confirm_ended_period,
+        legs=legs,
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(
@@ -755,6 +865,14 @@ async def void_transaction(
         raise HTTPException(status_code=409, detail="Transaction is already voided")
     workspace = await session.get(Workspace, transaction.workspace_id)
     assert workspace is not None
+    await _enforce_period_guard(
+        session,
+        transaction,
+        user,
+        workspace,
+        confirmed=bool(body and body.confirm_ended_period),
+        include_children=True,
+    )
     if (
         user.id != workspace.owner_user_id
         and not (body and body.confirm_ended_period)

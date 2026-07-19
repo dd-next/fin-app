@@ -16,14 +16,21 @@ from app.ledger import (
     account_balance,
     account_out,
     account_values,
+    decimal_difference,
+    decimal_sum,
     financial_times,
     normalize_name,
     quantize_asset_amount,
+    quantize_main_amount,
     require_asset_code,
     transaction_out,
     validate_amount,
 )
 from app.models import Account, Asset, Transaction, TransactionLeg, User, utcnow
+from app.periods import (
+    enforce_transaction_period_impact,
+    transaction_period_impact,
+)
 from app.schemas import (
     AccountCreate,
     AccountOut,
@@ -84,7 +91,9 @@ async def create_account(
         await session.rollback()
         raise HTTPException(status_code=409, detail="Account name already exists")
     await session.refresh(account)
-    return await account_out(session, account, workspace.base_asset_id)
+    return await account_out(
+        session, account, workspace.base_asset_id, workspace.id
+    )
 
 
 @router.get("", response_model=list[AccountOut])
@@ -104,6 +113,7 @@ async def list_accounts(
             session,
             account,
             workspace.base_asset_id,
+            workspace.id,
             access_role=(await account_role(session, account, user.id)) or "viewer",
         )
         for account in accounts
@@ -132,33 +142,29 @@ async def account_summary(
         ).scalars()
     )
     exact_values = [
-        await account_values(session, account, base_asset) for account in accounts
+        await account_values(session, account, base_asset, workspace.id)
+        for account in accounts
     ]
     outputs = [
         await account_out(
             session,
             account,
             workspace.base_asset_id,
+            workspace.id,
             access_role=(await account_role(session, account, user.id)) or "viewer",
             values=values,
         )
         for account, values in zip(accounts, exact_values, strict=True)
     ]
-    net_worth = sum(
-        (
-            values.valued_balance
-            for values in exact_values
-            if values.valued_balance is not None
-        ),
-        ZERO,
+    net_worth = decimal_sum(
+        values.valued_balance
+        for values in exact_values
+        if values.valued_balance is not None
     )
-    available = sum(
-        (
-            values.valued_balance
-            for account, values in zip(accounts, exact_values, strict=True)
-            if account.include_in_available and values.valued_balance is not None
-        ),
-        ZERO,
+    available = decimal_sum(
+        values.valued_balance
+        for account, values in zip(accounts, exact_values, strict=True)
+        if account.include_in_available and values.valued_balance is not None
     )
     unvalued_totals: dict[int, Decimal] = {}
     assets: dict[int, AssetOut] = {}
@@ -166,14 +172,14 @@ async def account_summary(
         accounts, outputs, exact_values, strict=True
     ):
         if values.valued_balance is None and values.balance != 0:
-            unvalued_totals[account.asset_id] = (
-                unvalued_totals.get(account.asset_id, ZERO) + values.balance
+            unvalued_totals[account.asset_id] = decimal_sum(
+                (unvalued_totals.get(account.asset_id, ZERO), values.balance)
             )
             assets[account.asset_id] = output.asset
     return AccountSummaryOut(
         base_asset=AssetOut.model_validate(base_asset),
-        net_worth=quantize_asset_amount(net_worth, base_asset),
-        available=quantize_asset_amount(available, base_asset),
+        net_worth=quantize_main_amount(net_worth, base_asset),
+        available=quantize_main_amount(available, base_asset),
         accounts=outputs,
         unvalued=[
             UnvaluedAssetOut(
@@ -198,7 +204,7 @@ async def get_account(
         session, account_id, user.id, "view", allow_archived=True
     )
     return await account_out(
-        session, account, workspace.base_asset_id, access_role=role
+        session, account, workspace.base_asset_id, workspace.id, access_role=role
     )
 
 
@@ -231,7 +237,7 @@ async def patch_account(
         raise HTTPException(status_code=409, detail="Account name already exists")
     await session.refresh(account)
     return await account_out(
-        session, account, workspace.base_asset_id, access_role=role
+        session, account, workspace.base_asset_id, workspace.id, access_role=role
     )
 
 
@@ -245,7 +251,7 @@ async def reconcile_account(
     workspace = await primary_workspace(session, user.id)
     account, _ = await require_account_action(session, account_id, user.id, "owner")
     target = validate_amount(body.target_balance, account.asset, allow_zero=True)
-    delta = target - await account_balance(session, account.id)
+    delta = decimal_difference(target, await account_balance(session, account.id))
     validate_amount(delta, account.asset)
     occurred_at, local_date = financial_times(workspace, None, None)
     transaction = Transaction(
@@ -262,6 +268,14 @@ async def reconcile_account(
         TransactionLeg(account_id=account.id, asset_id=account.asset_id, amount=delta)
     )
     session.add(transaction)
+    await session.flush()
+    enforce_transaction_period_impact(
+        await transaction_period_impact(
+            session, transaction, legs=list(transaction.legs)
+        ),
+        confirmed=False,
+        workspace_owner=True,
+    )
     await session.commit()
     await session.refresh(transaction)
     return await transaction_out(session, transaction)
@@ -279,5 +293,5 @@ async def archive_account(
     await session.commit()
     await session.refresh(account)
     return await account_out(
-        session, account, workspace.base_asset_id, access_role=role
+        session, account, workspace.base_asset_id, workspace.id, access_role=role
     )

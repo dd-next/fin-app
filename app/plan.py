@@ -12,6 +12,7 @@ from app.access import require_workspace_owner
 from app.auth import require_user
 from app.db import get_session
 from app.ledger import (
+    decimal_absolute,
     require_asset_code,
     require_category,
     validate_amount,
@@ -86,7 +87,9 @@ async def actual_amount(
     )
     if not amounts:
         return None
-    negatives = [abs(Decimal(value)) for value in amounts if Decimal(value) < 0]
+    negatives = [
+        decimal_absolute(value) for value in amounts if Decimal(value) < 0
+    ]
     positives = [Decimal(value) for value in amounts if Decimal(value) > 0]
     return (negatives or positives or [Decimal("0")])[0]
 

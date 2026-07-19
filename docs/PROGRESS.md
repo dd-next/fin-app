@@ -100,6 +100,60 @@ Status legend: `[ ]` not started · `[~]` in progress · `[x]` completed · `[!]
   replaced by the functional Phase 11 surface.
 - Blocker: none.
 
+### Phase 10 — Financial correctness (2026-07-19)
+
+- Status: [x]
+- Completed: manual valuation rates are workspace/Main-pair scoped with manual
+  precedence, posted direct-rate fallback, Main-switch isolation, and no
+  multi-hop; Main-currency presentation now rounds once with `ROUND_HALF_UP`
+  while exact high-precision Decimal arithmetic is preserved through ledger,
+  sign, valuation, reconciliation, and aggregate paths.
+  Account-specific periods now provide owner-only create/list/read/edit/close,
+  snapshot-bound signed replay, Plan cards, lifecycle confirmation, and closed
+  record guards across all financial mutation paths.
+- Reviewer blocks: rate isolation/manual precedence →
+  `phase10_valuation_review` → P2 missing isolation/latest/void/multi-hop/CRUD
+  regressions fixed → `phase10_valuation_rereview` APPROVED; money presentation
+  → `phase10_money_presentation_review` → P1 ambient Decimal-context truncation
+  and P2 weak precision fixture fixed → `phase10_money_presentation_rereview` →
+  P1 unary sign truncation fixed → `phase10_money_presentation_final_review`
+  APPROVED; account-period replay → `phase10_period_replay_review` → P2
+  movement/Plan matrix gaps fixed → `phase10_period_replay_rereview` → P2
+  ambiguous Plan-status assertion fixed → `phase10_period_replay_final_review`
+  APPROVED; mutation guards/privacy → `phase10_period_guards_review` → P2
+  guard-path/privacy matrix gaps fixed → stalled
+  `phase10_period_guards_rereview` stopped without accepting a result →
+  `phase10_period_guards_final_review` → four residual P2 rollback/permission
+  gaps fixed → `phase10_period_guards_closure_review` APPROVED with no P0–P3.
+  Phase commit gate → `phase10_commit_gate_review` → APPROVED with no P0–P3
+  and no unrelated changes.
+- Tests: valuation block targeted suite — **9 passed in 1.62s**; `env -u
+  DATABASE_URL PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p
+  no:cacheprovider -q tests/test_valuation_v2.py
+  tests/test_phase9_ledger_integrity_v2.py tests/test_ledger_v2.py
+  tests/test_plan_v2.py` — **24 passed in 3.41s**; compileall,
+  `node --check app/static/app.js`, and `git diff --check` — passed; period,
+  budget, ledger, and Plan targeted suite — **41 passed in 2.60s**; mutation
+  guard targeted suite — **50 passed in 4.55s**; final period suite — **12
+  passed in 1.89s**; `env -u DATABASE_URL PYTHONDONTWRITEBYTECODE=1
+  .venv/bin/python -m pytest -p no:cacheprovider -q` — **86 passed in 7.59s**;
+  `.venv/bin/python -m compileall -q app tests`, `node --check
+  app/static/app.js`, `.venv/bin/pip check`, and `git diff --check` — passed.
+- Checks: conflicting workspaces, manual delete fallback, void fallback,
+  Unvalued/no-multi-hop, shared-account valuation isolation, VND regression,
+  maximum 38-digit crypto plus smallest unit, direct-rate multiplication,
+  aggregate-before-rounding, and exact outgoing sign are covered.
+  Snapshot funding, strict leg timestamp membership, same-account overlap,
+  cross-account transfer/exchange replay, fee/root void, all signed movement
+  types, and open/in-range/account-bound Planned selection are also covered.
+  `env -u DATABASE_URL .venv/bin/alembic check` reports no new upgrade
+  operations; the phase gate independently passed 20 valuation/period tests,
+  OpenAPI boundary, `/health`, budget purity, no-float, and diff checks.
+- Decisions / assumptions: calculation helpers use an explicit high-precision
+  Decimal context or context-free sign operations; API quantization remains a
+  separate final presentation step.
+- Blocker: none.
+
 ## Required phase-entry template
 
 Copy this structure for every phase. Do not mark a phase complete without every

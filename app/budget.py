@@ -28,11 +28,12 @@ stays agnostic.
 
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Iterable
 
 TWO_PLACES = Decimal("0.01")
 ZERO = Decimal("0")
+CALCULATION_PRECISION = 100
 
 # (calendar day the expense belongs to, amount)
 DatedAmount = tuple[date, Decimal]
@@ -48,7 +49,42 @@ def round_to_quantum(value: Decimal, quantum: Decimal = TWO_PLACES) -> Decimal:
     quantum = Decimal(quantum)
     if not quantum.is_finite() or quantum <= 0:
         raise ValueError("quantum must be a positive finite Decimal")
-    return Decimal(value).quantize(quantum, rounding=ROUND_HALF_UP)
+    value = Decimal(value)
+    with localcontext() as context:
+        context.prec = max(
+            CALCULATION_PRECISION,
+            len(value.as_tuple().digits) + max(-quantum.as_tuple().exponent, 0) + 2,
+        )
+        return value.quantize(quantum, rounding=ROUND_HALF_UP)
+
+
+def _exact_sum(values: Iterable[Decimal]) -> Decimal:
+    items = [Decimal(value) for value in values]
+    nonzero = [value for value in items if value]
+    if not nonzero:
+        return ZERO
+    digits = (
+        max(value.adjusted() for value in nonzero)
+        - min(value.as_tuple().exponent for value in nonzero)
+        + len(str(len(items)))
+        + 2
+    )
+    with localcontext() as context:
+        context.prec = max(CALCULATION_PRECISION, digits)
+        total = ZERO
+        for value in items:
+            total += value
+        return total
+
+
+def _difference(left: Decimal, right: Decimal) -> Decimal:
+    return _exact_sum((Decimal(left), Decimal(right).copy_negate()))
+
+
+def _quotient(value: Decimal, divisor: int) -> Decimal:
+    with localcontext() as context:
+        context.prec = CALCULATION_PRECISION
+        return Decimal(value) / Decimal(divisor)
 
 
 def days_total(start_date: date, end_date: date) -> int:
@@ -73,7 +109,7 @@ def per_day(
     remaining: Decimal, days_left: int, quantum: Decimal = TWO_PLACES
 ) -> Decimal:
     """Money spread evenly over days_left at base-asset precision."""
-    return round_to_quantum(remaining / days_left, quantum)
+    return round_to_quantum(_quotient(remaining, days_left), quantum)
 
 
 def preview_after(
@@ -82,7 +118,7 @@ def preview_after(
     quantum: Decimal = TWO_PLACES,
 ) -> Decimal:
     """Live preview of today's number if a pending (unsaved) expense lands."""
-    return round_to_quantum(available_today - pending, quantum)
+    return round_to_quantum(_difference(available_today, pending), quantum)
 
 
 @dataclass(frozen=True)
@@ -135,47 +171,56 @@ def compute_budget(
     spent = ZERO
     for day, amount in expenses:
         day = _clamp_day(day, start_date, ref)
-        spent_by_day[day] = spent_by_day.get(day, ZERO) + amount
-        spent += amount
+        amount = Decimal(amount)
+        spent_by_day[day] = _exact_sum((spent_by_day.get(day, ZERO), amount))
+        spent = _exact_sum((spent, amount))
     rebases = {d for d in rebase_days if start_date <= d <= end_date}
 
     # Replay the fully elapsed days: unspent allowance rolls forward; a day
     # that ended overspent ate the pool, so the daily base rebases over the
     # days after it — exactly the reference behavior.
-    daily = total_amount / total
+    total_amount = Decimal(total_amount)
+    daily = _quotient(total_amount, total)
     carry = ZERO
     spent_before_today = ZERO
     day = start_date
     while day < ref:
         if day in rebases:
-            daily = (total_amount - spent_before_today) / (
-                (end_date - day).days + 1
+            daily = _quotient(
+                _difference(total_amount, spent_before_today),
+                (end_date - day).days + 1,
             )
             carry = ZERO
         day_spent = spent_by_day.get(day, ZERO)
-        spent_before_today += day_spent
-        leftover = daily + carry - day_spent
+        spent_before_today = _exact_sum((spent_before_today, day_spent))
+        leftover = _exact_sum((daily, carry, day_spent.copy_negate()))
         if leftover >= 0:
             carry = leftover
         else:
-            daily = (total_amount - spent_before_today) / (end_date - day).days
+            daily = _quotient(
+                _difference(total_amount, spent_before_today),
+                (end_date - day).days,
+            )
             carry = ZERO
         day += timedelta(days=1)
     if ref in rebases:
-        daily = (total_amount - spent_before_today) / ((end_date - ref).days + 1)
+        daily = _quotient(
+            _difference(total_amount, spent_before_today),
+            (end_date - ref).days + 1,
+        )
         carry = ZERO
 
-    budget_today = daily + carry
-    spent_today = spent - spent_before_today
-    available = budget_today - spent_today
-    remaining = total_amount - spent
+    budget_today = _exact_sum((daily, carry))
+    spent_today = _difference(spent, spent_before_today)
+    available = _difference(budget_today, spent_today)
+    remaining = _difference(total_amount, spent)
 
     # Tomorrow, by the same day-end rule applied to today as it stands:
     # leftover rolls forward; overspend rebases over the remaining days.
     if available >= 0:
-        next_daily = daily + available
+        next_daily = _exact_sum((daily, available))
     else:
-        next_daily = remaining / max(left - 1, 1)
+        next_daily = _quotient(remaining, max(left - 1, 1))
 
     return BudgetSummary(
         days_total=total,
