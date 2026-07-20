@@ -13,3 +13,4 @@ secrets/
 credentials.json
 .agents/
 .claude/
+.vscode/
