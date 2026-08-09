@@ -1,13 +1,13 @@
 ---
 id: T-002
 title: Replace the account-period model and migrate the schema
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3
 blocked-by: [T-001]
 branch: task/T-002-period-model-migration
-base-commit:
-implementer:
+base-commit: 505ad4397c784403161445cad943042262765305
+implementer: Codex
 readiness-reviewed-by: /root/t002_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: 757616ff011afd6e046f181f0f363ba461573353
 readiness-verdict: ready
@@ -168,4 +168,8 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
 
 ## Session log
 
-- (empty)
+- 2026-08-09 Codex: claimed `task/T-002-period-model-migration` from accepted
+  integration commit `505ad4397c784403161445cad943042262765305`; implementation
+  is starting with the migration/backfill block, followed by model invariants
+  and transitional period reads. Nothing implemented yet; no open product
+  question.
