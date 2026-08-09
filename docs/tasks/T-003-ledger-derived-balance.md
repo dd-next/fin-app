@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: Derive current_balance from the ledger and compute the reconciliation input
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6, §6.1
 blocked-by: [T-002]
@@ -22,32 +22,32 @@ truth exactly once.
 
 ## Acceptance
 
-- [ ] An immutable internal period-balance result exposes `current_balance`
+- [x] An immutable internal period-balance result exposes `current_balance`
       from the same ledger service the Accounts API uses, and the two agree
       exactly before API quantization. T-008 exposes this exact result in JSON;
       T-003 does not change `app/schemas.py` or the public response.
-- [ ] The internal result field is named `current_balance`, not `remaining` or
+- [x] The internal result field is named `current_balance`, not `remaining` or
       `account_balance`, so T-008 does not rename or recompute it.
-- [ ] Every signed financial leg affects its own account in the correct
+- [x] Every signed financial leg affects its own account in the correct
       direction, including fees, transfers, exchanges, and adjustments.
-- [ ] Correction, Delete, and Undo recompute the value from posted signed legs
+- [x] Correction, Delete, and Undo recompute the value from posted signed legs
       rather than adjusting a stored aggregate.
-- [ ] Each current-period read captures one UTC `reference_time` `T` and uses
+- [x] Each current-period read captures one UTC `reference_time` `T` and uses
       that same value for both ledger balance and window queries.
-- [ ] `window_net` sums exact signed posted legs using
+- [x] `window_net` sums exact signed posted legs using
       `snapshot_at < leg.created_at <= T`; equality at `snapshot_at` belongs to
       `opening_balance`, a leg after `T` is excluded from both queries, and a
       non-posted leg is excluded.
-- [ ] `reconciliation_delta = current_balance - (opening_balance + window_net)`
+- [x] `reconciliation_delta = current_balance - (opening_balance + window_net)`
       is computed on read and stored nowhere.
-- [ ] `calculation_opening_balance + window_net == current_balance` holds
+- [x] `calculation_opening_balance + window_net == current_balance` holds
       exactly, including after a corrected pre-period leg.
-- [ ] Closed history uses stored opening/closing snapshots and never
+- [x] Closed history uses stored opening/closing snapshots and never
       substitutes the live account balance, reconciliation delta, or a later
       reference time.
-- [ ] `app/budget.py` imports no database or web-framework module; inputs are
+- [x] `app/budget.py` imports no database or web-framework module; inputs are
       plain Decimal data.
-- [ ] Focused tests prove exact-boundary partitioning, post-`T` and non-posted
+- [x] Focused tests prove exact-boundary partitioning, post-`T` and non-posted
       exclusion, pre-period correction/Delete/Undo without double counting,
       Accounts-service equality, per-account fee/transfer/exchange/adjustment
       direction, 18-place Decimal reconciliation, delivery of
@@ -223,6 +223,32 @@ a pre-period correction.
   `21 passed, 8 deselected`; `git diff --check` passed.
 - Verdict: approved; prior P1/P2 findings are closed.
 
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t003_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete task range
+  `efdb5c0..d83f6c6`.
+- Findings (verbatim, P0–P3):
+
+  > Final read-only review T-003 (`efdb5c0..d83f6c6`): P0 none; P1 none;
+  > P2 none; P3 none. APPROVED for acceptance. Verified immutable internal
+  > `PeriodBalanceInputs.current_balance` with no public schema expansion;
+  > shared `app.ledger.account_balance` used by Accounts and period
+  > reconciliation; one captured T; posted-only
+  > `snapshot_at < created_at <= T` partition and exact identity; Decimal-only
+  > calculations; correction/void/Undo semantics derive from posted signed
+  > legs (no stored aggregate); fee/transfer/exchange/adjustment sign coverage;
+  > closed values use stored opening/closing snapshots; ended uses strict `<`
+  > end boundary; budget remains framework/DB-free. Task evidence accurately
+  > records prior findings/fixes and reviewer passes. Full gate evidence
+  > supplied by implementer: 118 passed, node check, diff check, clean tree.
+  > Administrative next step only: transcribe this final review, tick
+  > acceptance, update session/status.
+- Resolution: none required.
+- Reviewer checks: full task range and recorded gate evidence.
+- Verdict: approved for acceptance; no P0–P3 findings.
+
 ## Session log
 
 - 2026-08-09 Codex: claimed `task/T-003-ledger-derived-balance` from accepted
@@ -234,3 +260,8 @@ a pre-period correction.
   now use their distinct canonical cutoffs; targeted balance/reconciliation
   selector passes `21 passed, 8 deselected`. Remaining: full task gate, final
   acceptance review/evidence, commit, and local integration.
+- 2026-08-09 Codex: all acceptance criteria and P0–P2 findings are closed.
+  Exact reconciliation regression:
+  `test_current_balance_reconciliation_uses_one_exact_ledger_cutoff`. Full
+  gate: `118 passed`; JS syntax and `git diff --check` passed. Task is
+  review-approved and ready for local owner acceptance.
