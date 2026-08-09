@@ -32,13 +32,20 @@ same-account successor without mutating the predecessor.
 - [ ] Manual close is allowed only for a current period and commits
       `closed_at` plus the exact posted-ledger `closing_balance` captured through
       that same UTC instant in one transaction.
-- [ ] Closing never creates, edits, deletes, or voids a ledger movement, and
-      later Correction, Delete, or Undo cannot rewrite the stored opening or
-      closing snapshots.
-- [ ] Period creation rejects a second current period on the same account but
-      ignores closed and naturally ended predecessors whose original calendar
-      ranges overlap the requested successor; periods on different accounts
-      remain independent.
+- [ ] Closing never creates, edits, deletes, or voids a ledger movement. A
+      focused test compares the complete ledger row identities, amounts, and
+      statuses before/after close while the stored `closing_balance` preserves
+      exact high-precision Decimal value.
+- [ ] After manual close, Correction, Delete, and Undo remain allowed and
+      change the live account ledger/balance according to their normal rules,
+      while the period's `snapshot_at`, `opening_balance`, `closed_at`, and
+      `closing_balance` remain byte-for-byte unchanged.
+- [ ] One creation transaction rejects a second current period on the same
+      account, selects the latest eligible historical predecessor boundary,
+      derives the exact Decimal posted balance through that boundary, and
+      persists the successor. Closed and naturally ended predecessors do not
+      block the successor even when their original calendar ranges overlap;
+      periods on different accounts remain independent.
 - [ ] A same-workspace-day successor is valid immediately after close. Its
       `snapshot_at` is the later of its workspace-local `start_boundary` and
       the latest eligible predecessor close/end boundary, and its
@@ -47,19 +54,26 @@ same-account successor without mutating the predecessor.
       included in the predecessor's closed window and successor opening
       snapshot, but excluded from the successor replay window.
 - [ ] Natural expiry remains read-only and permits a successor without a
-      write-on-read finalization; the ended period's replay window stays
-      strictly before its workspace-local end boundary and cannot absorb
-      successor-era activity.
-- [ ] Focused tests cover workspace-local midnight status, ended close/edit
-      rejection, exact manual-close cutoff and snapshot immutability, same-day
-      closed successor boundary partitioning, naturally ended successor
-      creation, same-account current-period rejection, and different-account
-      independence.
+      write-on-read finalization; GET and list leave the persisted predecessor
+      byte-for-byte unchanged with both closing fields null. The ended period's
+      replay window stays strictly before its workspace-local end boundary and
+      cannot absorb successor-era activity.
+- [ ] Focused tests cover workspace-local midnight status; ended close/edit
+      rejection; GET/list natural-expiry persistence; exact high-precision
+      manual-close cutoff with an unchanged ledger; post-close Correction,
+      Delete, and Undo with immutable snapshots; same-day closed successor
+      boundary partitioning; same-account current-period rejection; and
+      different-account independence.
+- [ ] A non-UTC natural-expiry test uses at least two historical same-account
+      predecessors and legs immediately before and exactly at the latest end
+      boundary. It proves latest-boundary selection, strict equality exclusion
+      from ended replay, equality inclusion in successor opening, and exclusion
+      from successor replay.
 
 ## Touches
 
 - `app/periods.py`
-- `tests/test_periods_v2.py` or a bounded period-lifecycle test module
+- `tests/test_period_lifecycle_v2.py`
 - `docs/tasks/T-004-period-lifecycle.md`
 - `docs/BACKLOG.md` and `docs/PROGRESS.md` for task lifecycle state only
 
@@ -77,7 +91,7 @@ same-account successor without mutating the predecessor.
 ## Verification
 
 ```bash
-.venv/bin/python -m pytest tests/test_periods_v2.py -k "lifecycle or close or ended or successor or overlap" -q
+.venv/bin/python -m pytest tests/test_period_lifecycle_v2.py -q
 .venv/bin/python -m pytest tests/test_operations_v2.py -k "without_a_period or period" -q
 .venv/bin/python -m pytest -q
 node --check app/static/app.js
@@ -95,6 +109,33 @@ Append-only readiness passes. The reviewer checks this definition against
 `specs/ACCOUNT_PERIODS-v2.1.md` §§4–5, the applicable lifecycle baseline in
 `specs/FinnApp-v2.md` §§5 and §7, and
 `decisions/ADR-0005-periods-are-optional-and-ledger-derived.md`.
+
+### Pass 1
+
+- Reviewer task name/vendor: `/root/t004_readiness_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `e89b7ce`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — Post-close ledger editing is underspecified and can pass vacuously by continuing to reject every edit. The task only says later Correction, Delete, or Undo “cannot rewrite” stored snapshots (`docs/tasks/T-004-period-lifecycle.md:35-37`), but §5 requires those operations to remain allowed, change the live ledger normally, and leave snapshots unchanged (`docs/specs/ACCOUNT_PERIODS-v2.1.md:182-186`). This ambiguity is material because the current guard explicitly rejects transaction changes affecting a closed period (`app/periods.py:223-235`). Add a checkable acceptance criterion and focused tests proving Correction, Delete, and Undo after manual close update the live ledger according to normal rules while `snapshot_at`, `opening_balance`, `closed_at`, and `closing_balance` remain byte-for-byte unchanged. This belongs in T-004, not the T-008 response/route-surface task.
+  >
+  > P1 — Successor creation does not require the atomic snapshot reconstruction mandated by §5. The task separately requires current-period blocking (`docs/tasks/T-004-period-lifecycle.md:38-41`) and an exact successor `snapshot_at`/`opening_balance` (`docs/tasks/T-004-period-lifecycle.md:42-45`), but only manual close is explicitly required to use one transaction (`docs/tasks/T-004-period-lifecycle.md:32-34`). The specification says period creation must atomically reconstruct `opening_balance` from posted legs through the selected snapshot boundary (`docs/specs/ACCOUNT_PERIODS-v2.1.md:160-164`), while the lifecycle invariant permits at most one current period (`docs/specs/ACCOUNT_PERIODS-v2.1.md:90-97`, `docs/specs/ACCOUNT_PERIODS-v2.1.md:134-136`). Require one creation transaction to enforce the same-account current-period guard, select the latest eligible predecessor boundary, derive the exact Decimal posted balance through that boundary, and persist the successor. Otherwise a check-then-create implementation can satisfy the written bullets sequentially while violating the atomic financial boundary or admitting concurrent current periods.
+  >
+  > P2 — The required focused-test list does not prove either no-write lifecycle path. Acceptance prohibits lazy expiry writes and any close-time ledger mutation (`docs/tasks/T-004-period-lifecycle.md:24-28`, `docs/tasks/T-004-period-lifecycle.md:35-37`), but the listed tests mention only midnight status, successor creation, close cutoff, and snapshot immutability (`docs/tasks/T-004-period-lifecycle.md:53-57`). Add assertions that GET/list across natural expiry leaves the persisted predecessor unchanged with both closing fields null, and that manual close leaves the complete ledger row set and statuses unchanged while storing the exact high-precision Decimal balance. These directly cover §4’s no-finalization rule (`docs/specs/ACCOUNT_PERIODS-v2.1.md:105-109`) and §5’s snapshot-only close semantics (`docs/specs/ACCOUNT_PERIODS-v2.1.md:121-127`).
+  >
+  > P2 — Natural-expiry boundary selection is not sufficiently tested. The task requires the latest eligible predecessor boundary and strict ended replay cutoff (`docs/tasks/T-004-period-lifecycle.md:42-51`), but its test list requires only generic “naturally ended successor creation” (`docs/tasks/T-004-period-lifecycle.md:53-57`). Add a workspace with a non-UTC timezone, at least two historical same-account predecessors, and legs just before and exactly at the latest natural end boundary. Assert that the successor selects that latest boundary, the ended predecessor excludes equality, and successor opening includes equality while successor replay excludes it, as required by `docs/specs/ACCOUNT_PERIODS-v2.1.md:138-164`.
+  >
+  > P2 — Verification is not exact for the declared test scope. `Touches` allows either `tests/test_periods_v2.py` or a separate bounded lifecycle module (`docs/tasks/T-004-period-lifecycle.md:59-63`), but the targeted command executes only `tests/test_periods_v2.py` (`docs/tasks/T-004-period-lifecycle.md:77-81`). Either restrict the task to that file or name/include the alternate module in the command so every permitted implementation has a mandatory targeted gate.
+  >
+  > P3: None.
+  >
+  > Verdict: **not ready**. The goal, M-size boundary, T-002 dependency, workspace-local status rules, ended/closed immutability, historical-overlap override, same-day successor partition, T-007/T-008 separation, scratch-database rule, and general repository checks are otherwise appropriately bounded. Commit `e89b7cef0f8d6fd4287514642dde953e1a650ea0` was reviewed read-only; `git diff --check e89b7ce^ e89b7ce` passed.
+- Resolution: post-close ledger edits, transactional successor creation, both
+  no-write paths, exact natural-boundary partitioning, and the single focused
+  test module are now explicit acceptance requirements.
+- Verdict: not ready; corrected and submitted for fresh readiness review.
 
 ## Review
 
