@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
-| Last full suite | **116 passed** (2026-08-09, T-002 acceptance) |
-| Active work | T-003 ledger-derived balance passed final review and awaits local owner acceptance |
+| Last full suite | **118 passed** (2026-08-09, T-003 acceptance) |
+| Active work | T-002 and T-003 accepted; T-004 lifecycle task is next for specification/readiness |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002 accepted; T-003 is review-approved for local acceptance.**
+Status: **T-002 and T-003 accepted; T-004 is next for specification/readiness.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -47,6 +47,10 @@ Status: **T-002 accepted; T-003 is review-approved for local acceptance.**
 - T-002 gate: full pytest `116 passed`; JS syntax, fresh scratch migration,
   `alembic check`, and `git diff --check` passed. Detailed review evidence:
   [`tasks/T-002-period-model-migration.md`](tasks/T-002-period-model-migration.md).
+- T-003 added one-cutoff ledger reconciliation for current periods, strict
+  ended boundaries, and immutable closed-history projections. Full pytest
+  `118 passed`; detailed evidence:
+  [`tasks/T-003-ledger-derived-balance.md`](tasks/T-003-ledger-derived-balance.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

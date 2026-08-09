@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: Derive current_balance from the ledger and compute the reconciliation input
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6, §6.1
 blocked-by: [T-002]
@@ -265,3 +265,7 @@ a pre-period correction.
   `test_current_balance_reconciliation_uses_one_exact_ledger_cutoff`. Full
   gate: `118 passed`; JS syntax and `git diff --check` passed. Task is
   review-approved and ready for local owner acceptance.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `73be55b` into `finapp-v2-develop`; no push was
+  performed. T-003 is done; T-004 is the next ordered task and still needs a
+  task file plus independent readiness review before claim.
