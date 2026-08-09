@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: Implement redistribution allowance policy and pure dispatch
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.2, §7.3
 blocked-by: [T-003, T-005]
@@ -21,42 +21,42 @@ result contract.
 
 ## Acceptance
 
-- [ ] `app/budget.py` exposes `compute_redistribute_remaining_days` with the
+- [x] `app/budget.py` exposes `compute_redistribute_remaining_days` with the
       same plain signed-effect inputs, strict assigned-day validation,
       base-10 asset quantum, and immutable `AllowanceResult` as T-005.
-- [ ] For bounded reference day `D`, exact
+- [x] For bounded reference day `D`, exact
       `current_balance = pool_start + sum(effects through D)`, `today_net` is
       the exact sum assigned to `D`, and
       `start_of_day_balance = current_balance - today_net`.
-- [ ] Exact `daily_base = start_of_day_balance / days_remaining`, where
+- [x] Exact `daily_base = start_of_day_balance / days_remaining`, where
       `days_remaining = (end_date - D) + 1`; `carry_exact` is always zero and
       `available_before_today_effects_exact = daily_base`.
-- [ ] Exact `available_today = daily_base + today_net`; the current-day effect
+- [x] Exact `available_today = daily_base + today_net`; the current-day effect
       is subtracted once before division and added once afterward, so it is
       never double counted. Signed income raises and outflow lowers today's
       amount one-for-one after the start-of-day division.
-- [ ] Every new reference day performs a fresh exact redistribution regardless
+- [x] Every new reference day performs a fresh exact redistribution regardless
       of prior under/overspend. The canonical day-two example after day-one
       spend `60` produces exact base `940 / 9`, not carry-policy `140`.
-- [ ] Presentation fields use T-005 `ROUND_HALF_UP` asset-precision validation
+- [x] Presentation fields use T-005 `ROUND_HALF_UP` asset-precision validation
       without modifying exact fields. Rounding residue remains in
       `current_balance`, and on the final day `available_today_exact` equals the
       complete exact current balance.
-- [ ] Negative balances/allowances remain negative, one-day and clamped
+- [x] Negative balances/allowances remain negative, one-day and clamped
       before/after reference dates never divide by zero, invalid date ranges
       and effects outside `start_date..bounded_reference` are rejected, and
       recomputation persists no aggregate.
-- [ ] A pure `compute_allowance` dispatcher accepts exactly
+- [x] A pure `compute_allowance` dispatcher accepts exactly
       `carry_next_day` and `redistribute_remaining_days`, defaults omitted
       policy to `redistribute_remaining_days`, returns `AllowanceResult`, and
       rejects unknown values deterministically.
-- [ ] Dispatching `carry_next_day` is exactly equal to the reviewed T-005
+- [x] Dispatching `carry_next_day` is exactly equal to the reviewed T-005
       direct function for the same inputs; T-006 does not duplicate or alter
       carry math.
-- [ ] Existing legacy `compute_budget` behavior remains compatible. T-008 will
+- [x] Existing legacy `compute_budget` behavior remains compatible. T-008 will
       replace period-domain calls with explicit signed effects and the new
       dispatcher; T-006 changes no DB, period, schema, route, or UI file.
-- [ ] Focused tests cover canonical redistribution versus carry, current-day
+- [x] Focused tests cover canonical redistribution versus carry, current-day
       outflow/income exactly once, successive-day under/overspend rebases,
       final-day residue, negative/one-day/date bounds, strict validation,
       both dispatch paths/default/unknown policy, 18-place Decimal and VND/BTC
@@ -149,6 +149,45 @@ the review; the implementer records it verbatim following
   `git diff --check` passed.
 - Verdict: approved; no P0–P3 findings.
 
+### Pass 2 — final task review
+
+- Reviewer task name/vendor: `/root/t006_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete task range
+  `73001f9..c195c71`; clean task branch.
+- Findings (verbatim, P0–P3):
+
+  > T-006 final review verdict: **APPROVED for local acceptance**.
+  >
+  > P0: No findings.
+  > P1: No findings.
+  > P2: No findings.
+  > P3: No findings.
+  >
+  > Reviewed read-only without edits or branch switching: complete range `73001f9..c195c71`, task contract, readiness evidence, ACCOUNT_PERIODS-v2.1 §§7.2–7.3, T-005 result/carry compatibility, and applicable Decimal/purity rules.
+  >
+  > Confirmed:
+  >
+  > - Redistribution and current-day effect formulas are correct without double counting.
+  > - Carry dispatch is the direct T-005 implementation; no duplicated or altered carry math.
+  > - Exact fields remain separate from `ROUND_HALF_UP` presentation fields.
+  > - Validation, negative/final/one-day/bounded cases and immutable results are covered.
+  > - Legacy `compute_budget` remains compatible.
+  > - No period-domain, schema, API, route, or UI drift.
+  > - Readiness P0–P2 are closed; its P3 dependency-sync note was resolved in BACKLOG.
+  >
+  > Independent gates:
+  >
+  > - Focused: `11 passed`
+  > - Carry + legacy: `39 passed`
+  > - Full suite: `153 passed`
+  > - `node --check`: passed
+  > - `git diff --check 73001f9..c195c71`: passed
+  > - Worktree: clean on `task/T-006-redistribute-policy`
+- Resolution: none required.
+- Reviewer checks: complete range and full gate evidence.
+- Verdict: approved for local acceptance; no P0–P3 findings.
+
 ## Session log
 
 - 2026-08-09 Codex: drafted bounded T-006 pure redistribution/dispatch after
@@ -157,3 +196,7 @@ the review; the implementer records it verbatim following
 - 2026-08-09 Codex: readiness passed at `43856a7`, owner promoted at
   `73001f9`, and the exact task branch was claimed from that integration HEAD;
   pure implementation and review remain; no open question.
+- 2026-08-09 Codex: pure redistribution and common dispatch landed with
+  independent approval and no findings. Gate: focused `11 passed`, carry plus
+  legacy `39 passed`, full suite `153 passed`, JS syntax and diff checks
+  passed. Task is ready for local owner acceptance; no open question.
