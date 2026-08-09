@@ -8,9 +8,9 @@ blocked-by: [T-003, T-005]
 branch: task/T-006-redistribute-policy
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t006_readiness_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 43856a7
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -96,6 +96,30 @@ check must use an explicit scratch `DATABASE_URL`.
 Append-only readiness passes against `specs/ACCOUNT_PERIODS-v2.1.md` §7.2 and
 §7.3, T-005's reviewed common result, the Decimal baseline in
 `specs/FinnApp-v2.md`, and ADR-0005.
+
+### Pass 1
+
+- Reviewer task name/vendor: `/root/t006_readiness_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `43856a7`.
+- Findings (verbatim, P0–P3):
+
+  > Readiness verdict for `43856a7`: **READY**.
+  >
+  > P0: No findings.
+  >
+  > P1: No findings.
+  >
+  > P2: No findings.
+  >
+  > P3 — `docs/tasks/T-006-redistribute-policy.md:7` adds `T-005` to `blocked-by`, while `docs/BACKLOG.md` still lists only `T-003`. The added dependency is technically justified because T-006 must reuse T-005's accepted `AllowanceResult` and carry implementation and assert dispatcher/direct-function equality; it does not alter the effective backlog order because T-005 is already accepted immediately before T-006. For repository clarity, the owner may mirror `T-005` in the BACKLOG dependency cell during promotion, but this is not a readiness blocker.
+  >
+  > The task is bounded and checkable against ACCOUNT_PERIODS-v2.1 §§7.2/7.3, T-005, the Decimal baseline, ADR-0005, AGENTS, BACKLOG, and REVIEW_PROTOCOL. It specifies the exact start-of-day/current-day no-double-count formula; fresh per-reference-day redistribution; zero carry; final-day exact residue; signed/negative/bounded/date validation; shared immutable result and ROUND_HALF_UP presentation contract; exact carry dispatch equality; default and unknown-policy behavior; pure boundaries; and focused verification. T-007/T-008/API/DB/UI scope is excluded. `git diff --check 43856a7^ 43856a7` passed; HEAD is `43856a7`; worktree is clean. Documentation-only review, so no tests were required.
+  >
+  > Review was read-only; no files changed and no branch switch was performed.
+- Resolution: the technically required T-005 dependency will be mirrored in
+  BACKLOG by the repository owner in the separate promotion commit.
+- Verdict: ready.
 
 ## Review
 
