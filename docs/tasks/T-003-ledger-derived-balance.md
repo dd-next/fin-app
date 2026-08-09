@@ -1,13 +1,13 @@
 ---
 id: T-003
 title: Derive current_balance from the ledger and compute the reconciliation input
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6, §6.1
 blocked-by: [T-002]
 branch: task/T-003-ledger-derived-balance
-base-commit:
-implementer:
+base-commit: 1af115628c25781fbc0b2d40f900e6503e2badf4
+implementer: Codex
 readiness-reviewed-by: /root/t003_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: 32f7f17
 readiness-verdict: ready
@@ -163,4 +163,7 @@ a pre-period correction.
 
 ## Session log
 
-- (empty)
+- 2026-08-09 Codex: claimed `task/T-003-ledger-derived-balance` from accepted
+  integration commit `1af115628c25781fbc0b2d40f900e6503e2badf4`.
+  Starting with the shared cutoff-aware ledger service and immutable internal
+  reconciliation result; public JSON remains unchanged until T-008.

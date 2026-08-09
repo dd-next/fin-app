@@ -31,7 +31,7 @@ backend gap remains open.
 |----|------|--------|------|------|------------|
 | [T-001](tasks/T-001-mobile-backend-contract-sync.md) | Synchronize mobile design and backend contracts | done | M | design audit | — |
 | [T-002](tasks/T-002-period-model-migration.md) | Period model and migration | done | M | periods §3 | T-001 |
-| [T-003](tasks/T-003-ledger-derived-balance.md) | Ledger-derived `current_balance` and reconciliation input | todo | M | periods §6, §6.1 | T-002 |
+| [T-003](tasks/T-003-ledger-derived-balance.md) | Ledger-derived `current_balance` and reconciliation input | in-progress | M | periods §6, §6.1 | T-002 |
 | T-004 | Lifecycle: manual close, natural expiry, successor rules | backlog | M | periods §4, §5 | T-002 |
 | T-005 | `carry_next_day` policy in pure `app/budget.py` | backlog | M | periods §7.1, §7.3 | T-003 |
 | T-006 | `redistribute_remaining_days` policy in pure `app/budget.py` | backlog | M | periods §7.2, §7.3 | T-003 |
