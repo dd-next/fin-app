@@ -8,9 +8,9 @@ blocked-by: [T-004, T-005, T-006, T-007]
 branch: task/T-008-period-api-lifecycle-surface
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t008_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: c6a1b8f
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -64,8 +64,9 @@ live ledger balance, and both exact allowance policies through the existing
       with both close fields null and omits the live keys entirely. `closed`
       has `status="closed"`, non-null `closed_at`/`closing_balance`, and omits
       the live keys entirely. Omission, not JSON null, is required for history
-      live keys. Create/detail/list/PATCH/close use this union; current lookup
-      uses `current|null`, including immediately-ended create/PATCH responses.
+      live keys. Create/detail/list/PATCH/close use this union, including an
+      immediately-ended create/PATCH response. Current lookup uses only
+      `current|null` and returns null after that transition.
 - [ ] T-008's exact transitional response matrix is mechanical to remove in
       T-009: all three status shapes include `funding_amount`, `remaining`, and
       `planned`; `funding_amount` equals presented `opening_balance`;
@@ -231,6 +232,47 @@ T-009, and scenario 24 permission hardening remains assigned to T-010.
   implementation blocks.
 - Verdict: not ready; fresh readiness re-review required.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t008_readiness_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `c6a1b8f`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only readiness re-review of commit `c6a1b8fb7336dbbb333cd7fdb816ca9f29a6555e`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3 — Minor wording ambiguity at `docs/tasks/T-008-period-api-lifecycle-surface.md:67-68`: “including immediately-ended create/PATCH responses” grammatically follows the `current|null` clause, although lines 77–80 correctly require current lookup to ignore ended rows. Intended behavior remains recoverable: create/PATCH may return `ended`; subsequent current lookup returns JSON `null`. Rephrasing would improve clarity but does not block readiness.
+  >
+  > All Pass-1 findings are closed:
+  >
+  > - The T-008/T-009 request and output transition is deterministic, including create funding behavior, PATCH funding/confirmation behavior, exact three-shape legacy outputs, derivations, and mechanical T-009 removal (`:24-76`).
+  > - T-008 stops RebaseEvent consumption while preserving dormant storage/migration identity; T-009 has no model or migration work (`:117-121,161-163`).
+  > - The current/ended/closed union, exact common names/types, live-field omission, close-pair nullability, and route usage are defined (`:55-80`).
+  > - Create/PATCH use `extra="forbid"` with an exhaustive named forbidden-input regression matrix and mutation-neutral `422` behavior (`:48-54`).
+  > - Transactions period-filter parity is in Touches, acceptance, focused coverage, and verification, with exact snapshot/lifecycle boundaries and financial-date independence (`:126-145,151-155,176`).
+  > - Internal exact Decimal values and pre-quantization Allowance equality are separated from asset-precision `ROUND_HALF_UP` API presentation (`:102-112`).
+  > - One route reference `T` governs lifecycle, ledger cutoff, effective day, list serialization, and close timestamp (`:85-90`).
+  > - Shared-user and foreign-owner `404` regression coverage is enumerated for every period route and `transactions?period_id` (`:133-137`).
+  > - Three sequential logical blocks each require targeted tests and a fresh independent read-only review (`:233-252` in the current task file).
+  >
+  > The T-009 final legacy-contract removal and T-010 permission-hardening boundaries are coherent. Dependencies T-004–T-007 are accepted. The three cohesive, sequential blocks remain feasible at the upper end of size M. Verification commands are exact; existing named test modules exist, and the new focused T-008 module is explicitly scoped.
+  >
+  > `git diff --check c6a1b8f^ c6a1b8f` passed. No tests were needed for this documentation-only review.
+  >
+  > Verdict: **READY**.
+  >
+  > No files were edited and no branch was switched. HEAD remained `c6a1b8f` on `finapp-v2-develop`.
+- Resolution: all P0–P2 are closed; the non-blocking P3 sentence was rephrased
+  so ended create/PATCH responses and subsequent current-null lookup are
+  grammatically separate.
+- Verdict: ready.
+
 ## Implementation blocks and review gates
 
 Implement sequentially on the one T-008 branch; after each block run its
@@ -270,3 +312,6 @@ ends. Date · agent · what landed · what is left · open questions.
   Rebase consumption, adds canonical Transactions-filter parity, quantization,
   one-cutoff and privacy invariants, and splits implementation into three
   separately reviewed blocks. Fresh readiness re-review remains.
+- 2026-08-09 Codex: readiness Pass 2 approved T-008 with no P0–P2 findings;
+  its wording-only P3 was resolved. Readiness evidence is complete. Owner
+  promotion, exact branch claim, and implementation remain; no open question.
