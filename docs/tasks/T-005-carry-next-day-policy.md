@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: Implement exact carry-next-day allowance policy
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.1, §7.3
 blocked-by: [T-003]
@@ -274,3 +274,7 @@ ends. Date · agent · what landed · what is left · open questions.
   history `61587f2 -> 4e60782 -> 7eb3100`. All findings are closed. Gate:
   focused `16 passed`, legacy budget `23 passed`, full suite `142 passed`, JS
   syntax and diff checks passed. Task is ready for local owner acceptance.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `86672c3` into `finapp-v2-develop`; no push was
+  performed. T-005 is done; T-006 is the next ordered task and still requires
+  its own task file and independent readiness review before claim.
