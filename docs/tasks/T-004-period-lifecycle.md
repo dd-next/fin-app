@@ -40,6 +40,11 @@ same-account successor without mutating the predecessor.
       change the live account ledger/balance according to their normal rules,
       while the period's `snapshot_at`, `opening_balance`, `closed_at`, and
       `closing_balance` remain byte-for-byte unchanged.
+- [ ] Period lifecycle state never disables an otherwise authorized Financial
+      Operation or transaction account assignment: new Spend/Add
+      funds/Transfer/Exchange/Adjustment flows continue to apply their normal
+      ledger and permission rules after natural expiry or manual close without
+      mutating historical period snapshots.
 - [ ] One creation transaction rejects a second current period on the same
       account, selects the latest eligible historical predecessor boundary,
       derives the exact Decimal posted balance through that boundary, and
@@ -61,9 +66,10 @@ same-account successor without mutating the predecessor.
 - [ ] Focused tests cover workspace-local midnight status; ended close/edit
       rejection; GET/list natural-expiry persistence; exact high-precision
       manual-close cutoff with an unchanged ledger; post-close Correction,
-      Delete, and Undo with immutable snapshots; same-day closed successor
-      boundary partitioning; same-account current-period rejection; and
-      different-account independence.
+      Delete, Undo, new Operations, exchange, and account reassignment with
+      immutable snapshots; same-day closed successor boundary partitioning;
+      same-account current-period rejection; and different-account
+      independence.
 - [ ] A non-UTC natural-expiry test uses at least two historical same-account
       predecessors and legs immediately before and exactly at the latest end
       boundary. It proves latest-boundary selection, strict equality exclusion
@@ -96,7 +102,7 @@ same-account successor without mutating the predecessor.
 
 ```bash
 .venv/bin/python -m pytest tests/test_period_lifecycle_v2.py -q
-.venv/bin/python -m pytest tests/test_periods_v2.py tests/test_operations_undo_v2.py -k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards" -q
+.venv/bin/python -m pytest tests/test_periods_v2.py tests/test_operations_undo_v2.py -q
 .venv/bin/python -m pytest tests/test_operations_v2.py -k "without_a_period or period" -q
 .venv/bin/python -m pytest -q
 node --check app/static/app.js
@@ -240,3 +246,8 @@ ends. Date · agent · what landed · what is left · open questions.
   `tests/test_operations_undo_v2.py`; only those regression-test touches and
   their targeted command were added to the task scope for read-only review;
   implementation remains; no open question.
+- 2026-08-09 Codex: a complete closed-guard search found additional
+  superseded new-Operation, exchange, and account-reassignment assertions in
+  the already scoped legacy module; acceptance now names the §4 invariant and
+  the regression gate runs both legacy modules unfiltered; implementation
+  remains; no open question.
