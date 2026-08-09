@@ -1,16 +1,16 @@
 ---
 id: T-002
 title: Replace the account-period model and migrate the schema
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3
 blocked-by: [T-001]
 branch: task/T-002-period-model-migration
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t002_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: 757616ff011afd6e046f181f0f363ba461573353
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -131,6 +131,29 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   migration fixtures added without adding T-003 runtime reconciliation or
   T-007 editing to this task.
 - Verdict: not ready; corrected and submitted for a fresh readiness review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t002_readiness_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `757616ff011afd6e046f181f0f363ba461573353`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > The prior P1 is closed: migration semantics cover current/open, naturally
+  > ended, and manually closed rows; exact snapshot cutoffs, default rollover
+  > policy, pre-mutation rejection, preservation requirements, and
+  > empty/populated/rejection fixtures are explicit. Scope, Touches, blockers,
+  > size, and scratch-only migration verification are suitable.
+- Resolution: none required.
+- Verdict: ready.
 
 ## Review
 

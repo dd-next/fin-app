@@ -19,8 +19,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0001_release_v2` |
 | Last full suite | **111 passed** (2026-07-19, Phase 13 acceptance) |
-| Active work | T-001 accepted; T-002 period-model task is next for readiness review, not yet claimed |
-| Blocker | No product blocker; T-002 must pass readiness review before implementation starts |
+| Active work | T-001 accepted; T-002 period-model task is readiness-approved and ready to claim |
+| Blocker | None; T-002 passed readiness review at `757616f` |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
 
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **contract audit accepted; application implementation not started.**
+Status: **contract audit accepted; T-002 is readiness-approved for implementation.**
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
@@ -75,7 +75,7 @@ frozen-design/backend-first order is
 [ADR-0007](decisions/ADR-0007-mobile-design-is-frozen-and-backend-first.md).
 
 Task breakdown and order: [`BACKLOG.md`](BACKLOG.md). T-001 is accepted;
-T-002 is the first implementation task after its independent readiness review.
+T-002 passed independent readiness review and is the first implementation task.
 
 ## Workflow and design handoff
 
