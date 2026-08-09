@@ -74,6 +74,10 @@ same-account successor without mutating the predecessor.
 
 - `app/periods.py`
 - `tests/test_period_lifecycle_v2.py`
+- `tests/test_periods_v2.py` — replace lifecycle assertions that encode the
+  superseded closed-period transaction guard
+- `tests/test_operations_undo_v2.py` — replace the superseded closed-period
+  Undo rejection assertion
 - `docs/tasks/T-004-period-lifecycle.md`
 - `docs/BACKLOG.md` and `docs/PROGRESS.md` for task lifecycle state only
 
@@ -91,7 +95,7 @@ same-account successor without mutating the predecessor.
 ## Verification
 
 ```bash
-.venv/bin/python -m pytest tests/test_period_lifecycle_v2.py -q
+.venv/bin/python -m pytest tests/test_period_lifecycle_v2.py tests/test_periods_v2.py tests/test_operations_undo_v2.py -k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards" -q
 .venv/bin/python -m pytest tests/test_operations_v2.py -k "without_a_period or period" -q
 .venv/bin/python -m pytest -q
 node --check app/static/app.js
@@ -183,3 +187,8 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: readiness passed at `f03b8e8`, owner promoted the task at
   `74556f7`, and the exact task branch was claimed from that integration HEAD;
   lifecycle implementation and block review remain; no open question.
+- 2026-08-09 Codex: pre-implementation inspection found superseded
+  closed-period rejection assertions in `tests/test_periods_v2.py` and
+  `tests/test_operations_undo_v2.py`; only those regression-test touches and
+  their targeted command were added to the task scope for read-only review;
+  implementation remains; no open question.
