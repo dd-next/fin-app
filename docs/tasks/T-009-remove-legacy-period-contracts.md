@@ -8,9 +8,9 @@ blocked-by: [T-008]
 branch: task/T-009-remove-legacy-period-contracts
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t009_readiness_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 6c8d9cf
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -162,6 +162,39 @@ T-010 permissions or schema/model work.
   DOM, history, and request result.
 - Verdict: not ready; fresh readiness re-review required.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t009_readiness_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `6c8d9cf`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only readiness re-review of commit `6c8d9cf`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > All prior findings are fully closed:
+  >
+  > - Final create/PATCH schemas and validation semantics are exact: omitted create Start/policy defaults, explicit-null/unknown/future/reversed/missing validation, PATCH at-least-one rule, and accepted lifecycle/replay behavior are frozen at `docs/tasks/T-009-remove-legacy-period-contracts.md:25-33`.
+  > - The newly forbidden inputs have an exact representative JSON matrix—null, boolean, number, valid-looking string, empty/malformed strings, array, and object—alone and combined, with create and PATCH mutation-neutral assertions at `:34-41`.
+  > - Effective OpenAPI property sets are exact for create, patch, current, ended, and closed; period confirmation is absent while transaction `confirm_ended_period` and Plan `planned_amount` remain protected at `:42-54`.
+  > - The desktop change is mechanical and checkable: Funding control/copy/selector and period Planned card are removed, Remaining becomes Current balance backed by `current_balance`, period requests send only Start/end without period confirmation, lifecycle-aware history facts are exact, and unrelated Plan UI remains intact at `:66-74`.
+  > - Exact response omission, Decimal presentation, one-cutoff behavior, current/null lookup, Plan separation, and dormant Rebase/migration invariants remain preserved at `:55-65,75-84`.
+  >
+  > The task remains a coherent S-sized producer/consumer contract removal. It does not absorb T-010 permission changes, model or migration work, dormant RebaseEvent removal, Plan semantics, Transactions membership, Phase 15 design, deployment, or push.
+  >
+  > `git diff --check 6c8d9cf^ 6c8d9cf` passed. No tests were needed for this documentation-only re-review. No files were edited, no branch was switched, and HEAD remained `6c8d9cf` on `finapp-v2-develop`.
+  >
+  > Verdict: **READY**.
+- Resolution: all P0–P2 findings are closed; no further changes required.
+- Verdict: ready.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -189,3 +222,6 @@ ends. Date · agent · what landed · what is left · open questions.
   final request matrix, JSON-type rejection matrix, exact OpenAPI component
   sets, and mechanical desktop result are now frozen. Fresh readiness
   re-review remains; no open question.
+- 2026-08-09 Codex: readiness Pass 2 approved T-009 with no P0–P3 findings.
+  Owner promotion, exact branch claim, implementation, and review remain; no
+  open question.
