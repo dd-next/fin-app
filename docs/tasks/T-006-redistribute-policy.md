@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: Implement redistribution allowance policy and pure dispatch
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.2, §7.3
 blocked-by: [T-003, T-005]
@@ -200,3 +200,7 @@ the review; the implementer records it verbatim following
   independent approval and no findings. Gate: focused `11 passed`, carry plus
   legacy `39 passed`, full suite `153 passed`, JS syntax and diff checks
   passed. Task is ready for local owner acceptance; no open question.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `2287dff` into `finapp-v2-develop`; no push was
+  performed. T-006 is done; T-007 is the next ordered task and still requires
+  its own task file and independent readiness review before claim.
