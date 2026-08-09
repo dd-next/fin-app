@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: Remove legacy period money contracts
-status: backlog
+status: todo
 size: S
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §9–§10
 blocked-by: [T-008]
@@ -225,3 +225,5 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: readiness Pass 2 approved T-009 with no P0–P3 findings.
   Owner promotion, exact branch claim, implementation, and review remain; no
   open question.
+- 2026-08-09 repository owner: promoted T-009 from backlog to todo after READY
+  evidence at `6c8d9cf`. Exact task-branch claim is next; no open question.
