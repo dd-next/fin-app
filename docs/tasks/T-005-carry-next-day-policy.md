@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: Implement exact carry-next-day allowance policy
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.1, §7.3
 blocked-by: [T-003]
