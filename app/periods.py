@@ -11,7 +11,7 @@ from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_user
-from app.budget import compute_budget
+from app.budget import AllowanceResult, compute_allowance, compute_budget
 from app.db import get_session
 from app.ledger import (
     account_balance,
@@ -62,10 +62,27 @@ class PeriodBalanceInputs:
     window_net: Decimal
     reconciliation_delta: Decimal
     calculation_opening_balance: Decimal
+    movements: tuple[tuple[date, Decimal], ...]
+
+
+@dataclass(frozen=True)
+class PeriodAllowanceProjection:
+    balance_inputs: PeriodBalanceInputs
+    effective_effects: tuple[tuple[date, Decimal], ...]
+    allowance: AllowanceResult
 
 
 def workspace_today(workspace: Workspace) -> date:
-    return datetime.now(UTC).astimezone(ZoneInfo(workspace.timezone)).date()
+    return workspace_day_at(
+        workspace,
+        datetime.now(UTC).replace(tzinfo=None),
+    )
+
+
+def workspace_day_at(workspace: Workspace, reference_time: datetime) -> date:
+    return reference_time.replace(tzinfo=UTC).astimezone(
+        ZoneInfo(workspace.timezone)
+    ).date()
 
 
 def workspace_day_boundary(workspace: Workspace, day: date) -> datetime:
@@ -351,14 +368,14 @@ async def current_period_balance_inputs(
         period.account_id,
         through=reference_time,
     )
-    window_net = decimal_sum(
-        amount
-        for _, amount in await period_movements(
+    movements = tuple(
+        await period_movements(
             session,
             period,
             reference_time=reference_time,
         )
     )
+    window_net = decimal_sum(amount for _, amount in movements)
     reconciliation_delta = decimal_difference(
         current_balance,
         decimal_sum((period.opening_balance, window_net)),
@@ -372,6 +389,58 @@ async def current_period_balance_inputs(
         window_net=window_net,
         reconciliation_delta=reconciliation_delta,
         calculation_opening_balance=calculation_opening_balance,
+        movements=movements,
+    )
+
+
+def effective_period_effects(
+    period: AccountPeriod,
+    movements: tuple[tuple[date, Decimal], ...],
+    *,
+    reference_day: date,
+) -> tuple[tuple[date, Decimal], ...]:
+    return tuple(
+        (
+            min(max(financial_day, period.start_date), reference_day),
+            amount,
+        )
+        for financial_day, amount in movements
+    )
+
+
+async def current_period_allowance(
+    session: AsyncSession,
+    period: AccountPeriod,
+    *,
+    reference_time: datetime,
+    reference_day: date,
+    quantum: Decimal,
+) -> PeriodAllowanceProjection:
+    balance_inputs = await current_period_balance_inputs(
+        session,
+        period,
+        reference_time=reference_time,
+    )
+    effects = effective_period_effects(
+        period,
+        balance_inputs.movements,
+        reference_day=reference_day,
+    )
+    allowance = compute_allowance(
+        balance_inputs.calculation_opening_balance,
+        period.start_date,
+        period.end_date,
+        effects,
+        rollover_policy=period.rollover_policy,
+        today=reference_day,
+        quantum=quantum,
+    )
+    if allowance.current_balance != balance_inputs.current_balance:
+        raise RuntimeError("Period allowance does not match live ledger balance")
+    return PeriodAllowanceProjection(
+        balance_inputs=balance_inputs,
+        effective_effects=effects,
+        allowance=allowance,
     )
 
 
@@ -408,65 +477,72 @@ async def account_period_out(
     today = workspace_today(workspace)
     reference_time = datetime.now(UTC).replace(tzinfo=None)
     status = period_status(period, today)
-    if status == "current":
-        balance_inputs = await current_period_balance_inputs(
-            session,
-            period,
-            reference_time=reference_time,
-        )
-        calculation_opening_balance = balance_inputs.calculation_opening_balance
-        movements = await period_movements(
-            session,
-            period,
-            reference_time=reference_time,
-        )
-    elif status == "closed":
-        assert period.closed_at is not None
-        assert period.closing_balance is not None
-        reference_time = period.closed_at
-        calculation_opening_balance = period.opening_balance
-        closed_day = reference_time.replace(tzinfo=UTC).astimezone(
-            ZoneInfo(workspace.timezone)
-        ).date()
-        movements = [
-            (
-                closed_day,
-                decimal_difference(period.closing_balance, period.opening_balance),
-            )
-        ]
-    else:
-        reference_time = workspace_day_boundary(
-            workspace, period.end_date + timedelta(days=1)
-        )
-        calculation_opening_balance = period.opening_balance
-        movements = await period_movements(
-            session,
-            period,
-            reference_time=reference_time,
-            include_reference_time=False,
-        )
-    rebase_days = list(
-        (
-            await session.execute(
-                select(RebaseEvent.day).where(
-                    RebaseEvent.account_period_id == period.id
-                )
-            )
-        ).scalars()
-    )
     quantum = Decimal(1).scaleb(-period.asset.decimals)
-    budget = compute_budget(
-        Decimal(calculation_opening_balance),
-        period.start_date,
-        period.end_date,
-        (
-            (local_date, decimal_negate(amount))
-            for local_date, amount in movements
-        ),
-        today=today,
-        rebase_days=rebase_days,
-        quantum=quantum,
-    )
+    if status == "current":
+        projection = await current_period_allowance(
+            session,
+            period,
+            reference_time=reference_time,
+            reference_day=today,
+            quantum=quantum,
+        )
+        available_today = projection.allowance.available_today
+        remaining = projection.balance_inputs.current_balance
+    else:
+        if status == "closed":
+            assert period.closed_at is not None
+            assert period.closing_balance is not None
+            reference_time = period.closed_at
+            calculation_opening_balance = period.opening_balance
+            closed_day = reference_time.replace(tzinfo=UTC).astimezone(
+                ZoneInfo(workspace.timezone)
+            ).date()
+            movements = [
+                (
+                    closed_day,
+                    decimal_difference(
+                        period.closing_balance, period.opening_balance
+                    ),
+                )
+            ]
+        else:
+            reference_time = workspace_day_boundary(
+                workspace, period.end_date + timedelta(days=1)
+            )
+            calculation_opening_balance = period.opening_balance
+            movements = await period_movements(
+                session,
+                period,
+                reference_time=reference_time,
+                include_reference_time=False,
+            )
+        rebase_days = list(
+            (
+                await session.execute(
+                    select(RebaseEvent.day).where(
+                        RebaseEvent.account_period_id == period.id
+                    )
+                )
+            ).scalars()
+        )
+        budget = compute_budget(
+            Decimal(calculation_opening_balance),
+            period.start_date,
+            period.end_date,
+            (
+                (local_date, decimal_negate(amount))
+                for local_date, amount in movements
+            ),
+            today=today,
+            rebase_days=rebase_days,
+            quantum=quantum,
+        )
+        available_today = budget.per_day_today
+        remaining = (
+            period.closing_balance
+            if period.closed_at is not None
+            else budget.remaining_money
+        )
     return AccountPeriodOut(
         id=period.id,
         account_id=period.account_id,
@@ -475,12 +551,8 @@ async def account_period_out(
         start_date=period.start_date,
         end_date=period.end_date,
         funding_amount=period.opening_balance,
-        available_today=budget.per_day_today,
-        remaining=(
-            period.closing_balance
-            if period.closed_at is not None
-            else budget.remaining_money
-        ),
+        available_today=available_today,
+        remaining=remaining,
         planned=await planned_amount(session, account, period),
         status=status,
         created_at=period.created_at,

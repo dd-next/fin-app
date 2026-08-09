@@ -298,6 +298,51 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Block 1 — canonical allowance projection, Pass 1
+
+- Reviewer task name/vendor: `/root/t008_allowance_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `ed21e8d`; modified
+  `app/periods.py`, directly inspected untracked
+  `tests/test_period_api_v21.py`, and bounded legacy assertion update in
+  `tests/test_periods_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only implementation review of T‑008 Block 1 at `ed21e8d`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: **APPROVED**.
+  >
+  > Evidence:
+  >
+  > - Canonical movement tuple is captured once in `PeriodBalanceInputs` and reused for `window_net`, reconciliation, clamping, and dispatch (`app/periods.py:371-393`, `419-437`).
+  > - Effects retain signed values and clamp financial dates to Start/reference day (`app/periods.py:396-408`).
+  > - Snapshot equality and void/non-window exclusions remain enforced by the canonical timestamp query (`app/periods.py:339-355`).
+  > - Reconciliation enters only through `calculation_opening_balance`; exact allowance/current-balance equality is enforced before serialization (`app/periods.py:379-385`, `429-439`).
+  > - Current API serialization now consumes `compute_allowance`; current Rebase rows are not queried (`app/periods.py:481-490`). Historical compatibility remains outside this block.
+  > - Focused coverage verifies both policies, 18-decimal exactness, boundary correction reconciliation, signed clamping, VND `5672269 / 15 → 685882`, repeated permissive overspend, and dormant Rebase neutrality (`tests/test_period_api_v21.py:22-222`).
+  > - `app/budget.py`, schemas, transaction filtering, and unrelated routes were unchanged.
+  >
+  > Checks:
+  >
+  > - `tests/test_period_api_v21.py`: `4 passed`
+  > - carry + redistribution suites: `27 passed`
+  > - period/lifecycle/start suites: `31 passed`
+  > - `git diff --check`: passed
+  >
+  > No files were edited and no branch was switched. HEAD remained `ed21e8d` on `task/T-008-period-api-lifecycle-surface`.
+- Resolution: none required.
+- Reviewer checks: focused `4 passed`; pure policies `27 passed`; period
+  regressions `31 passed`; diff-check passed.
+- Verdict: approved; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -319,3 +364,7 @@ ends. Date · agent · what landed · what is left · open questions.
   `task/T-008-period-api-lifecycle-surface` was atomically claimed from that
   promotion HEAD and records the full base hash above. Block 1 allowance
   projection is next; no open question.
+- 2026-08-09 Codex: Block 1 canonical allowance projection implemented and
+  independently approved with no P0–P3 findings. Focused `4 passed`, pure
+  policies `27 passed`, period regressions `31 passed`, and diff-check passed.
+  Block 2 request/response/routes remains; no open question.

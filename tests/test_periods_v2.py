@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from app.budget import compute_budget
+from app.budget import compute_allowance, compute_budget
 from app.ledger import account_balance
 from app.models import Account, AccountPeriod, Transaction, TransactionLeg, Workspace
 from app.periods import current_period_balance_inputs, period_movements
@@ -261,9 +261,9 @@ async def test_current_balance_reconciliation_uses_one_exact_ledger_cutoff(
 
         captured_opening = []
 
-        def capture_budget(opening_balance, *args, **kwargs):
+        def capture_allowance(opening_balance, *args, **kwargs):
             captured_opening.append(opening_balance)
-            return compute_budget(opening_balance, *args, **kwargs)
+            return compute_allowance(opening_balance, *args, **kwargs)
 
         class FrozenDateTime(datetime):
             @classmethod
@@ -271,7 +271,7 @@ async def test_current_balance_reconciliation_uses_one_exact_ledger_cutoff(
                 aware = reference_time.replace(tzinfo=UTC)
                 return aware if timezone is None else aware.astimezone(timezone)
 
-        monkeypatch.setattr("app.periods.compute_budget", capture_budget)
+        monkeypatch.setattr("app.periods.compute_allowance", capture_allowance)
         monkeypatch.setattr("app.periods.datetime", FrozenDateTime)
         response = await client.get(f"/api/v1/account-periods/{period['id']}")
         assert response.status_code == 200
