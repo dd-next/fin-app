@@ -8,9 +8,9 @@ blocked-by: [T-002]
 branch: task/T-004-period-lifecycle
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t004_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: f03b8e8
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -136,6 +136,35 @@ Append-only readiness passes. The reviewer checks this definition against
   no-write paths, exact natural-boundary partitioning, and the single focused
   test module are now explicit acceptance requirements.
 - Verdict: not ready; corrected and submitted for fresh readiness review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t004_readiness_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `f03b8e8`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None. Prior P1 findings are closed:
+  >
+  > - Post-close Correction, Delete, and Undo must remain functional, change the live ledger normally, and preserve all four stored snapshots unchanged.
+  > - Current-period guard, predecessor-boundary selection, exact Decimal balance derivation, and successor persistence are explicitly required in one creation transaction.
+  >
+  > P2: None. Prior P2 findings are closed:
+  >
+  > - GET/list natural expiry must be persistence-neutral.
+  > - Manual close must leave complete ledger identities, amounts, and statuses unchanged while preserving a high-precision balance.
+  > - The non-UTC test requires multiple predecessors and exact-equality boundary partitioning.
+  > - `Touches` and the targeted command name the same exact module: `tests/test_period_lifecycle_v2.py`.
+  >
+  > P3: None.
+  >
+  > Verdict: **ready**.
+  >
+  > The goal, M scope, T-002 dependency, Touches, exclusions for T-005–T-010/Phase 15, scratch-database rule, and verification commands are bounded and consistent with the named specifications, ADR-0005, BACKLOG, AGENTS, and review protocol. Reviewed commit `f03b8e87e1033e9d41d6e592c2c7ce06fa922a32` read-only; worktree was clean and `git diff --check f03b8e8^ f03b8e8` passed. No tests were needed for this documentation-only readiness review.
+- Resolution: none required.
+- Verdict: ready.
 
 ## Review
 
