@@ -8,9 +8,9 @@ blocked-by: [T-003]
 branch: task/T-005-carry-next-day-policy
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t005_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: 6f4bf30
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -134,6 +134,29 @@ in `specs/FinnApp-v2.md`, and
   strict assigned-effect domain, invalid range behavior, base-10 quantum
   validation, and the corresponding focused tests.
 - Verdict: not ready; corrected and submitted for fresh readiness review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t005_readiness_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `6f4bf30`.
+- Findings (verbatim, P0–P3):
+
+  > Readiness verdict for `6f4bf301cdf99e4e8c8fd614f14f2b49669e1203`: **READY**.
+  >
+  > P0: No findings.
+  >
+  > P1: No findings.
+  >
+  > P2: No findings.
+  >
+  > P3: No findings.
+  >
+  > The prior findings are closed: the task now defines immutable `AllowanceResult` exact and presentation fields; rejects effects before start, after end, or after the bounded reference date; requires deterministic `ValueError` for `end_date < start_date`; restricts quantum to positive finite base-10 `1E-n` (including `1`) and names focused validation tests. The separate pure carry-policy function preserves legacy `compute_budget` compatibility; T-006 owns redistribution/dispatch and T-008 owns financial-day clamping plus domain/API integration. Goal, dependencies, Touches/Out-of-scope, and verification are bounded against ACCOUNT_PERIODS-v2.1 §§7.1/7.3, Decimal baseline, ADR-0005, BACKLOG, AGENTS, and review protocol. `git diff --check 6f4bf30^ 6f4bf30` passed; worktree is clean. Documentation-only review, so no tests were required.
+  >
+  > Review was read-only; no files changed.
+- Resolution: none required.
+- Verdict: ready.
 
 ## Review
 
