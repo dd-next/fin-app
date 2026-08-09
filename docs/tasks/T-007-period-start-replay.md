@@ -339,6 +339,44 @@ the review; the implementer records it verbatim following
   `160 passed`; JS syntax and diff-check passed.
 - Verdict: approved; no P0–P3 findings.
 
+### Pass 3 — final task review
+
+- Reviewer task name/vendor: `/root/t007_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete clean task range
+  `1f48429689412f61737fbda5afcfbd78d05d6d23..d2df4d542941771e2b83f217236608308a1ce36c`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only final review of `1f48429689412f61737fbda5afcfbd78d05d6d23..d2df4d542941771e2b83f217236608308a1ce36c`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > All readiness and implementation findings are closed. Branch/base/implementer/status invariants are correct; the implementation is bounded to T‑007, reserves the writer before mutable period reads, preserves exact Decimal snapshot/replay semantics and ledger mutation neutrality, and covers chronology, resulting-ended, predecessor, historical-overlap, cross-account, rollback, and deterministic stale-PATCH concurrency behavior. No T‑008/T‑009 scope drift found.
+  >
+  > Independent gates:
+  >
+  > - Focused suite: `7 passed`
+  > - Period/lifecycle regression: `24 passed`
+  > - Full suite: `160 passed`
+  > - `node --check app/static/app.js`: passed
+  > - Range `git diff --check`: passed
+  > - Worktree: clean
+  > - HEAD remained `d2df4d5` on `task/T-007-period-start-replay`
+  >
+  > No files were edited and no branch was switched.
+  >
+  > Verdict: **APPROVED FOR LOCAL ACCEPTANCE**.
+- Resolution: none required.
+- Reviewer checks: complete clean range, focused/regression/full suites, JS,
+  range diff-check, and clean worktree.
+- Verdict: approved for local acceptance; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -379,3 +417,7 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: committed the approved implementation as `439ca04` and
   moved T-007 to review. Final clean-range review and local owner acceptance
   remain; no open question.
+- 2026-08-09 Codex: final clean-range review approved
+  `1f48429..d2df4d5` with no P0–P3 findings. Independent gate: focused
+  `7 passed`, period/lifecycle `24 passed`, full `160 passed`, JS syntax,
+  range diff-check, and clean worktree. T-007 awaits local owner acceptance.
