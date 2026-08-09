@@ -8,8 +8,8 @@ blocked-by: [T-002]
 branch: task/T-004-period-lifecycle
 base-commit: 74556f7e7859f4d65d5c5004e971456a517d21a3
 implementer: Codex
-readiness-reviewed-by: /root/t004_scope_rereview (Codex same-vendor fallback)
-readiness-reviewed-commit: f371904
+readiness-reviewed-by: /root/t004_final_scope_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 7f9e146
 readiness-verdict: ready
 ---
 
@@ -221,6 +221,33 @@ Append-only readiness passes. The reviewer checks this definition against
   > The legacy touches remain bounded and required by `ACCOUNT_PERIODS-v2.1.md` §5: the named assertions currently encode the superseded rule rejecting Correction/Delete/Undo after manual close. No implementation file beyond `app/periods.py` is implied. The shared guard, status, close, predecessor selection, snapshot derivation, and creation behavior all live there; transaction Correction/Delete and Operations Undo already invoke that guard through existing paths.
   >
   > Verdict: **ready for implementation**. Reviewed `f3719041ed21a8b36601156cf132e6115807b28f` read-only; worktree was clean and `git diff --check f371904^ f371904` passed. No tests run.
+- Resolution: none required.
+- Verdict: ready for implementation.
+
+### Pass 5 — complete closed-state scope review
+
+- Reviewer task name/vendor: `/root/t004_final_scope_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `7f9e146`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: **ready for implementation**.
+  >
+  > The amended acceptance criterion is consistent with `ACCOUNT_PERIODS-v2.1.md` §§4–5 and ADR-0005: lifecycle state cannot permanently block otherwise authorized Financial Operations or transaction account assignment, while stored period snapshots remain unchanged. Existing ended-state confirmation behavior can remain; it enables rather than permanently rejects the action. Closed-state rejection assertions are superseded.
+  >
+  > Updating all affected assertions within the already-scoped `tests/test_periods_v2.py` and `tests/test_operations_undo_v2.py` is bounded lifecycle regression work. Verification now runs the new lifecycle module and both legacy modules unfiltered, so no relevant assertion can be silently deselected.
+  >
+  > No implementation file beyond `app/periods.py` is implied. The shared period-impact guard, lifecycle status, close logic, predecessor selection, snapshot derivation, and creation behavior are all located there; transaction and Operations paths already invoke that shared guard.
+  >
+  > Reviewed commit `7f9e1467cf1da67583a2de972ec97a450323ecd9` read-only. Worktree was clean. No tests run, as requested.
 - Resolution: none required.
 - Verdict: ready for implementation.
 
