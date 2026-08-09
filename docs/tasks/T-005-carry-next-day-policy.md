@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: Implement exact carry-next-day allowance policy
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.1, §7.3
 blocked-by: [T-003]
@@ -20,50 +20,50 @@ effects without hidden state, persistence, or intermediate rounding.
 
 ## Acceptance
 
-- [ ] `app/budget.py` exposes a bounded `carry_next_day` calculation that
+- [x] `app/budget.py` exposes a bounded `carry_next_day` calculation that
       accepts `Decimal pool_start`, inclusive start/end dates, dated signed
       balance effects (`negative=outflow`, `positive=inflow`), reference day,
       and asset quantum; it imports no database or web-framework module.
-- [ ] The pure common result is an immutable `AllowanceResult` usable by
+- [x] The pure common result is an immutable `AllowanceResult` usable by
       T-006 policy dispatch. It exposes integer `days_total` and
       `days_remaining`; exact Decimal `current_balance`, `daily_base_exact`,
       `carry_exact`, `available_before_today_effects_exact`, `today_net`, and
       `available_today_exact`; and presentation-quantized Decimal `daily_base`
       and `available_today`. T-005 does not add these fields to a public schema.
-- [ ] The initial exact `daily_base` is `pool_start / days_total` and carry is
+- [x] The initial exact `daily_base` is `pool_start / days_total` and carry is
       zero. For every completed day with
       `available_end = daily_base + carry + net_day >= 0`, the complete exact
       `available_end` becomes next-day carry and `daily_base` is unchanged.
-- [ ] Consecutive unused allowances accumulate only into the next day: the
+- [x] Consecutive unused allowances accumulate only into the next day: the
       canonical `100` base example produces day-two `140` after day-one spend
       `60`, then day-three `240` after day-two spend `0`; unused money is not
       redistributed over all future days.
-- [ ] When a completed day has `available_end < 0`, carry resets to zero and
+- [x] When a completed day has `available_end < 0`, carry resets to zero and
       the next exact daily base is `balance_after_day / days_after_that_day`;
       repeated overspends reapply that rule from the newly rebased pool.
-- [ ] Current-day signed effects are applied exactly once to both live balance
+- [x] Current-day signed effects are applied exactly once to both live balance
       and `available_today`; income raises and outflow lowers today's amount.
-- [ ] Exact result fields are never quantized internally. Presentation fields
+- [x] Exact result fields are never quantized internally. Presentation fields
       use `ROUND_HALF_UP` at a supplied base-10 asset-precision quantum of the
       form `1E-n` (including `1`, with `n >= 0`); non-finite, non-positive, or
       non-power-of-ten quantums are rejected, and rounding residue remains in
       the exact balance.
-- [ ] The reference day is clamped into the inclusive period. Every supplied
+- [x] The reference day is clamped into the inclusive period. Every supplied
       effect must already be assigned to a day from `start_date` through that
       bounded reference day; an effect before start, after end, or after the
       bounded reference day is rejected instead of ignored or transplanted.
       T-008 owns canonical financial-day clamping before calling policy math.
-- [ ] Negative balances and allowances remain negative, a one-day period never
+- [x] Negative balances and allowances remain negative, a one-day period never
       divides by zero, and `end_date < start_date` raises a deterministic
       `ValueError` before any division.
-- [ ] Recomputing from the same plain inputs is deterministic and persists no
+- [x] Recomputing from the same plain inputs is deterministic and persists no
       daily aggregate. The new policy function has no `rebase_days` or other
       ad hoc user-triggered rebase input.
-- [ ] Existing `compute_budget` callers and tests remain compatible during
+- [x] Existing `compute_budget` callers and tests remain compatible during
       T-005; policy dispatch and `redistribute_remaining_days` land in T-006,
       and the period domain/API switches to explicit `rollover_policy` only in
       T-008.
-- [ ] Focused tests cover the canonical carry sequence, exact-spend boundary,
+- [x] Focused tests cover the canonical carry sequence, exact-spend boundary,
       first and repeated overspends, signed income/outflow, negative pool,
       one-day/before/after bounds, 18-place Decimal precision, non-cent asset
       quantums, invalid range/quantum validation, rejection of pre-start,
@@ -219,6 +219,43 @@ the review; the implementer records it verbatim following
   --check` passed.
 - Verdict: approved; prior P2 findings are closed.
 
+### Pass 3 — final task review
+
+- Reviewer task name/vendor: `/root/t005_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete task range
+  `61587f2..7eb3100`; clean task branch.
+- Findings (verbatim, P0–P3):
+
+  > Final task review verdict for `61587f2..7eb3100`: **APPROVED for local acceptance**.
+  >
+  > P0: No findings.
+  >
+  > P1: No findings.
+  >
+  > P2: No findings.
+  >
+  > P3: No findings.
+  >
+  > The prior P2 findings are closed. `AllowanceResult` provides the immutable common T-006 contract; carry, overspend/rebase, signed-effect, exact/presentation rounding, validation, negative/one-day/date-bound behavior match the task and specification. Legacy compatibility remains intact, with no DB/framework imports, state, rebase argument, API/domain changes, or T-006/T-008 scope drift.
+  >
+  > Verified read-only:
+  >
+  > - T-005 focused: `16 passed`
+  > - Legacy budget: `23 passed`
+  > - Full suite: `142 passed`
+  > - `node --check`: passed
+  > - `git diff --check 61587f2..7eb3100`: passed
+  > - Task branch clean
+  > - History confirmed: `61587f2 → 4e60782 → 7eb3100`
+  > - `finapp-v2-develop` remains at `61587f2`
+  > - No files edited; no branch switch performed
+  >
+  > The implementer may now transcribe this verdict verbatim, complete the acceptance/session evidence, and perform local owner acceptance.
+- Resolution: none required.
+- Reviewer checks: complete range and full gate evidence.
+- Verdict: approved for local acceptance; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -230,3 +267,10 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: readiness passed at `6f4bf30`, owner promoted the task at
   `61587f2`, and the exact task branch was claimed from that integration HEAD;
   pure carry implementation and review remain; no open question.
+- 2026-08-09 Codex: a read-only reviewer unexpectedly moved the shared
+  worktree to integration while the block was uncommitted; no changes were
+  lost. The implementation was cherry-picked after the recorded claim and the
+  integration pointer was restored to promotion `61587f2`, yielding verified
+  history `61587f2 -> 4e60782 -> 7eb3100`. All findings are closed. Gate:
+  focused `16 passed`, legacy budget `23 passed`, full suite `142 passed`, JS
+  syntax and diff checks passed. Task is ready for local owner acceptance.
