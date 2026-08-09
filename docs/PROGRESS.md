@@ -17,9 +17,9 @@ the one task file you are working on. Nothing else by default.
 |---|---|
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
-| Schema head | `0001_release_v2` |
-| Last full suite | **111 passed** (2026-07-19, Phase 13 acceptance) |
-| Active work | T-002 period model/migration passed final review and awaits local owner acceptance |
+| Schema head | `0002_period_snapshot_model` |
+| Last full suite | **116 passed** (2026-08-09, T-002 acceptance) |
+| Active work | T-002 accepted; T-003 ledger-derived balance is next for readiness review |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,15 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **contract audit accepted; T-002 is review-approved for local acceptance.**
+Status: **T-002 accepted; T-003 is next for readiness review.**
+
+- T-002 replaced editable period funding storage with exact opening/closing
+  ledger snapshots and stable rollover-policy constraints.
+- Populated migration preflights incompatible legacy data, preserves period and
+  rebase identities, and derives snapshot balances without `float`.
+- T-002 gate: full pytest `116 passed`; JS syntax, fresh scratch migration,
+  `alembic check`, and `git diff --check` passed. Detailed review evidence:
+  [`tasks/T-002-period-model-migration.md`](tasks/T-002-period-model-migration.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

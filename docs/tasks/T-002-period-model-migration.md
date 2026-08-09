@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: Replace the account-period model and migrate the schema
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3
 blocked-by: [T-001]
@@ -375,3 +375,6 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   `0001_release_v2 → 0002_period_snapshot_model` and `alembic check` passed;
   `git diff --check` passed. Task is in review at branch commit pending the
   final evidence commit; next owner action is local fast-forward integration.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `b88e858` into `finapp-v2-develop`; no push was
+  performed. T-002 is done and T-003 is next for independent readiness review.
