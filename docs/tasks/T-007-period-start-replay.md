@@ -8,9 +8,9 @@ blocked-by: [T-002, T-003, T-004]
 branch: task/T-007-period-start-replay
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t007_readiness_final (Codex same-vendor fallback)
+readiness-reviewed-commit: 568d7e1
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -217,6 +217,44 @@ REVIEW_PROTOCOL.
   fixtures must prove period/ledger mutation neutrality.
 - Verdict: not ready; final readiness re-review required.
 
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t007_readiness_final`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `568d7e1`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only final readiness re-review of commit `568d7e1b72a0317220f2f81bb075b1f817743323`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > The Pass-2 P1 is closed. Create and PATCH now deterministically reject derived `snapshot_at >= period_end_boundary` with HTTP `422` detail `Period snapshot must precede end boundary`. Equality and later-than-end predecessor cases are explicitly required as mutation-neutral fixtures covering the target period and complete ledger.
+  >
+  > Earlier findings remain closed:
+  >
+  > - resulting-ended edits have strict historical cutoff, immediate immutability, null close snapshots, and successor eligibility;
+  > - predecessor eligibility and maximum-boundary selection are exact;
+  > - stale PATCH ordering requires writer reservation before target loading and lifecycle re-read;
+  > - historical overlap is allowed only when the canonical window remains chronological;
+  > - the obsolete all-history overlap guard is explicitly superseded;
+  > - the concurrency gate requires a `tmp_path` file-backed SQLite database, normal pooling, separate request-scoped sessions, deterministic interleaving, exact statuses, one current row, and persisted period/ledger invariants.
+  >
+  > The scope remains feasible at size M. T-008 correctly retains omitted-Start schema wiring, rollover-policy exposure, allowance/API response synchronization, and lifecycle surface work. T-009 retains removal of legacy funding/remaining/planned contracts. Dependencies T-002–T-004 are accepted.
+  >
+  > `git diff --check adb9236 568d7e1` passed. No tests were required for this documentation-only readiness review.
+  >
+  > No files were edited and no branch was switched; HEAD remained `568d7e1` on `finapp-v2-develop`.
+  >
+  > Verdict: **READY**.
+- Resolution: no further changes required; every readiness P0–P2 is closed.
+- Verdict: ready.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -240,3 +278,6 @@ ends. Date · agent · what landed · what is left · open questions.
   now rejects derived snapshot boundaries at or after the selected period end
   boundary for create and PATCH, with mutation-neutral equality/later tests.
   Final readiness re-review, promotion, and implementation remain.
+- 2026-08-09 Codex: readiness Pass 3 approved T-007 with no P0–P3 findings;
+  readiness evidence is complete. Owner promotion, exact branch claim, and
+  implementation remain; no open question.
