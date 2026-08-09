@@ -332,7 +332,10 @@ def _seed_populated_legacy_periods(connection, *, future_start: bool = False):
     }
 
 
-def test_period_snapshot_migration_backfills_populated_release_database(tmp_path: Path):
+def test_period_snapshot_migration_backfills_populated_release_database(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     database = tmp_path / "populated-periods.db"
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
@@ -382,8 +385,9 @@ def test_period_snapshot_migration_backfills_populated_release_database(tmp_path
 
 
 def test_period_snapshot_migration_rejects_future_legacy_start_without_changes(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     database = tmp_path / "future-period.db"
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
@@ -411,7 +415,10 @@ def test_period_snapshot_migration_rejects_future_legacy_start_without_changes(
     engine.dispose()
 
 
-def test_period_snapshot_populated_downgrade_and_reupgrade(tmp_path: Path):
+def test_period_snapshot_populated_downgrade_and_reupgrade(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     database = tmp_path / "period-roundtrip.db"
     config = Config("alembic.ini")
     config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")

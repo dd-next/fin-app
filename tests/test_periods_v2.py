@@ -4,7 +4,11 @@ from decimal import Decimal
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import select
+
 from app.budget import compute_budget
+from app.models import Account, AccountPeriod, Transaction, TransactionLeg, Workspace
+from app.periods import period_movements
 from tests.conftest import register, seed_unassigned_transaction
 from tests.test_ledger_v2 import create_account
 from tests.test_sharing_v2 import accept, invitation, login
@@ -57,6 +61,34 @@ async def create_plan_rule(
     return response.json()
 
 
+async def add_test_leg(client, account_id, amount, created_at, *, status="posted"):
+    async with client._finapp_test_sessions() as session:
+        account = await session.get(Account, account_id)
+        assert account is not None
+        transaction = Transaction(
+            workspace_id=account.workspace_id,
+            created_by_user_id=account.owner_user_id,
+            type="adjustment",
+            occurred_at=created_at,
+            local_date=created_at.replace(tzinfo=UTC).astimezone(
+                ZoneInfo("Asia/Ho_Chi_Minh")
+            ).date(),
+            origin="manual",
+            status=status,
+        )
+        transaction.legs.append(
+            TransactionLeg(
+                account_id=account.id,
+                asset_id=account.asset_id,
+                amount=Decimal(amount),
+                created_at=created_at,
+            )
+        )
+        session.add(transaction)
+        await session.commit()
+        return transaction.id
+
+
 async def test_snapshot_boundary_replay_correction_and_void(client):
     await register(client)
     account = await create_account(client, "Period USD", "USD", "900")
@@ -93,6 +125,105 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert replayed["remaining"] == "900"
 
 
+async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
+    await register(client)
+    account = await create_account(client, "Runtime boundary USD", "USD", "200")
+    today = local_today()
+    predecessor = await create_period(
+        client,
+        account["id"],
+        "999",
+        today - timedelta(days=3),
+        today - timedelta(days=2),
+    )
+    successor_start = today - timedelta(days=1)
+
+    async with client._finapp_test_sessions() as session:
+        workspace = await session.get(Workspace, account["workspace_id"])
+        assert workspace is not None
+        timezone = ZoneInfo(workspace.timezone)
+        local_boundary = (
+            datetime.combine(successor_start, datetime.min.time(), tzinfo=timezone)
+            .astimezone(UTC)
+            .replace(tzinfo=None)
+        )
+        selected_boundary = local_boundary + timedelta(hours=2)
+        opening_leg = (
+            await session.execute(
+                select(TransactionLeg)
+                .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+                .where(TransactionLeg.account_id == account["id"])
+                .order_by(TransactionLeg.id)
+            )
+        ).scalars().first()
+        assert opening_leg is not None
+        opening_leg.created_at = local_boundary - timedelta(hours=1)
+        predecessor_row = await session.get(AccountPeriod, predecessor["id"])
+        assert predecessor_row is not None
+        predecessor_row.closed_at = selected_boundary
+        predecessor_row.closing_balance = Decimal("150")
+        await session.commit()
+
+    await add_test_leg(client, account["id"], "-50", selected_boundary)
+    await add_test_leg(
+        client, account["id"], "999", selected_boundary, status="voided"
+    )
+    await add_test_leg(
+        client, account["id"], "20", selected_boundary + timedelta(hours=1)
+    )
+    successor = await create_period(
+        client,
+        account["id"],
+        "777",
+        successor_start,
+        today + timedelta(days=2),
+    )
+
+    assert successor["funding_amount"] == "150"
+    async with client._finapp_test_sessions() as session:
+        successor_row = await session.get(AccountPeriod, successor["id"])
+        assert successor_row is not None
+        assert successor_row.snapshot_at == selected_boundary
+        assert successor_row.opening_balance == Decimal("150")
+        assert await period_movements(session, successor_row) == [
+            (successor_start, Decimal("20"))
+        ]
+
+
+async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeypatch):
+    await register(client)
+    account = await create_account(client, "Close snapshot USD", "USD", "100")
+    period = await create_period(client, account["id"], "999")
+    spent = await client.post(
+        "/api/v1/operations/spend",
+        json={"account_id": account["id"], "amount": "10"},
+    )
+    assert spent.status_code == 201, spent.text
+    fixed = datetime.now(UTC).replace(tzinfo=None, microsecond=0) + timedelta(minutes=5)
+    await add_test_leg(client, account["id"], "5", fixed)
+    await add_test_leg(client, account["id"], "999", fixed, status="voided")
+    await add_test_leg(client, account["id"], "20", fixed + timedelta(hours=1))
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, timezone=None):
+            aware = fixed.replace(tzinfo=UTC)
+            return aware if timezone is None else aware.astimezone(timezone)
+
+    monkeypatch.setattr("app.periods.datetime", FrozenDateTime)
+    closed = await client.post(f"/api/v1/account-periods/{period['id']}/close")
+    assert closed.status_code == 200, closed.text
+
+    async with client._finapp_test_sessions() as session:
+        closed_row = await session.get(AccountPeriod, period["id"])
+        assert closed_row is not None
+        assert closed_row.closed_at == fixed
+        assert closed_row.closing_balance == Decimal("95")
+        await session.refresh(closed_row)
+        assert closed_row.closed_at == fixed
+        assert closed_row.closing_balance == Decimal("95")
+
+
 async def test_same_account_overlap_rejected_cross_account_overlap_allowed(client):
     await register(client)
     first = await create_account(client, "First period USD", "USD")
@@ -104,7 +235,7 @@ async def test_same_account_overlap_rejected_cross_account_overlap_allowed(clien
     overlap = await client.post(
         f"/api/v1/accounts/{first['id']}/periods",
         json={
-            "start_date": end.isoformat(),
+            "start_date": today.isoformat(),
             "end_date": (end + timedelta(days=2)).isoformat(),
             "funding_amount": "100",
         },
@@ -298,7 +429,7 @@ async def test_current_history_and_planned_is_informational(client):
     assert [item["id"] for item in current_items] == [current["id"]]
     assert [item["id"] for item in history_items] == [past["id"]]
     assert current_items[0]["planned"] == "70"
-    assert current_items[0]["remaining"] == "93"
+    assert current_items[0]["remaining"] == "-7"
 
 
 def test_budget_replay_is_pure_and_preserves_full_decimal_precision():
@@ -341,8 +472,8 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         f"/api/v1/account-periods/{current['id']}",
         json={"funding_amount": "120"},
     )
-    assert current_patch.status_code == 200, current_patch.text
-    assert current_patch.json()["funding_amount"] == "120"
+    assert current_patch.status_code == 422
+    assert current_patch.json()["detail"] == "Funding amount is not editable"
 
     immutable = await client.patch(
         f"/api/v1/account-periods/{current['id']}",
@@ -361,13 +492,13 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60"},
     )
-    assert rejected.status_code == 409
-    assert "confirmation" in rejected.json()["detail"].lower()
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == "Funding amount is not editable"
     confirmed = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60", "confirm_ended_period": True},
     )
-    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.status_code == 422
 
     overlap = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
@@ -378,18 +509,16 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
     )
     assert overlap.status_code == 409
 
-    upcoming = await create_period(
-        client,
-        account["id"],
-        "70",
-        today + timedelta(days=5),
-        today + timedelta(days=8),
+    upcoming = await client.post(
+        f"/api/v1/accounts/{account['id']}/periods",
+        json={
+            "start_date": (today + timedelta(days=5)).isoformat(),
+            "end_date": (today + timedelta(days=8)).isoformat(),
+            "funding_amount": "70",
+        },
     )
-    upcoming_patch = await client.patch(
-        f"/api/v1/account-periods/{upcoming['id']}",
-        json={"funding_amount": "75"},
-    )
-    assert upcoming_patch.status_code == 200, upcoming_patch.text
+    assert upcoming.status_code == 422
+    assert "future" in upcoming.json()["detail"].lower()
 
     closed = await client.post(f"/api/v1/account-periods/{current['id']}/close")
     assert closed.status_code == 200, closed.text
@@ -439,7 +568,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     transaction_id = posted.json()["id"]
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "90"
+    ).json()["remaining"] == "-10"
 
     rejected_patch = await client.patch(
         f"/api/v1/transactions/{transaction_id}", json={"amount": "20"}
@@ -452,7 +581,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     assert confirmed_patch.status_code == 200, confirmed_patch.text
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "80"
+    ).json()["remaining"] == "-20"
     assert (
         await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     ).status_code == 409
@@ -463,7 +592,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     assert confirmed_void.status_code == 200, confirmed_void.text
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "100"
+    ).json()["remaining"] == "0"
 
     current = await create_period(
         client, account["id"], "100", today - timedelta(days=1), today + timedelta(days=1)
@@ -581,7 +710,8 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
         f"/api/v1/account-periods/{state_period['id']}",
         json={**moved_to_ended, "confirm_ended_period": True},
     )
-    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.status_code == 409
+    assert confirmed.json()["detail"] == "Start date changes require snapshot replay"
     moved_to_future = {
         "start_date": (today + timedelta(days=3)).isoformat(),
         "end_date": (today + timedelta(days=5)).isoformat(),
@@ -596,7 +726,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
             f"/api/v1/account-periods/{state_period['id']}",
             json={**moved_to_future, "confirm_ended_period": True},
         )
-    ).status_code == 200
+    ).status_code == 409
 
     ended_account = await create_account(client, "Move ended USD", "USD")
     plain_account = await create_account(client, "Move plain USD", "USD")

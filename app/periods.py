@@ -1,6 +1,6 @@
 """Owner-private account periods and signed-leg replay."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Literal
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import require_user
 from app.budget import compute_budget
 from app.db import get_session
-from app.ledger import decimal_negate, decimal_sum, require_owned_account, validate_amount
+from app.ledger import decimal_negate, decimal_sum, require_owned_account
 from app.models import (
     Account,
     AccountPeriod,
@@ -53,6 +53,61 @@ def workspace_today(workspace: Workspace) -> date:
     return datetime.now(UTC).astimezone(ZoneInfo(workspace.timezone)).date()
 
 
+def workspace_day_boundary(workspace: Workspace, day: date) -> datetime:
+    return (
+        datetime.combine(day, time.min, tzinfo=ZoneInfo(workspace.timezone))
+        .astimezone(UTC)
+        .replace(tzinfo=None)
+    )
+
+
+async def posted_balance_at(
+    session: AsyncSession,
+    *,
+    account_id: int,
+    boundary: datetime,
+) -> Decimal:
+    amounts = (
+        await session.execute(
+            select(TransactionLeg.amount)
+            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+            .where(
+                TransactionLeg.account_id == account_id,
+                TransactionLeg.created_at <= boundary,
+                Transaction.status == "posted",
+            )
+        )
+    ).scalars()
+    return decimal_sum(Decimal(value) for value in amounts)
+
+
+async def initial_snapshot_at(
+    session: AsyncSession,
+    *,
+    account_id: int,
+    start_date: date,
+    workspace: Workspace,
+) -> datetime:
+    snapshot_at = workspace_day_boundary(workspace, start_date)
+    predecessor = (
+        await session.execute(
+            select(AccountPeriod)
+            .where(
+                AccountPeriod.account_id == account_id,
+                AccountPeriod.end_date < start_date,
+            )
+            .order_by(AccountPeriod.end_date.desc(), AccountPeriod.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if predecessor is None:
+        return snapshot_at
+    predecessor_boundary = predecessor.closed_at or workspace_day_boundary(
+        workspace, predecessor.end_date + timedelta(days=1)
+    )
+    return max(snapshot_at, predecessor_boundary)
+
+
 def period_status(period: AccountPeriod, today: date) -> str:
     if period.closed_at is not None:
         return "closed"
@@ -82,7 +137,7 @@ async def movement_period_impact(
                 await session.execute(
                     select(AccountPeriod).where(
                         AccountPeriod.account_id == leg.account_id,
-                        AccountPeriod.created_at < leg.created_at,
+                        AccountPeriod.snapshot_at < leg.created_at,
                         AccountPeriod.start_date <= local_date,
                         AccountPeriod.end_date >= local_date,
                     )
@@ -219,7 +274,7 @@ async def period_movements(
             .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
             .where(
                 TransactionLeg.account_id == period.account_id,
-                TransactionLeg.created_at > period.created_at,
+                TransactionLeg.created_at > period.snapshot_at,
                 Transaction.local_date >= period.start_date,
                 Transaction.local_date <= period.end_date,
                 Transaction.status == "posted",
@@ -273,7 +328,7 @@ async def account_period_out(
     )
     quantum = Decimal(1).scaleb(-period.asset.decimals)
     budget = compute_budget(
-        Decimal(period.funding_amount),
+        Decimal(period.opening_balance),
         period.start_date,
         period.end_date,
         (
@@ -291,7 +346,7 @@ async def account_period_out(
         created_by_user_id=period.created_by_user_id,
         start_date=period.start_date,
         end_date=period.end_date,
-        funding_amount=period.funding_amount,
+        funding_amount=period.opening_balance,
         available_today=budget.per_day_today,
         remaining=budget.remaining_money,
         planned=await planned_amount(session, account, period),
@@ -313,14 +368,23 @@ async def create_account_period(
     session: AsyncSession = Depends(get_session),
 ):
     account = await require_owned_account(session, account_id, user.id)
+    workspace = await session.get(Workspace, account.workspace_id)
+    assert workspace is not None
     if body.end_date < body.start_date:
         raise HTTPException(status_code=422, detail="End date must not precede start date")
-    funding = validate_amount(body.funding_amount, account.asset, allow_zero=True)
+    if body.start_date > workspace_today(workspace):
+        raise HTTPException(status_code=422, detail="Start date must not be in the future")
     await ensure_no_overlap(
         session,
         account_id=account.id,
         start_date=body.start_date,
         end_date=body.end_date,
+    )
+    snapshot_at = await initial_snapshot_at(
+        session,
+        account_id=account.id,
+        start_date=body.start_date,
+        workspace=workspace,
     )
     period = AccountPeriod(
         account_id=account.id,
@@ -328,7 +392,11 @@ async def create_account_period(
         created_by_user_id=user.id,
         start_date=body.start_date,
         end_date=body.end_date,
-        funding_amount=funding,
+        snapshot_at=snapshot_at,
+        opening_balance=await posted_balance_at(
+            session, account_id=account.id, boundary=snapshot_at
+        ),
+        rollover_policy="redistribute_remaining_days",
     )
     session.add(period)
     await session.commit()
@@ -400,6 +468,13 @@ async def patch_account_period(
         raise HTTPException(status_code=409, detail="Closed account period is read-only")
     if any(getattr(body, field) is None for field in changed_fields):
         raise HTTPException(status_code=422, detail="Period fields cannot be null")
+    if "funding_amount" in changed_fields:
+        raise HTTPException(status_code=422, detail="Funding amount is not editable")
+    if "start_date" in changed_fields:
+        raise HTTPException(
+            status_code=409,
+            detail="Start date changes require snapshot replay",
+        )
     start_date = body.start_date if "start_date" in changed_fields else period.start_date
     end_date = body.end_date if "end_date" in changed_fields else period.end_date
     if end_date < start_date:
@@ -419,15 +494,8 @@ async def patch_account_period(
         end_date=end_date,
         exclude_period_id=period.id,
     )
-    if "start_date" in changed_fields:
-        period.start_date = start_date
     if "end_date" in changed_fields:
         period.end_date = end_date
-    if "funding_amount" in changed_fields:
-        assert body.funding_amount is not None
-        period.funding_amount = validate_amount(
-            body.funding_amount, account.asset, allow_zero=True
-        )
     await session.commit()
     await session.refresh(period)
     return await account_period_out(session, period, account)
@@ -442,7 +510,12 @@ async def close_account_period(
     period, account = await require_private_period(session, period_id, user.id)
     if period.closed_at is not None:
         raise HTTPException(status_code=409, detail="Account period is already closed")
-    period.closed_at = datetime.now(UTC).replace(tzinfo=None)
+    closed_at = datetime.now(UTC).replace(tzinfo=None)
+    closing_balance = await posted_balance_at(
+        session, account_id=account.id, boundary=closed_at
+    )
+    period.closed_at = closed_at
+    period.closing_balance = closing_balance
     await session.commit()
     await session.refresh(period)
     return await account_period_out(session, period, account)

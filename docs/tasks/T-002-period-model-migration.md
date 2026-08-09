@@ -232,6 +232,88 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   — `9 passed`; `git diff --check` — passed.
 - Verdict: approved for the migration block; both prior P2 findings are closed.
 
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t002_runtime_block_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `d2fc2a4`; modified
+  `app/periods.py` and `tests/test_periods_v2.py` inspected as a bounded
+  transitional-runtime diff.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — Runtime snapshot and boundary behavior lacks direct coverage.
+  > `initial_snapshot_at()` and `posted_balance_at()` introduce the core
+  > runtime partition at `app/periods.py:56`, `app/periods.py:64`, and
+  > `app/periods.py:84`, while replay switches to strict
+  > `snapshot_at < leg.created_at` at `app/periods.py:268`. Existing tests
+  > verify ordinary replay but do not assert runtime `snapshot_at`,
+  > exact-boundary inclusion in `opening_balance`, exclusion from replay,
+  > non-UTC local boundary, or the later predecessor close/end boundary.
+  > Migration coverage does not validate these separate runtime helpers. Add a
+  > runtime fixture covering those cases and the compatibility
+  > `funding_amount == opening_balance` alias.
+  >
+  > P2 — Manual-close pairing and exact ledger capture are untested. The new
+  > behavior calculates the balance before assigning both fields at
+  > `app/periods.py:513`, which correctly avoids autoflushing a half-written
+  > closing pair, but `tests/test_periods_v2.py:392` asserts only
+  > `status == closed`. Add a DB-level assertion that `closed_at` and
+  > `closing_balance` are both set, that the balance includes a posted leg
+  > exactly at the cutoff and excludes later/non-posted legs, and that
+  > subsequent activity does not rewrite either snapshot.
+  >
+  > P3: None.
+- Resolution: added direct non-UTC predecessor/exact-boundary runtime coverage
+  and a frozen-cutoff DB-level closing-pair test.
+- Reviewer checks: periods plus migrations initially `21 passed`;
+  `git diff --check` passed.
+- Verdict: changes required for two P2 coverage gaps; corrected and submitted
+  for re-review.
+
+### Pass 4
+
+- Reviewer task name/vendor: `/root/t002_runtime_block_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `d2fc2a4`; complete
+  runtime diff after Pass 3 coverage fixes.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None. Both prior gaps are closed:
+  >
+  > - Runtime test uses the `Asia/Ho_Chi_Minh` local boundary, a
+  >   non-overlapping predecessor closed two hours later, exact-boundary
+  >   posted/voided legs, strict replay of only the later movement, and the
+  >   transitional `funding_amount` alias.
+  > - Close test freezes the cutoff and verifies
+  >   `closed_at`/`closing_balance = 95`: exact posted leg included, voided and
+  >   later legs excluded, pair persisted unchanged.
+  >
+  > P3: None.
+  >
+  > Verdict: approved; no P0–P2 findings in the runtime diff.
+  >
+  > Test note outside this bounded diff: my combined rerun with an exported
+  > scratch `DATABASE_URL` produced 20 passed / 3 migration-fixture failures
+  > because Alembic’s environment URL overrode the per-test database URLs. The
+  > runtime tests, including both new tests, passed. This does not invalidate
+  > the runtime block, but the final T-002 scratch gate should resolve or
+  > account for that harness interaction.
+- Resolution: no runtime logic change required; added explicit environment
+  isolation to all three new migration fixtures, then reproduced the exact
+  exported-scratch task gate successfully.
+- Reviewer checks: runtime re-review approved; exact scratch migration/check
+  plus period/migration test command now passes `23 passed`.
+- Verdict: approved; both runtime P2 findings and the test-harness note are
+  closed.
+
 ## Session log
 
 - 2026-08-09 Codex: claimed `task/T-002-period-model-migration` from accepted
@@ -244,3 +326,8 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   and populated downgrade/re-upgrade coverage passes (`9 passed`). Remaining:
   transitional period-domain reads/writes required to keep the application
   runnable on the new non-null snapshot model, then task gates and acceptance.
+- 2026-08-09 Codex: implemented and independently approved transitional
+  runtime persistence and reads on the snapshot model. Exact exported-scratch
+  verification passes: upgrade `0001` → head, `alembic check`, period/migration
+  suite `23 passed`, and `git diff --check`. Remaining: full regression suite,
+  final task review, acceptance evidence, task commit, and local integration.
