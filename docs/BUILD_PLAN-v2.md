@@ -2,8 +2,9 @@
 
 Authoritative requirements are in
 [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md). This plan is deliberately
-sequential: do not begin a later phase until the current phase is committed and
-its `docs/PROGRESS.md` entry has all required evidence.
+sequential: do not begin a later phase until the repository owner accepts the
+current phase and its `docs/PROGRESS.md` summary links to complete task
+evidence.
 
 For every logical block, follow [`REVIEW_PROTOCOL-v2.md`](REVIEW_PROTOCOL-v2.md).
 Each reviewer sub-agent is read-only and independent from the author of the
@@ -13,15 +14,19 @@ block. A phase commit is forbidden until its review findings are closed.
 
 1. Inspect the current worktree before edits and preserve unrelated user
    changes.
-2. Work in the stated block order: schema/migration → domain → API → UI →
+2. After task readiness and any explicit contract-audit block, work in the
+   applicable implementation order: schema/migration → domain → API → UI →
    tests → docs. Split a block if this would hide unrelated behavior.
 3. After each written block: targeted tests, a separate reviewer sub-agent,
    fixes, and re-review if findings changed logic/tests.
 4. At phase end run complete `pytest`, `node --check app/static/app.js`,
    `git diff --check`, and the phase-specific checks below.
-5. Update `docs/PROGRESS.md` with 2–4 concise work lines, exact commands and
-   outcomes, reviewer task/findings/resolution, and decisions/assumptions.
-6. Commit only the phase using `v2 phase N: <short summary>`.
+5. Record detailed commands, outcomes, review passes, and resolutions in each
+   task file. Update `docs/PROGRESS.md` with 2–4 concise phase lines, exact gate
+   outcomes, and links to those task files and ADRs.
+6. Task commits use `T-NNN: <short summary>`. After all task commits are
+   accepted, the repository owner archives them and creates the phase-closing
+   `v2 phase N: <short summary>` commit.
 
 ## Phase 8 — Documentation and specification reset
 
@@ -187,8 +192,90 @@ Purpose: produce a reproducible, persistent single-container release.
 - full suite, JS check, diff check, fresh migration, browser acceptance, and
   every specification acceptance criterion pass.
 
+## Phase 14 — Backend contract synchronization for the mobile design
+
+Purpose: make the financial model and public API capable of driving the final
+mobile design before any mobile UI implementation starts. The design assets
+are not changed in this phase.
+
+### Blocks
+
+1. **Contract audit and authority map** — freeze the design source hierarchy,
+   record every design/backend mismatch, and convert each backend gap into an
+   ordered task with explicit dependencies.
+2. **Account-period model and ledger derivation** — replace editable funding
+   with opening/closing snapshots, live ledger balance, optional lifecycle,
+   reconciliation, and exact Decimal replay.
+3. **Daily allowance and period API** — implement both rollover calculations,
+   default new periods to `redistribute_remaining_days`, support the mobile
+   checkbox and explicit create/edit Start-date semantics, and preserve
+   Available today as informational rather than an authorization limit.
+4. **Rates and transfers** — keep rates manual, adapt the mobile pair direction,
+   and add a one-amount same/cross-asset transfer quote/execute contract without
+   losing exact Decimal or Total-capital invariants. External Auto remains a
+   disabled Phase 15 placeholder.
+5. **Transactions and Plan feed** — expose planned occurrences through the
+   specified Transaction-details route without creating fake posted movements,
+   map adjustment/exchange rows, order by financial date, support the shown
+   transaction-type edit, and reconcile mobile Plan-rule fields with domain
+   validation.
+6. **Account and category lifecycle** — restore archived accounts and
+   merge/delete categories and Plan-rule references without changing balances.
+   Owner transfer is deferred; logout keeps the shipped server-session model.
+7. **Acceptance and specification merge** — run the complete backend matrix,
+   close every contract blocker, and merge the accepted changes into the
+   primary product specification.
+
+### Phase checks
+
+- every backend gap in `design/MOBILE-BACKEND-GAP-AUDIT.md` is either closed or
+  explicitly accepted by the repository owner;
+- all financial values remain Decimal and posted ledger movements remain the
+  source of account balances;
+- period, transfer, manual-rate, feed, category, account, and Plan
+  contracts have API and permission regression tests;
+- a fresh scratch database migrates to one Alembic head and `alembic check`
+  reports no pending operations;
+- the full automated suite, JS syntax check, and diff/status manifest pass.
+
+## Phase 15 — Mobile redesign implementation
+
+Purpose: implement the 390×844 mobile design after Phase 14 supplies every
+required backend contract, while preserving the working desktop experience.
+
+### Blocks
+
+1. **Handoff and responsive shell** — import approved tokens, establish the
+   mobile breakpoint/safe-area rules, five-tab shell, and preserve desktop
+   behavior where no desktop redesign exists.
+2. **Reusable primitives** — rows, metric strips, Operations cards, controls,
+   bottom sheets, branded confirmations, and accessible focus handling.
+3. **Accounts and Transactions** — mobile list/empty/detail/filter/swipe flows
+   backed by the Phase 14 contracts.
+4. **Operations and periods** — exact 390×844 composition, keyboard clearance,
+   validation, account/period states, and success confirmations.
+5. **Plan, Profile, Settings, and Analytics** — implement the Plan item
+   three-action row, dynamic account label, manual-rate flow, standard logout,
+   disabled Owner/Auto placeholders, and keep Analytics/Scan as placeholders.
+6. **Interaction and acceptance matrix** — phone visual checks, reduced
+   motion, target sizes, content, navigation graph, destructive confirmations,
+   and desktop regression at the existing acceptance width.
+
+### Phase checks
+
+- every item in the mobile `spec/08-acceptance.md` checklist passes at 390×844;
+- no mobile flow uses native select, `alert`, `confirm`, or `prompt`;
+- Operations remains fully visible with the keyboard state specified by the
+  reference and no forbidden screen scroll appears;
+- desktop remains functional and keeps features not represented in the mobile
+  design until a separate desktop specification replaces them;
+- full suite, JS syntax, scratch-database browser checks, and diff/status
+  manifest pass.
+
 ## Completion rule
 
-Do not mark the release complete because an earlier prototype test suite passed.
-Completion requires all Phase 8–13 checks, reviewer evidence for every logical
-block, and the twelve acceptance criteria in `specs/FinnApp-v2.md`.
+Do not mark the release complete because an earlier prototype test suite
+passed. Completion of the shipped v2 baseline required all Phase 8–13 checks.
+The next release additionally requires Phases 14–15, reviewer evidence for
+every task, and the active acceptance criteria linked from
+`docs/PROGRESS.md`.
