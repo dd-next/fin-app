@@ -1,13 +1,13 @@
 ---
 id: T-005
 title: Implement exact carry-next-day allowance policy
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.1, §7.3
 blocked-by: [T-003]
 branch: task/T-005-carry-next-day-policy
-base-commit:
-implementer:
+base-commit: 61587f2e4c22488417ab377ae27a71554e803987
+implementer: Codex
 readiness-reviewed-by: /root/t005_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: 6f4bf30
 readiness-verdict: ready
@@ -172,3 +172,6 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: drafted the bounded pure-math T-005 contract on
   `finapp-v2-develop` after local T-004 acceptance; readiness review, owner
   promotion, branch claim, and implementation remain; no open question.
+- 2026-08-09 Codex: readiness passed at `6f4bf30`, owner promoted the task at
+  `61587f2`, and the exact task branch was claimed from that integration HEAD;
+  pure carry implementation and review remain; no open question.
