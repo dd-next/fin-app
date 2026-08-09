@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: Implement redistribution allowance policy and pure dispatch
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.2, §7.3
 blocked-by: [T-003, T-005]
