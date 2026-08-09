@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Enforce account-period close, expiry, and successor lifecycle
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §4–§5
 blocked-by: [T-002]
@@ -21,56 +21,56 @@ same-account successor without mutating the predecessor.
 
 ## Acceptance
 
-- [ ] `period_status` uses the account workspace's local calendar date:
+- [x] `period_status` uses the account workspace's local calendar date:
       `current` is an unclosed period whose inclusive range contains that date,
       `ended` is an unclosed period after `end_date`, and `closed` is any period
       with `closed_at`; no read lazily writes expiry state or invents a natural
       `closing_balance`.
-- [ ] An ended period has `closed_at=null` and `closing_balance=null`, remains
+- [x] An ended period has `closed_at=null` and `closing_balance=null`, remains
       immutable, and rejects both edit and manual-close attempts; a manually
       closed period likewise rejects subsequent edits and repeated close.
-- [ ] Manual close is allowed only for a current period and commits
+- [x] Manual close is allowed only for a current period and commits
       `closed_at` plus the exact posted-ledger `closing_balance` captured through
       that same UTC instant in one transaction.
-- [ ] Closing never creates, edits, deletes, or voids a ledger movement. A
+- [x] Closing never creates, edits, deletes, or voids a ledger movement. A
       focused test compares the complete ledger row identities, amounts, and
       statuses before/after close while the stored `closing_balance` preserves
       exact high-precision Decimal value.
-- [ ] After manual close, Correction, Delete, and Undo remain allowed and
+- [x] After manual close, Correction, Delete, and Undo remain allowed and
       change the live account ledger/balance according to their normal rules,
       while the period's `snapshot_at`, `opening_balance`, `closed_at`, and
       `closing_balance` remain byte-for-byte unchanged.
-- [ ] Period lifecycle state never disables an otherwise authorized Financial
+- [x] Period lifecycle state never disables an otherwise authorized Financial
       Operation or transaction account assignment: new Spend/Add
       funds/Transfer/Exchange/Adjustment flows continue to apply their normal
       ledger and permission rules after natural expiry or manual close without
       mutating historical period snapshots.
-- [ ] One creation transaction rejects a second current period on the same
+- [x] One creation transaction rejects a second current period on the same
       account, selects the latest eligible historical predecessor boundary,
       derives the exact Decimal posted balance through that boundary, and
       persists the successor. Closed and naturally ended predecessors do not
       block the successor even when their original calendar ranges overlap;
       periods on different accounts remain independent.
-- [ ] A same-workspace-day successor is valid immediately after close. Its
+- [x] A same-workspace-day successor is valid immediately after close. Its
       `snapshot_at` is the later of its workspace-local `start_boundary` and
       the latest eligible predecessor close/end boundary, and its
       `opening_balance` is the exact posted balance through that instant.
-- [ ] A leg exactly at the predecessor close/successor snapshot boundary is
+- [x] A leg exactly at the predecessor close/successor snapshot boundary is
       included in the predecessor's closed window and successor opening
       snapshot, but excluded from the successor replay window.
-- [ ] Natural expiry remains read-only and permits a successor without a
+- [x] Natural expiry remains read-only and permits a successor without a
       write-on-read finalization; GET and list leave the persisted predecessor
       byte-for-byte unchanged with both closing fields null. The ended period's
       replay window stays strictly before its workspace-local end boundary and
       cannot absorb successor-era activity.
-- [ ] Focused tests cover workspace-local midnight status; ended close/edit
+- [x] Focused tests cover workspace-local midnight status; ended close/edit
       rejection; GET/list natural-expiry persistence; exact high-precision
       manual-close cutoff with an unchanged ledger; post-close Correction,
       Delete, Undo, new Operations, exchange, and account reassignment with
       immutable snapshots; same-day closed successor boundary partitioning;
       same-account current-period rejection; and different-account
       independence.
-- [ ] A non-UTC natural-expiry test uses at least two historical same-account
+- [x] A non-UTC natural-expiry test uses at least two historical same-account
       predecessors and legs immediately before and exactly at the latest end
       boundary. It proves latest-boundary selection, strict equality exclusion
       from ended replay, equality inclusion in successor opening, and exclusion
@@ -396,6 +396,31 @@ the review; the implementer records it verbatim following
   bounded `git diff --check` passed.
 - Verdict: approved; prior concurrency P1 is closed.
 
+### Pass 6 — final task review
+
+- Reviewer task name/vendor: `/root/t004_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete task range
+  `74556f7..2abc00e`; clean worktree.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > All prior readiness and implementation P0–P2 findings are closed. The reviewed range satisfies the T-004 acceptance criteria: workspace-local read-only expiry; current-only exact manual close without ledger writes; immutable snapshots across post-close financial operations; serialized same-account successor creation; latest closed/ended predecessor boundary selection; exact same-day and natural-expiry partitioning; and different-account independence. No schema, UI, T-007, T-008, T-010, or Phase 15 drift was found.
+  >
+  > Gate evidence is sufficient and consistent with the reviewed scope: lifecycle `8 passed`; periods plus Undo `25 passed`; Operations selector `3 passed, 2 deselected`; full suite `126 passed`; JS syntax, `git diff --check`, and clean-worktree checks passed.
+  >
+  > Verdict: **APPROVED for local T-004 task acceptance**.
+- Resolution: none required.
+- Reviewer checks: complete task range and recorded gate evidence.
+- Verdict: approved for local task acceptance; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -417,3 +442,9 @@ ends. Date · agent · what landed · what is left · open questions.
   the already scoped legacy module; acceptance now names the §4 invariant and
   the regression gate runs both legacy modules unfiltered; implementation
   remains; no open question.
+- 2026-08-09 Codex: both lifecycle blocks landed with independent approval;
+  all readiness and implementation P0–P2 findings are closed. Gate evidence:
+  lifecycle `8 passed`, period plus Undo `25 passed`, Operations selector `3
+  passed, 2 deselected`, full suite `126 passed`, JS syntax and `git diff
+  --check` passed, worktree clean. Task is review-approved and ready for local
+  owner acceptance; no open question.

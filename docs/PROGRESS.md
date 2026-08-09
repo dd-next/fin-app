@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
-| Last full suite | **118 passed** (2026-08-09, T-003 acceptance) |
-| Active work | T-002 and T-003 accepted; T-004 lifecycle task is next for specification/readiness |
+| Last full suite | **126 passed** (2026-08-09, T-004 review gate) |
+| Active work | T-004 lifecycle passed final review and awaits local owner acceptance |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002 and T-003 accepted; T-004 is next for specification/readiness.**
+Status: **T-002 and T-003 accepted; T-004 is review-approved for local acceptance.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -51,6 +51,10 @@ Status: **T-002 and T-003 accepted; T-004 is next for specification/readiness.**
   ended boundaries, and immutable closed-history projections. Full pytest
   `118 passed`; detailed evidence:
   [`tasks/T-003-ledger-derived-balance.md`](tasks/T-003-ledger-derived-balance.md).
+- T-004 enforces write-neutral natural expiry, exact atomic manual close,
+  immutable post-close history, and serialized exact-boundary successors. Full
+  pytest `126 passed`; detailed evidence:
+  [`tasks/T-004-period-lifecycle.md`](tasks/T-004-period-lifecycle.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
