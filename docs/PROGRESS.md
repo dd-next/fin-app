@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0001_release_v2` |
 | Last full suite | **111 passed** (2026-07-19, Phase 13 acceptance) |
-| Active work | T-002 period model/migration is in progress on `task/T-002-period-model-migration` |
+| Active work | T-002 period model/migration passed final review and awaits local owner acceptance |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **contract audit accepted; T-002 implementation is in progress.**
+Status: **contract audit accepted; T-002 is review-approved for local acceptance.**
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

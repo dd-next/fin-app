@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: Replace the account-period model and migrate the schema
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3
 blocked-by: [T-001]
@@ -20,46 +20,46 @@ a second independently editable representation of account money.
 
 ## Acceptance
 
-- [ ] The period model persists `account_id`, `asset_id`, `start_date`,
+- [x] The period model persists `account_id`, `asset_id`, `start_date`,
       `end_date`, `snapshot_at`, `opening_balance`, `rollover_policy`, `created_at`,
       `closed_at`, and `closing_balance`.
-- [ ] `account_id` and `asset_id` are immutable. `snapshot_at` and
+- [x] `account_id` and `asset_id` are immutable. `snapshot_at` and
       `opening_balance` change only through the T-007 current-period Start-date
       operation and are immutable for ended/closed history.
-- [ ] `end_date` is inclusive and a period with `end_date < start_date` is
+- [x] `end_date` is inclusive and a period with `end_date < start_date` is
       rejected.
-- [ ] `closed_at` and `closing_balance` are nullable and are written together
+- [x] `closed_at` and `closing_balance` are nullable and are written together
       or not at all.
-- [ ] `rollover_policy` accepts only the two approved stable values.
-- [ ] `funding_amount` no longer participates in the period model or domain
+- [x] `rollover_policy` accepts only the two approved stable values.
+- [x] `funding_amount` no longer participates in the period model or domain
       calculation. Removing it from public responses belongs to T-009.
-- [ ] `planned` is absent from the period model and period calculations.
-- [ ] No stored column holds a mutable current balance.
-- [ ] One Alembic revision upgrades a scratch database from
+- [x] `planned` is absent from the period model and period calculations.
+- [x] No stored column holds a mutable current balance.
+- [x] One Alembic revision upgrades a scratch database from
       `0001_release_v2`, including populated legacy period rows, and the final
       `alembic check` reports no pending operations.
-- [ ] The populated upgrade preserves period IDs, dates, creator, account,
+- [x] The populated upgrade preserves period IDs, dates, creator, account,
       asset, timestamps, and dependent `rebase_event` rows; it never copies
       legacy `funding_amount` into a v2.1 balance field.
-- [ ] For each compatible legacy row, the migration derives `snapshot_at` as
+- [x] For each compatible legacy row, the migration derives `snapshot_at` as
       the later of the workspace-local `start_date` boundary and the preceding
       same-account period boundary, then derives `opening_balance` from posted
       signed account legs with `leg.created_at <= snapshot_at`.
-- [ ] A manually closed legacy row keeps `closed_at` and receives a
+- [x] A manually closed legacy row keeps `closed_at` and receives a
       `closing_balance` derived from posted signed account legs with
       `leg.created_at <= closed_at`; an open or naturally ended row has both
       closing fields null. Every migrated row defaults to
       `redistribute_remaining_days`.
-- [ ] Before changing schema or rows, the populated upgrade fails explicitly
+- [x] Before changing schema or rows, the populated upgrade fails explicitly
       and leaves the database at `0001_release_v2` when legacy data cannot be
       represented without invention or loss: a future `start_date`,
       `end_date < start_date`, overlapping same-account ranges, account/asset
       mismatch, or invalid workspace timezone.
-- [ ] Migration tests cover empty upgrade, current/open, naturally ended, and
+- [x] Migration tests cover empty upgrade, current/open, naturally ended, and
       manually closed populated rows, an exact snapshot-boundary leg, preserved
       `rebase_event` linkage, and one rejected incompatible fixture whose
       original schema/data remain readable.
-- [ ] Money columns keep Decimal storage at crypto precision; no `float`
+- [x] Money columns keep Decimal storage at crypto precision; no `float`
       appears in the model, migration, or domain guards.
 
 ## Touches
@@ -314,6 +314,45 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
 - Verdict: approved; both runtime P2 findings and the test-harness note are
   closed.
 
+### Pass 5
+
+- Reviewer task name/vendor: `/root/t002_final_task_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: complete task range
+  `8300fd0..99df2f8` plus uncommitted `tests/test_operations_v2.py` expectation
+  correction.
+- Findings (verbatim, P0–P3):
+
+  > Final read-only review: **APPROVED**.
+  >
+  > - P0: None.
+  > - P1: None.
+  > - P2: None.
+  > - P3: None.
+  >
+  > Acceptance verdict: every T-002 acceptance item is satisfied for its
+  > bounded scope. The model and migration use exact `Decimal`/18-digit
+  > crypto-capable storage, contain no mutable current-balance or funding
+  > truth, enforce date/rollover/closing-pair constraints, preserve required
+  > legacy identities and linkage, derive snapshots with `<=` and replay with
+  > strict `>`, preflight incompatible populated data before DDL, and support
+  > tested populated downgrade/re-upgrade. Public schemas and guards prevent
+  > mutation of identity and snapshot fields; stored opening/closing snapshots
+  > remain unchanged.
+  >
+  > The uncommitted `tests/test_operations_v2.py` expectations correctly
+  > reflect ledger-derived opening balances after caller-supplied funding stops
+  > being domain truth.
+  >
+  > T-003, T-004, T-007, and T-009 remain correctly scoped to finish
+  > reconciliation, successor/lifecycle behavior, Start-date editing, and
+  > removal of transitional response aliases. No unresolved P0–P2 findings.
+- Resolution: none required.
+- Reviewer checks: inspected full committed range and uncommitted manifest;
+  implementer gate `116 passed`, JS syntax, scratch migrations, Alembic drift,
+  and diff check supplied.
+- Verdict: approved; task acceptance-ready.
+
 ## Session log
 
 - 2026-08-09 Codex: claimed `task/T-002-period-model-migration` from accepted
@@ -331,3 +370,8 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   verification passes: upgrade `0001` → head, `alembic check`, period/migration
   suite `23 passed`, and `git diff --check`. Remaining: full regression suite,
   final task review, acceptance evidence, task commit, and local integration.
+- 2026-08-09 Codex: all acceptance criteria and P0–P2 findings are closed. Full
+  gate: `116 passed`; `node --check app/static/app.js` passed; explicit scratch
+  `0001_release_v2 → 0002_period_snapshot_model` and `alembic check` passed;
+  `git diff --check` passed. Task is in review at branch commit pending the
+  final evidence commit; next owner action is local fast-forward integration.
