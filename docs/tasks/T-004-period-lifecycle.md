@@ -95,7 +95,8 @@ same-account successor without mutating the predecessor.
 ## Verification
 
 ```bash
-.venv/bin/python -m pytest tests/test_period_lifecycle_v2.py tests/test_periods_v2.py tests/test_operations_undo_v2.py -k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards" -q
+.venv/bin/python -m pytest tests/test_period_lifecycle_v2.py -q
+.venv/bin/python -m pytest tests/test_periods_v2.py tests/test_operations_undo_v2.py -k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards" -q
 .venv/bin/python -m pytest tests/test_operations_v2.py -k "without_a_period or period" -q
 .venv/bin/python -m pytest -q
 node --check app/static/app.js
@@ -169,6 +170,32 @@ Append-only readiness passes. The reviewer checks this definition against
   > The goal, M scope, T-002 dependency, Touches, exclusions for T-005–T-010/Phase 15, scratch-database rule, and verification commands are bounded and consistent with the named specifications, ADR-0005, BACKLOG, AGENTS, and review protocol. Reviewed commit `f03b8e87e1033e9d41d6e592c2c7ce06fa922a32` read-only; worktree was clean and `git diff --check f03b8e8^ f03b8e8` passed. No tests were needed for this documentation-only readiness review.
 - Resolution: none required.
 - Verdict: ready.
+
+### Pass 3 — claimed-scope amendment
+
+- Reviewer task name/vendor: `/root/t004_scope_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `44c482c..ca4ab5a`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only scope verdict for `44c482c..ca4ab5a`: **not ready only because the targeted command can silently deselect the new focused module; the two added legacy-test touches themselves are required and bounded.**
+  >
+  > Verbatim findings:
+  >
+  > P0: None.
+  >
+  > P1: None. Updating the existing closed-period transaction-edit and Undo assertions is required by `ACCOUNT_PERIODS-v2.1.md` §5 lines 182–186: Correction, Delete, and Undo must remain allowed after manual close and must alter the live ledger normally without rewriting snapshots. The present assertions at `tests/test_periods_v2.py:779-790` and `tests/test_operations_undo_v2.py:362-370` encode the superseded rejection and would contradict the accepted contract. Limiting the edits to those lifecycle assertions is bounded T-004 regression work, not a route/API redesign.
+  >
+  > P2 — The targeted verification is not exact for the new focused test module. `tests/test_period_lifecycle_v2.py` does not yet exist, and the command applies `-k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards"` to all three files. Nothing in Acceptance requires every new test function in `tests/test_period_lifecycle_v2.py` to contain `lifecycle`, so required close/expiry/successor tests can be silently deselected while the command passes. Run `tests/test_period_lifecycle_v2.py` unfiltered, then run the two legacy modules with the narrow `-k`, or remove `-k` from the combined command.
+  >
+  > P3: None.
+  >
+  > Implementation-file scope: no file besides `app/periods.py` is presently implied. The shared `enforce_transaction_period_impact` guard that rejects closed-period changes is defined in `app/periods.py:223-242`; existing transaction Correction/Delete and Operations Undo paths already call that shared guard (`app/transactions.py`, `app/operations.py`) and should inherit the new behavior without edits. Manual close, status, predecessor selection, and creation also live in `app/periods.py`. Any need to edit `app/transactions.py` or `app/operations.py` would be a newly discovered scope change requiring review.
+  >
+  > Verdict: **not ready** until the targeted command executes all of `tests/test_period_lifecycle_v2.py`; after that documentation-only fix, ready for implementation.
+- Resolution: the new focused module now runs unfiltered in its own command;
+  the narrow selector applies only to the two legacy regression modules.
+- Verdict: not ready; corrected and submitted for fresh scope re-review.
 
 ## Review
 
