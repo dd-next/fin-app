@@ -164,6 +164,61 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Pass 1
+
+- Reviewer task name/vendor: `/root/t005_carry_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `4e60782`; modified
+  `app/budget.py`; directly inspected untracked
+  `tests/test_budget_carry_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Implementation review verdict for complete uncommitted T-005 manifest at `4e60782`: **CHANGES REQUIRED**.
+  >
+  > P0: No findings.
+  >
+  > P1: No findings.
+  >
+  > P2 — `tests/test_budget_carry_v2.py:62-78` does not cover the acceptance criterion’s negative starting pool. The only negative case starts with positive `pool_start=50` and becomes negative after a current-day `-60` effect; it never exercises `pool_start < 0` across a multi-day period or the completed-day negative-base rebase path. Add a focused negative-pool test asserting negative exact base/allowance remains negative and is not clamped.
+  >
+  > P2 — `app/budget.py:18-21` now contradicts the new function’s signed-effect contract. The module docstring says income enters replay as a negative amount, while `compute_carry_next_day()` correctly treats positive effects as income and negative effects as outflow. Because both legacy `compute_budget` and the new ledger-effect function coexist, document their distinct input conventions so callers are not directed to invert ledger signs.
+  >
+  > P3: No findings.
+  >
+  > Evidence: implementation formulas and immutable common result otherwise match ACCOUNT_PERIODS-v2.1 §§7.1/7.3; effects are rejected outside `[start_date, bounded reference]`; current-day net is applied exactly once; invalid ranges and quantums are guarded; no DB/framework imports or rebase argument were added; T-006/T-008 boundaries and legacy `compute_budget` behavior are preserved. Manual 100-digit Decimal probe preserved the exact balance and produced a 100-digit quotient. `.venv/bin/python -m pytest tests/test_budget_carry_v2.py tests/test_budget.py -q` → `38 passed`; `git diff --check` passed. Review was read-only; no files changed.
+- Resolution: documented the distinct legacy expense-sign and v2 signed-ledger
+  conventions; added a multi-day negative starting pool test that exercises
+  the completed-day negative-base rebase without clamping.
+- Reviewer checks: combined new/legacy budget suites `38 passed`; manual
+  100-digit probe and `git diff --check` passed.
+- Verdict: changes required; corrected and submitted for fresh re-review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t005_carry_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `4e60782`; complete current
+  working tree including untracked `tests/test_budget_carry_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Implementation re-review verdict for complete uncommitted T-005 manifest at `4e60782`: **APPROVED**.
+  >
+  > P0: No findings.
+  >
+  > P1: No findings.
+  >
+  > P2: No findings.
+  >
+  > P3: No findings.
+  >
+  > The prior P2 findings are closed. `app/budget.py` now clearly distinguishes legacy `compute_budget` expense-style signs from v2 signed balance effects. The added `pool_start=-90` multi-day test exercises the completed-day negative-base rebase, asserts `daily_base_exact=-45`, and confirms no zero clamp. Carry/rebase formulas, immutable result fields, current-day exactly-once effects, strict effect boundaries, invalid range/quantum validation, Decimal precision, presentation-only `ROUND_HALF_UP`, legacy compatibility, and T-006/T-008 boundaries remain correct.
+  >
+  > Evidence: `.venv/bin/python -m pytest tests/test_budget_carry_v2.py tests/test_budget.py -q` → `39 passed`; `git diff --check` passed. The untracked `tests/test_budget_carry_v2.py` was directly inspected. Review was read-only; no files changed.
+- Resolution: none required.
+- Reviewer checks: combined new/legacy budget suites `39 passed`; `git diff
+  --check` passed.
+- Verdict: approved; prior P2 findings are closed.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
