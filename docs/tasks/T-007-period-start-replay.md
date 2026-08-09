@@ -25,7 +25,9 @@ snapshot and replay partition without changing the posted ledger balance.
       today succeeds, while a future Start date and `end_date < start_date`
       fail before any period row is persisted. The existing create path keeps
       deriving `snapshot_at` and exact `opening_balance`; T-008 owns making an
-      omitted Start date default to today.
+      omitted Start date default to today. Create also rejects without a row
+      when the derived `snapshot_at` is at or after the first workspace-local
+      instant following the inclusive `end_date`.
 - [ ] PATCH evaluates lifecycle state before applying the update: a period
       that is current at the start of the serialized operation may change
       `start_date` alone or together with `end_date`; an already ended or
@@ -48,6 +50,14 @@ snapshot and replay partition without changing the posted ledger balance.
       its inclusive `end_date`; the maximum boundary is selected across all
       such rows. `opening_balance` is then recomputed from posted legs with
       `created_at <= snapshot_at`, using `Decimal` only.
+- [ ] The canonical window must remain chronological: create and PATCH reject
+      atomically with HTTP `422` detail `Period snapshot must precede end
+      boundary` when derived `snapshot_at >= period_end_boundary`, where
+      `period_end_boundary` is the first workspace-local instant after the
+      selected inclusive `end_date`. Equality is rejected because an ended
+      window excludes the equality leg while opening would otherwise absorb
+      it; a later predecessor boundary is rejected for the same reason. The
+      target period and complete ledger remain byte-for-byte unchanged.
 - [ ] The edit atomically persists the selected dates, recomputed
       `snapshot_at`, and recomputed `opening_balance`. SQLite reserves the
       writer before reading lifecycle state, predecessors, ledger snapshot, or
@@ -79,8 +89,10 @@ snapshot and replay partition without changing the posted ledger balance.
       resulting-ended behavior above and never creates a second current row.
 - [ ] Original date-range overlap with distinct closed/ended history is allowed
       for both Start-date and end-date-only edits, superseding the old all-row
-      `ensure_no_overlap` behavior. A distinct same-account current row is a
-      conflict; different accounts remain independent.
+      `ensure_no_overlap` behavior when the resulting canonical window remains
+      chronological. A distinct same-account current row is a `409` conflict;
+      invalid snapshot chronology returns the `422` above; different accounts
+      remain independent.
 - [ ] Existing valid end-date-only PATCH behavior remains compatible except for
       the explicitly superseded all-history overlap rejection. The obsolete
       legacy assertion that every Start-date change returns `409` is replaced
@@ -90,6 +102,7 @@ snapshot and replay partition without changing the posted ledger balance.
       exact timezone and same-day predecessor boundaries; exact ledger and
       replay/reconciliation invariants; rollback; resulting-ended strict cutoff,
       subsequent immutability, and successor creation; historical overlap;
+      predecessor equality-at-end and later-than-end mutation-neutral rejection;
       stale-PATCH/successor serialization; different accounts; and no row or
       ledger mutation on rejected input.
 
@@ -171,6 +184,39 @@ REVIEW_PROTOCOL.
   concurrency fixture. All P1–P2 findings are addressed in the task contract.
 - Verdict: not ready; re-review required after the documentation changes.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t007_readiness_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `adb9236`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only readiness re-review of commit `adb923666450b6f6a19fd9451a110d7421b854b5`.
+  >
+  > P0: None.
+  >
+  > P1 — Resulting-ended replay is still ambiguous when an eligible predecessor boundary is at or after the edited period’s resulting end boundary. The task requires `snapshot_at` to be the maximum of the selected Start boundary and every eligible predecessor boundary (`docs/tasks/T-007-period-start-replay.md:41-50`), permits a current period to become ended (`docs/tasks/T-007-period-start-replay.md:35-40`), and broadly permits historical overlap (`docs/tasks/T-007-period-start-replay.md:80-83`). In an accepted API history, a same-day successor can therefore be edited backward so its latest predecessor closed after the first local instant following the selected `end_date`. The required result would store `opening_balance` from a timestamp later than the strict ended replay cutoff, making the canonical window empty or chronologically inverted while still calling the range “valid.” The same ambiguity exists for create because past Start/range success is stated without a predecessor-boundary qualification (`docs/tasks/T-007-period-start-replay.md:24-28`). Before readiness, define whether `snapshot_at >= period_end_boundary` is rejected atomically (the safer interpretation of “cannot cross or absorb” at lines 68–72) or explicitly accepted with coherent historical semantics, and require a focused same-account predecessor fixture covering equality and later-than-end boundaries plus mutation-neutral rejection if rejected.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > The prior findings are otherwise closed:
+  >
+  > - resulting-ended strict cutoff, subsequent read-only state, null close fields, and successor eligibility are explicit;
+  > - stale PATCH ordering now requires writer reservation before target load, lifecycle re-read, `409`, and no mutation;
+  > - historical overlap behavior explicitly supersedes the old all-row guard for Start- and end-only edits;
+  > - predecessor eligibility and boundary selection are exact;
+  > - file-backed SQLite verification requires normal pooling, separate request sessions, deterministic interleaving, and persisted-state/ledger assertions.
+  >
+  > T-008/T-009 boundaries remain sound, dependencies are accepted, and the task remains feasible at size M after resolving the boundary chronology. `git diff --check 4d7c332 adb9236` passed. No tests were needed for this documentation-only review. No files were edited and no branch was switched; HEAD remained `adb9236` on `finapp-v2-develop`.
+  >
+  > Verdict: **NOT READY**.
+- Resolution: create and PATCH now reject `snapshot_at >=
+  period_end_boundary` atomically; equality and later-than-end predecessor
+  fixtures must prove period/ledger mutation neutrality.
+- Verdict: not ready; final readiness re-review required.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -190,3 +236,7 @@ ends. Date · agent · what landed · what is left · open questions.
   task now defines resulting-ended behavior, stale-PATCH serialization,
   historical overlap, exact predecessor eligibility, and a file-backed
   concurrency test. Readiness re-review, promotion, and implementation remain.
+- 2026-08-09 Codex: readiness Pass 2 returned one P1 chronology gap; the task
+  now rejects derived snapshot boundaries at or after the selected period end
+  boundary for create and PATCH, with mutation-neutral equality/later tests.
+  Final readiness re-review, promotion, and implementation remain.
