@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import require_user
 from app.budget import compute_budget
 from app.db import get_session
-from app.ledger import decimal_negate, decimal_sum, require_owned_account
+from app.ledger import (
+    account_balance,
+    decimal_difference,
+    decimal_negate,
+    decimal_sum,
+    require_owned_account,
+)
 from app.models import (
     Account,
     AccountPeriod,
@@ -47,6 +53,15 @@ class PeriodImpact:
             ended=self.ended or other.ended,
             closed=self.closed or other.closed,
         )
+
+
+@dataclass(frozen=True)
+class PeriodBalanceInputs:
+    reference_time: datetime
+    current_balance: Decimal
+    window_net: Decimal
+    reconciliation_delta: Decimal
+    calculation_opening_balance: Decimal
 
 
 def workspace_today(workspace: Workspace) -> date:
@@ -266,23 +281,66 @@ async def ensure_no_overlap(
 
 
 async def period_movements(
-    session: AsyncSession, period: AccountPeriod
+    session: AsyncSession,
+    period: AccountPeriod,
+    *,
+    reference_time: datetime,
+    include_reference_time: bool = True,
 ) -> list[tuple[date, Decimal]]:
-    rows = (
-        await session.execute(
-            select(Transaction.local_date, TransactionLeg.amount)
-            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
-            .where(
-                TransactionLeg.account_id == period.account_id,
-                TransactionLeg.created_at > period.snapshot_at,
-                Transaction.local_date >= period.start_date,
-                Transaction.local_date <= period.end_date,
-                Transaction.status == "posted",
-            )
-            .order_by(Transaction.local_date, TransactionLeg.id)
+    statement = (
+        select(Transaction.local_date, TransactionLeg.amount)
+        .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+        .where(
+            TransactionLeg.account_id == period.account_id,
+            TransactionLeg.created_at > period.snapshot_at,
+            Transaction.status == "posted",
         )
-    ).all()
+        .order_by(Transaction.local_date, TransactionLeg.id)
+    )
+    cutoff = (
+        TransactionLeg.created_at <= reference_time
+        if include_reference_time
+        else TransactionLeg.created_at < reference_time
+    )
+    rows = (await session.execute(statement.where(cutoff))).all()
     return [(local_date, Decimal(amount)) for local_date, amount in rows]
+
+
+async def current_period_balance_inputs(
+    session: AsyncSession,
+    period: AccountPeriod,
+    *,
+    reference_time: datetime,
+) -> PeriodBalanceInputs:
+    if period.closed_at is not None:
+        raise ValueError("Closed period balance inputs use stored snapshots")
+    current_balance = await account_balance(
+        session,
+        period.account_id,
+        through=reference_time,
+    )
+    window_net = decimal_sum(
+        amount
+        for _, amount in await period_movements(
+            session,
+            period,
+            reference_time=reference_time,
+        )
+    )
+    reconciliation_delta = decimal_difference(
+        current_balance,
+        decimal_sum((period.opening_balance, window_net)),
+    )
+    calculation_opening_balance = decimal_sum(
+        (period.opening_balance, reconciliation_delta)
+    )
+    return PeriodBalanceInputs(
+        reference_time=reference_time,
+        current_balance=current_balance,
+        window_net=window_net,
+        reconciliation_delta=reconciliation_delta,
+        calculation_opening_balance=calculation_opening_balance,
+    )
 
 
 async def planned_amount(
@@ -316,7 +374,45 @@ async def account_period_out(
     assert workspace is not None
     await session.refresh(period, attribute_names=["asset"])
     today = workspace_today(workspace)
-    movements = await period_movements(session, period)
+    reference_time = datetime.now(UTC).replace(tzinfo=None)
+    status = period_status(period, today)
+    if status == "current":
+        balance_inputs = await current_period_balance_inputs(
+            session,
+            period,
+            reference_time=reference_time,
+        )
+        calculation_opening_balance = balance_inputs.calculation_opening_balance
+        movements = await period_movements(
+            session,
+            period,
+            reference_time=reference_time,
+        )
+    elif status == "closed":
+        assert period.closed_at is not None
+        assert period.closing_balance is not None
+        reference_time = period.closed_at
+        calculation_opening_balance = period.opening_balance
+        closed_day = reference_time.replace(tzinfo=UTC).astimezone(
+            ZoneInfo(workspace.timezone)
+        ).date()
+        movements = [
+            (
+                closed_day,
+                decimal_difference(period.closing_balance, period.opening_balance),
+            )
+        ]
+    else:
+        reference_time = workspace_day_boundary(
+            workspace, period.end_date + timedelta(days=1)
+        )
+        calculation_opening_balance = period.opening_balance
+        movements = await period_movements(
+            session,
+            period,
+            reference_time=reference_time,
+            include_reference_time=False,
+        )
     rebase_days = list(
         (
             await session.execute(
@@ -328,7 +424,7 @@ async def account_period_out(
     )
     quantum = Decimal(1).scaleb(-period.asset.decimals)
     budget = compute_budget(
-        Decimal(period.opening_balance),
+        Decimal(calculation_opening_balance),
         period.start_date,
         period.end_date,
         (
@@ -348,9 +444,13 @@ async def account_period_out(
         end_date=period.end_date,
         funding_amount=period.opening_balance,
         available_today=budget.per_day_today,
-        remaining=budget.remaining_money,
+        remaining=(
+            period.closing_balance
+            if period.closed_at is not None
+            else budget.remaining_money
+        ),
         planned=await planned_amount(session, account, period),
-        status=period_status(period, today),
+        status=status,
         created_at=period.created_at,
         closed_at=period.closed_at,
     )

@@ -154,12 +154,74 @@ a pre-period correction.
 
 ### Pass 1
 
-- Reviewer task name/vendor:
-- Reviewed base/head or working-tree manifest:
+- Reviewer task name/vendor: `/root/t003_balance_block_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `efdb5c0`; modified
+  `app/ledger.py`, `app/periods.py`, and `tests/test_periods_v2.py`.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Reviewer checks:
-- Verdict:
+
+  > P0 none.
+  >
+  > P1: ended periods are incorrectly treated as current.
+  > `app/periods.py:373-380` uses now/`current_period_balance_inputs` whenever
+  > `closed_at` is null, so naturally ended history includes legs after
+  > `period_end_boundary` (`period_movements:295-297` uses `<= now`) and can
+  > absorb successor-era activity; §5 requires ended window strictly `<` first
+  > instant after `end_date` and no live reconciliation.
+  >
+  > P1: closed history still replays mutable live rows for `available_today`
+  > (`384-419`); test mutates a pre-close leg but asserts only remaining
+  > (`tests:314-328`), so `available_today` can change after close, violating
+  > closed-history isolation from subsequently mutable transaction rows.
+  >
+  > P2 missing acceptance evidence: Accounts API/pre-quantization equality is
+  > tautologically checked against `account_balance` helper only (`235-237`);
+  > no fee/transfer/exchange/adjustment per-account direction tests; no distinct
+  > correction/Delete/Undo paths (direct DB amount/status mutation only); no
+  > assertion that `account_period_out` actually passes
+  > `calculation_opening_balance` into budget math; no test for ended strict end
+  > boundary.
+  >
+  > P3 none. Positive: cutoff boundaries, posted-only, same T, exact Decimal
+  > helpers, and equality invariant are sound for a true current period.
+- Resolution: split current/ended/closed reads; ended now uses strict end
+  boundary without reconciliation, closed uses stored snapshots only; added
+  budget-input spy and ended/closed immutability coverage. Existing
+  Operations/period suites cover signed movement directions and public
+  Correction/Delete/Undo paths.
+- Reviewer checks: targeted `20 passed`; `git diff --check` passed.
+- Verdict: changes required; corrected and submitted for re-review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t003_balance_block_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `efdb5c0`; complete block
+  after Pass 1 fixes.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Verdict: **APPROVED**.
+  >
+  > Confirmed:
+  >
+  > - Current periods use one `reference_time` and exact
+  >   `snapshot_at < created_at <= T`.
+  > - Reconciliation is exact `Decimal` and passed into `compute_budget`.
+  > - Ended periods use strict end boundary without live reconciliation.
+  > - Closed periods derive financial output only from stored opening/closing
+  >   snapshots; later ledger edits do not change it.
+  > - Shared `account_balance` service is used.
+  > - Focused suite: `tests/test_periods_v2.py` — **16 passed**.
+  > - No public contract expansion before T-008.
+- Resolution: none required.
+- Reviewer checks: bounded diff inspection; targeted combined selector
+  `21 passed, 8 deselected`; `git diff --check` passed.
+- Verdict: approved; prior P1/P2 findings are closed.
 
 ## Session log
 
@@ -167,3 +229,8 @@ a pre-period correction.
   integration commit `1af115628c25781fbc0b2d40f900e6503e2badf4`.
   Starting with the shared cutoff-aware ledger service and immutable internal
   reconciliation result; public JSON remains unchanged until T-008.
+- 2026-08-09 Codex: implemented and independently approved the shared cutoff
+  ledger service and reconciliation block. Current, ended, and closed reads
+  now use their distinct canonical cutoffs; targeted balance/reconciliation
+  selector passes `21 passed, 8 deselected`. Remaining: full task gate, final
+  acceptance review/evidence, commit, and local integration.

@@ -221,17 +221,23 @@ def financial_times(
     return utc_naive, financial_date
 
 
-async def account_balance(session: AsyncSession, account_id: int) -> Decimal:
-    amounts = (
-        await session.execute(
-            select(TransactionLeg.amount)
-            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
-            .where(
-                TransactionLeg.account_id == account_id,
-                Transaction.status == "posted",
-            )
+async def account_balance(
+    session: AsyncSession,
+    account_id: int,
+    *,
+    through: datetime | None = None,
+) -> Decimal:
+    statement = (
+        select(TransactionLeg.amount)
+        .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+        .where(
+            TransactionLeg.account_id == account_id,
+            Transaction.status == "posted",
         )
-    ).scalars()
+    )
+    if through is not None:
+        statement = statement.where(TransactionLeg.created_at <= through)
+    amounts = (await session.execute(statement)).scalars()
     return decimal_sum(Decimal(value) for value in amounts)
 
 

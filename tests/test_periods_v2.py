@@ -7,8 +7,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from app.budget import compute_budget
+from app.ledger import account_balance
 from app.models import Account, AccountPeriod, Transaction, TransactionLeg, Workspace
-from app.periods import period_movements
+from app.periods import current_period_balance_inputs, period_movements
 from tests.conftest import register, seed_unassigned_transaction
 from tests.test_ledger_v2 import create_account
 from tests.test_sharing_v2 import accept, invitation, login
@@ -185,9 +186,120 @@ async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
         assert successor_row is not None
         assert successor_row.snapshot_at == selected_boundary
         assert successor_row.opening_balance == Decimal("150")
-        assert await period_movements(session, successor_row) == [
+        assert await period_movements(
+            session,
+            successor_row,
+            reference_time=selected_boundary + timedelta(hours=1),
+        ) == [
             (successor_start, Decimal("20"))
         ]
+
+
+async def test_current_balance_reconciliation_uses_one_exact_ledger_cutoff(
+    client, monkeypatch
+):
+    await register(client)
+    account = await create_account(client, "Reconcile precision BTC", "BTC", "0")
+    today = local_today()
+    period = await create_period(client, account["id"], "999", today, today)
+    async with client._finapp_test_sessions() as session:
+        period_row = await session.get(AccountPeriod, period["id"])
+        assert period_row is not None
+        snapshot_at = period_row.snapshot_at
+
+    boundary_transaction_id = await add_test_leg(
+        client,
+        account["id"],
+        "0.123456789012345678",
+        snapshot_at,
+    )
+    await add_test_leg(client, account["id"], "-0.02", snapshot_at + timedelta(minutes=1))
+    window_transaction_id = await add_test_leg(
+        client, account["id"], "0.03", snapshot_at + timedelta(minutes=2)
+    )
+    await add_test_leg(
+        client,
+        account["id"],
+        "999",
+        snapshot_at + timedelta(minutes=2),
+        status="voided",
+    )
+    await add_test_leg(client, account["id"], "1", snapshot_at + timedelta(minutes=3))
+    reference_time = snapshot_at + timedelta(minutes=2)
+
+    async with client._finapp_test_sessions() as session:
+        period_row = await session.get(AccountPeriod, period["id"])
+        assert period_row is not None
+        values = await current_period_balance_inputs(
+            session, period_row, reference_time=reference_time
+        )
+        assert values.current_balance == Decimal("0.133456789012345678")
+        assert values.current_balance == await account_balance(
+            session, account["id"], through=reference_time
+        )
+        assert values.window_net == Decimal("0.01")
+        assert values.reconciliation_delta == Decimal("0.123456789012345678")
+        assert values.calculation_opening_balance == Decimal(
+            "0.123456789012345678"
+        )
+        assert (
+            values.calculation_opening_balance + values.window_net
+            == values.current_balance
+        )
+
+        captured_opening = []
+
+        def capture_budget(opening_balance, *args, **kwargs):
+            captured_opening.append(opening_balance)
+            return compute_budget(opening_balance, *args, **kwargs)
+
+        class FrozenDateTime(datetime):
+            @classmethod
+            def now(cls, timezone=None):
+                aware = reference_time.replace(tzinfo=UTC)
+                return aware if timezone is None else aware.astimezone(timezone)
+
+        monkeypatch.setattr("app.periods.compute_budget", capture_budget)
+        monkeypatch.setattr("app.periods.datetime", FrozenDateTime)
+        response = await client.get(f"/api/v1/account-periods/{period['id']}")
+        assert response.status_code == 200
+        assert captured_opening == [Decimal("0.123456789012345678")]
+
+        boundary_transaction = await session.get(Transaction, boundary_transaction_id)
+        assert boundary_transaction is not None
+        boundary_leg = (
+            await session.execute(
+                select(TransactionLeg).where(
+                    TransactionLeg.transaction_id == boundary_transaction_id
+                )
+            )
+        ).scalar_one()
+        boundary_leg.amount = Decimal("0.223456789012345678")
+        await session.commit()
+        values = await current_period_balance_inputs(
+            session, period_row, reference_time=reference_time
+        )
+        assert values.reconciliation_delta == Decimal("0.223456789012345678")
+        assert (
+            values.calculation_opening_balance + values.window_net
+            == values.current_balance
+        )
+
+        boundary_transaction.status = "voided"
+        window_transaction = await session.get(Transaction, window_transaction_id)
+        assert window_transaction is not None
+        window_transaction.status = "voided"
+        await session.commit()
+        values = await current_period_balance_inputs(
+            session, period_row, reference_time=reference_time
+        )
+        assert values.current_balance == Decimal("-0.02")
+        assert values.window_net == Decimal("-0.02")
+        assert values.reconciliation_delta == Decimal("0")
+        assert (
+            values.calculation_opening_balance + values.window_net
+            == values.current_balance
+        )
 
 
 async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeypatch):
@@ -200,7 +312,7 @@ async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeyp
     )
     assert spent.status_code == 201, spent.text
     fixed = datetime.now(UTC).replace(tzinfo=None, microsecond=0) + timedelta(minutes=5)
-    await add_test_leg(client, account["id"], "5", fixed)
+    exact_transaction_id = await add_test_leg(client, account["id"], "5", fixed)
     await add_test_leg(client, account["id"], "999", fixed, status="voided")
     await add_test_leg(client, account["id"], "20", fixed + timedelta(hours=1))
 
@@ -213,15 +325,73 @@ async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeyp
     monkeypatch.setattr("app.periods.datetime", FrozenDateTime)
     closed = await client.post(f"/api/v1/account-periods/{period['id']}/close")
     assert closed.status_code == 200, closed.text
+    closed_available = closed.json()["available_today"]
 
     async with client._finapp_test_sessions() as session:
         closed_row = await session.get(AccountPeriod, period["id"])
         assert closed_row is not None
         assert closed_row.closed_at == fixed
         assert closed_row.closing_balance == Decimal("95")
+        exact_leg = (
+            await session.execute(
+                select(TransactionLeg).where(
+                    TransactionLeg.transaction_id == exact_transaction_id
+                )
+            )
+        ).scalar_one()
+        exact_leg.amount = Decimal("500")
+        await session.commit()
         await session.refresh(closed_row)
         assert closed_row.closed_at == fixed
         assert closed_row.closing_balance == Decimal("95")
+    closed_again = await client.get(f"/api/v1/account-periods/{period['id']}")
+    assert closed_again.status_code == 200
+    assert closed_again.json()["remaining"] == "95"
+    assert closed_again.json()["available_today"] == closed_available
+
+
+async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation(client):
+    await register(client)
+    account = await create_account(client, "Ended cutoff USD", "USD", "0")
+    today = local_today()
+    period = await create_period(
+        client,
+        account["id"],
+        "999",
+        today - timedelta(days=4),
+        today - timedelta(days=2),
+    )
+    async with client._finapp_test_sessions() as session:
+        workspace = await session.get(Workspace, account["workspace_id"])
+        period_row = await session.get(AccountPeriod, period["id"])
+        assert workspace is not None
+        assert period_row is not None
+        end_boundary = (
+            datetime.combine(
+                period_row.end_date + timedelta(days=1),
+                datetime.min.time(),
+                tzinfo=ZoneInfo(workspace.timezone),
+            )
+            .astimezone(UTC)
+            .replace(tzinfo=None)
+        )
+    await add_test_leg(client, account["id"], "-10", end_boundary - timedelta(seconds=1))
+    await add_test_leg(client, account["id"], "100", end_boundary)
+    await add_test_leg(client, account["id"], "1000", end_boundary + timedelta(seconds=1))
+
+    response = await client.get(f"/api/v1/account-periods/{period['id']}")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ended"
+    assert response.json()["remaining"] == "-10"
+    async with client._finapp_test_sessions() as session:
+        period_row = await session.get(AccountPeriod, period["id"])
+        assert period_row is not None
+        assert await period_movements(
+            session,
+            period_row,
+            reference_time=end_boundary,
+            include_reference_time=False,
+        ) == [(period_row.end_date, Decimal("-10"))]
 
 
 async def test_same_account_overlap_rejected_cross_account_overlap_allowed(client):
@@ -568,7 +738,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     transaction_id = posted.json()["id"]
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "-10"
+    ).json()["remaining"] == "0"
 
     rejected_patch = await client.patch(
         f"/api/v1/transactions/{transaction_id}", json={"amount": "20"}
@@ -581,7 +751,7 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
     assert confirmed_patch.status_code == 200, confirmed_patch.text
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "-20"
+    ).json()["remaining"] == "0"
     assert (
         await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     ).status_code == 409
