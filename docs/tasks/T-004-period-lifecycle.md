@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Enforce account-period close, expiry, and successor lifecycle
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §4–§5
 blocked-by: [T-002]
@@ -448,3 +448,7 @@ ends. Date · agent · what landed · what is left · open questions.
   passed, 2 deselected`, full suite `126 passed`, JS syntax and `git diff
   --check` passed, worktree clean. Task is review-approved and ready for local
   owner acceptance; no open question.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `e1ea8e7` into `finapp-v2-develop`; no push was
+  performed. T-004 is done; T-005 is the next ordered task and still requires
+  its own task file and independent readiness review before claim.
