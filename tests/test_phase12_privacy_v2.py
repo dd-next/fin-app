@@ -89,7 +89,13 @@ async def test_deleting_linked_transfer_replays_both_periods_and_reopens_plan(cl
         listed = await client.get(
             f"/api/v1/transactions?period_id={period['id']}"
         )
-        assert listed.json()["items"] == []
+        items = listed.json()["items"]
+        assert transfer["id"] not in {item["id"] for item in items}
+        assert all(item["status"] == "posted" for item in items)
+        assert all(
+            any(leg["account_id"] == period["account_id"] for leg in item["legs"])
+            for item in items
+        )
 
     reopened = (await occurrences_for_rule(client, workspace_id, rule["id"]))[0]
     assert reopened["status"] in {"planned", "overdue"}

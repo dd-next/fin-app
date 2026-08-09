@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: Synchronize the period API and lifecycle response surface
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6–§9; design/MOBILE-BACKEND-GAP-AUDIT.md period API rows
 blocked-by: [T-004, T-005, T-006, T-007]
@@ -21,23 +21,23 @@ live ledger balance, and both exact allowance policies through the existing
 
 ## Acceptance
 
-- [ ] `AccountPeriodCreate` accepts required `end_date`, optional
+- [x] `AccountPeriodCreate` accepts required `end_date`, optional
       `start_date`, and optional `rollover_policy`; omitted Start resolves to
       the route's captured workspace-local today and omitted policy resolves to
       `redistribute_remaining_days`. Explicit null, future Start, invalid date
       order, and unknown/null policy return deterministic `422` without a row.
-- [ ] Create no longer requires `funding_amount`; `snapshot_at` and exact
+- [x] Create no longer requires `funding_amount`; `snapshot_at` and exact
       `opening_balance` remain server-derived by the accepted T-004/T-007
       transaction. During T-008 only, optional non-null Decimal
       `funding_amount` parses and is ignored; explicit null/invalid Decimal is
       `422`. It cannot affect storage or response values. T-009 deletes that
       schema member, making every supplied `funding_amount` an extra-field
       `422` without changing T-008 domain behavior.
-- [ ] Explicit create policy `carry_next_day` or
+- [x] Explicit create policy `carry_next_day` or
       `redistribute_remaining_days` persists exactly; omission persists
       redistribution. Existing atomic current-period, predecessor,
       chronological-boundary, and Decimal snapshot guards remain unchanged.
-- [ ] PATCH accepts optional `start_date`, `end_date`, and `rollover_policy`,
+- [x] PATCH accepts optional `start_date`, `end_date`, and `rollover_policy`,
       requires at least one of those three business fields, rejects null or an
       unknown policy, and preserves T-007 atomic Start replay and lifecycle
       rules. Transitional PATCH `funding_amount` always returns `422` detail
@@ -45,20 +45,20 @@ live ledger balance, and both exact allowance policies through the existing
       `confirm_ended_period` is ignored when a valid business field exists,
       does not bypass lifecycle rules, and alone returns `422` for no business
       field. T-009 deletes both schema members.
-- [ ] Create and PATCH use `extra="forbid"`. Except for the two frozen
+- [x] Create and PATCH use `extra="forbid"`. Except for the two frozen
       transitional members above, client-supplied `snapshot_at`,
       `opening_balance`, `closing_balance`, `current_balance`,
       `account_balance`, `remaining`, `planned`, `account_id`, `asset_id`,
       `created_by_user_id`, `status`, `created_at`, or `closed_at` returns
       deterministic `422` and persists no period/ledger mutation. Focused tests
       cover every forbidden key on create and PATCH.
-- [ ] The response union has exactly three status shapes. Common fields use
+- [x] The response union has exactly three status shapes. Common fields use
       these existing names/types: `id: int`, `account_id: int`,
       `asset: AssetOut`, `created_by_user_id: int`, `start_date: date`,
       `end_date: date`, `snapshot_at: datetime`, `opening_balance: Decimal`,
       `rollover_policy`, `status`, `created_at: datetime`, `closed_at`, and
       `closing_balance`.
-- [ ] `current` has `status="current"`, `closed_at=null`,
+- [x] `current` has `status="current"`, `closed_at=null`,
       `closing_balance=null`, and additionally includes non-null
       `current_balance` and `available_today`. `ended` has `status="ended"`
       with both close fields null and omits the live keys entirely. `closed`
@@ -67,7 +67,7 @@ live ledger balance, and both exact allowance policies through the existing
       live keys. Create/detail/list/PATCH/close use this union, including an
       immediately-ended create/PATCH response. Current lookup uses only
       `current|null` and returns null after that transition.
-- [ ] T-008's exact transitional response matrix is mechanical to remove in
+- [x] T-008's exact transitional response matrix is mechanical to remove in
       T-009: all three status shapes include `funding_amount`, `remaining`, and
       `planned`; `funding_amount` equals presented `opening_balance`;
       `remaining` equals presented `current_balance` for current,
@@ -75,68 +75,68 @@ live ledger balance, and both exact allowance policies through the existing
       presented zero and performs no Plan query. None drives any new field.
       T-009 deletes exactly these keys/schema assignments and the dormant
       compatibility input members.
-- [ ] `GET /api/v1/accounts/{account_id}/periods/current` returns the one
+- [x] `GET /api/v1/accounts/{account_id}/periods/current` returns the one
       current object or HTTP `200` JSON `null`. It performs no lifecycle write,
       ignores ended/closed rows, preserves owner 404 redaction, and never
       fabricates zero/N/A values.
-- [ ] `GET /accounts/{account_id}/periods?scope=history`, account-period detail,
+- [x] `GET /accounts/{account_id}/periods?scope=history`, account-period detail,
       PATCH, close, and create return the lifecycle-appropriate schema.
       Existing `scope=all|current` behavior may remain as a desktop-compatible
       superset, but every item uses the same status-aware response rules.
-- [ ] Every route captures one naive-UTC reference `T` after authorization (and
+- [x] Every route captures one naive-UTC reference `T` after authorization (and
       after writer reservation for mutations), derives workspace-local today
       from that exact T, and reuses T for status selection, all list items,
       current lookup, account balance, movement cutoff, effective-day clamping,
       and response serialization. Close uses the same T as `closed_at`. No
       single response can mix pre/post-midnight lifecycle or ledger cutoffs.
-- [ ] Current allowance integration calls the accepted pure
+- [x] Current allowance integration calls the accepted pure
       `compute_allowance` dispatcher with `calculation_opening_balance` from
       T-003, the stored policy, asset quantum, and signed posted window effects
       exactly once. `app/budget.py` remains unchanged and free of DB/framework
       imports.
-- [ ] Effective financial days clamp every window effect before dispatch:
+- [x] Effective financial days clamp every window effect before dispatch:
       dates before `start_date` map to Start, dates after the current replay day
       map to that replay day, and in-range dates remain unchanged. Boundary
       equality stays in opening only; voided/non-window legs do not enter
       effects; reconciliation delta enters only through the calculation
       opening pool.
-- [ ] Internal `opening_balance`, `current_balance`, `closing_balance`, window
+- [x] Internal `opening_balance`, `current_balance`, `closing_balance`, window
       net, reconciliation delta, and AllowanceResult values remain exact
       Decimal. Before response quantization,
       `AllowanceResult.current_balance == PeriodBalanceInputs.current_balance`
       exactly. At the API boundary, all returned money (new and transitional)
       uses asset precision and `ROUND_HALF_UP`; 18-decimal assets lose no
       supported precision.
-- [ ] The dated Asia/Ho_Chi_Minh VND fixture returns exact
+- [x] The dated Asia/Ho_Chi_Minh VND fixture returns exact
       `opening_balance=6000000`, `current_balance=5980000`, redistribution base
       `5672269/15`, and API `available_today=685882` at VND precision, without
       Planned input or hard-coded response constants.
-- [ ] Both policies cover current-day income/outflow exactly once, pre-period
+- [x] Both policies cover current-day income/outflow exactly once, pre-period
       correction reconciliation, negative balances, one-day periods,
       timezone/boundary clamping, and 18-place Decimal precision. Dispatch
       results are derived on read and persist no daily aggregate.
-- [ ] T-008 stops importing/querying `RebaseEvent` and never passes ad-hoc
+- [x] T-008 stops importing/querying `RebaseEvent` and never passes ad-hoc
       rebase days to the new dispatcher. The preserved table/relationships and
       T-002 migration identity remain dormant and unchanged. T-009 removes only
       any remaining public/query compatibility contract; no T-009 model or
       migration work is implied.
-- [ ] Spending above `available_today`, including repeated overspend, remains
+- [x] Spending above `available_today`, including repeated overspend, remains
       accepted under normal Operations permissions; account/current balance
       changes normally and the recalculated allowance may be negative. No
       period value is used as an authorization limit.
-- [ ] `GET /api/v1/transactions?period_id=...` uses the same canonical
+- [x] `GET /api/v1/transactions?period_id=...` uses the same canonical
       timestamp window as the period: account leg, posted status,
       `created_at > snapshot_at`, and lifecycle cutoff (`<= T` current,
       `<= closed_at` closed, `< period_end_boundary` ended). It does not filter
       membership by `Transaction.local_date`; back/future financial dates are
       included and map to the same effective clamped day used by allowance.
       Snapshot/cutoff equality and void exclusion match the period window.
-- [ ] Existing privacy is regression-tested for both a shared user and a
+- [x] Existing privacy is regression-tested for both a shared user and a
       foreign owner: create/list/current/detail/PATCH/close and
       `transactions?period_id` return owner-private `404` without revealing
       existence. T-010 may harden permission semantics but T-008 cannot weaken
       current redaction.
-- [ ] Focused tests cover create defaults/explicit policies/validation and
+- [x] Focused tests cover create defaults/explicit policies/validation and
       ignored transitional funding; policy-only and combined PATCH with
       mutation-neutral ledger assertions; current object/null; ended/closed
       response separation; history/detail/create/patch/close schemas; VND
@@ -425,6 +425,66 @@ the review; the implementer records it verbatim following
   diff-check passed.
 - Verdict: approved; no P0–P3 findings.
 
+### Block 3 — Transactions period-filter parity, Pass 1
+
+- Reviewer task name/vendor: `/root/t008_transaction_filter_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `96d72c9`; modified
+  `app/transactions.py` and `tests/test_transactions_phase12_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > READ-ONLY T-008 Block 3 review verdict: CHANGES REQUIRED.
+  >
+  > P0: None.
+  >
+  > P1 — The required full-suite gate is red. `tests/test_phase12_privacy_v2.py::test_deleting_linked_transfer_replays_both_periods_and_reopens_plan` still asserts that each period-filter result is exactly empty after deleting the linked transfer (`tests/test_phase12_privacy_v2.py:88-92`). Under the newly correct canonical timestamp membership, the source account's posted opening-balance `adjustment` is after the period snapshot and remains a valid member, so the response contains that transaction and the assertion fails. This is a superseded legacy expectation, not a reason to exclude adjustments: T-008 explicitly requires all financial types/adjustments and the focused Block 3 test correctly asserts the opening adjustment is included. Update the stale regression to assert the deleted transfer is absent (and, if desired, that any remaining members are legitimate posted canonical-window rows), then include that bounded assertion change in the reviewed manifest and rerun the full suite.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Evidence: `tests/test_transactions_phase12_v2.py`: 5 passed; `tests/test_period_api_v21.py`: 11 passed; `git diff --check`: passed. Full suite: 1 failed, 172 passed; only the stale phase12 privacy assertion above failed. Code inspection otherwise confirms account-leg + posted + `created_at > snapshot_at`; current `<=` one captured T, closed `<= closed_at`, ended `<` local end+1 boundary; no implicit local_date membership filter; back/future effective-day clamping parity; snapshot/cutoff equality; void exclusion; all financial types; account mismatch 422; shared/foreign owner-private 404; and no writes/commits/model/schema/lifecycle drift in Block 3. No files edited, no branch switched, no commit created; HEAD remained 96d72c9 and manifest remained the two stated files.
+- Resolution: the bounded Phase 12 regression now asserts that the deleted
+  transfer is absent while allowing only remaining posted transactions with a
+  leg on that exact period account. It no longer excludes a legitimate
+  canonical opening adjustment.
+- Verdict: changes required; fresh re-review completed below.
+
+### Block 3 — Transactions period-filter parity, Pass 2
+
+- Reviewer task name/vendor: `/root/t008_transaction_filter_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `96d72c9`; corrected
+  manifest in `app/transactions.py`, `tests/test_transactions_phase12_v2.py`,
+  and bounded `tests/test_phase12_privacy_v2.py` assertion.
+- Findings (verbatim, P0–P3):
+
+  > READ-ONLY T-008 Block 3 re-review of the corrected manifest over HEAD `96d72c9`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: APPROVED.
+  >
+  > The prior P1 is closed. The bounded update in `tests/test_phase12_privacy_v2.py` now proves that the deleted linked transfer is absent from both period-filter results while allowing legitimate remaining canonical members; every remaining item must still be posted and contain a leg for the specific period account. It does not relax owner/shared/foreign privacy assertions or any application permission behavior. The focused Block 3 suite separately proves posted opening-balance adjustments are valid canonical members, along with all other financial types.
+  >
+  > Implementation still matches canonical membership and lifecycle cutoffs: period-account leg, posted transaction, strict `created_at > snapshot_at`; current `<=` exactly one captured T, closed `<= closed_at`, ended `<` workspace-local end+1 boundary; no implicit `local_date` membership filter; back/future dates and allowance clamping parity; equality boundaries, void exclusion, account mismatch 422, and shared/foreign owner-private 404. The GET path introduces no assignment, flush, commit, lifecycle write, or Block 1/2/schema/model drift.
+  >
+  > Evidence:
+  > - Corrected bounded focused set: `17 passed`.
+  > - Full suite: `173 passed`.
+  > - `git diff --check`: passed.
+  > - No files edited, no branch switched, no commit created; HEAD remained `96d72c9` and manifest is exactly `app/transactions.py`, `tests/test_transactions_phase12_v2.py`, and the bounded superseded assertion in `tests/test_phase12_privacy_v2.py`.
+- Resolution: all P0–P2 findings are closed; no further changes required.
+- Reviewer checks: corrected focused set `17 passed`; full suite `173 passed`;
+  diff-check passed.
+- Verdict: approved; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -456,3 +516,8 @@ ends. Date · agent · what landed · what is left · open questions.
   Focused `11 passed`, bounded regressions `45 passed`, full suite
   `171 passed`, node syntax and diff-check passed. Block 3 Transactions-filter
   parity remains; no open question.
+- 2026-08-09 Codex: Block 3 canonical Transactions period-filter implemented.
+  Review Pass 1 found one stale P1 full-suite assertion that excluded a valid
+  opening adjustment; the assertion was corrected and Pass 2 approved with no
+  P0–P3. Focused `17 passed`, full suite `173 passed`, node syntax and
+  diff-check passed. T-008 is ready for owner acceptance; no open question.

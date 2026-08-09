@@ -1,6 +1,6 @@
 """Financial transaction commands and history."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -38,8 +38,12 @@ from app.models import (
 from app.operations_undo import reindex_operations_root
 from app.periods import (
     enforce_transaction_period_impact,
+    period_status,
     require_private_period,
     transaction_period_impact,
+    utc_reference_time,
+    workspace_day_at,
+    workspace_day_boundary,
 )
 from app.schemas import (
     AssignAccountIn,
@@ -453,10 +457,12 @@ async def list_transactions(
     workspace = await primary_workspace(session, user.id)
     visible_ids = await visible_account_ids(session, user.id)
     period: AccountPeriod | None = None
+    period_reference_time: datetime | None = None
     if period_id is not None:
         period, period_account = await require_private_period(
             session, period_id, user.id
         )
+        period_reference_time = utc_reference_time()
         if account_id is not None and account_id != period_account.id:
             raise HTTPException(
                 status_code=422, detail="Account filter does not match period"
@@ -484,13 +490,33 @@ async def list_transactions(
         )
         statement = statement.where(TransactionLeg.account_id == account_id)
     if period is not None:
+        assert period_reference_time is not None
         statement = statement.where(
             TransactionLeg.account_id == period.account_id,
-            TransactionLeg.created_at > period.created_at,
-            Transaction.local_date >= period.start_date,
-            Transaction.local_date <= period.end_date,
+            TransactionLeg.created_at > period.snapshot_at,
             Transaction.status == "posted",
         )
+        status_at_reference = period_status(
+            period, workspace_day_at(workspace, period_reference_time)
+        )
+        if status_at_reference == "closed":
+            assert period.closed_at is not None
+            statement = statement.where(
+                TransactionLeg.created_at <= period.closed_at
+            )
+        elif status_at_reference == "ended":
+            statement = statement.where(
+                TransactionLeg.created_at
+                < workspace_day_boundary(
+                    workspace, period.end_date + timedelta(days=1)
+                )
+            )
+        elif status_at_reference == "current":
+            statement = statement.where(
+                TransactionLeg.created_at <= period_reference_time
+            )
+        else:
+            statement = statement.where(TransactionLeg.id.is_(None))
     if date_from is not None:
         statement = statement.where(Transaction.local_date >= date_from)
     if date_to is not None:
