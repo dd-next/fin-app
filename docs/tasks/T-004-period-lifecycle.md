@@ -1,13 +1,13 @@
 ---
 id: T-004
 title: Enforce account-period close, expiry, and successor lifecycle
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §4–§5
 blocked-by: [T-002]
 branch: task/T-004-period-lifecycle
-base-commit:
-implementer:
+base-commit: 74556f7e7859f4d65d5c5004e971456a517d21a3
+implementer: Codex
 readiness-reviewed-by: /root/t004_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: f03b8e8
 readiness-verdict: ready
@@ -180,3 +180,6 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: drafted the bounded T-004 lifecycle contract on
   `finapp-v2-develop`; readiness review, owner promotion, branch claim, and
   implementation remain; no open question.
+- 2026-08-09 Codex: readiness passed at `f03b8e8`, owner promoted the task at
+  `74556f7`, and the exact task branch was claimed from that integration HEAD;
+  lifecycle implementation and block review remain; no open question.
