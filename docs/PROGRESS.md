@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
-| Last full suite | **160 passed** (2026-08-09, T-007 review gate) |
-| Active work | T-007 Start-date replay passed final review and awaits local owner acceptance |
+| Last full suite | **160 passed** (2026-08-09, T-007 acceptance) |
+| Active work | T-002–T-007 accepted; T-008 period API/lifecycle surface is next for specification/readiness |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-006 accepted; T-007 is review-approved for local acceptance.**
+Status: **T-002–T-007 accepted; T-008 is next for specification/readiness.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.

@@ -1,7 +1,7 @@
 ---
 id: T-007
 title: Implement atomic period Start-date snapshot replay
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §5, §8; design/MOBILE-BACKEND-GAP-AUDIT.md period start date
 blocked-by: [T-002, T-003, T-004]
@@ -421,3 +421,7 @@ ends. Date · agent · what landed · what is left · open questions.
   `1f48429..d2df4d5` with no P0–P3 findings. Independent gate: focused
   `7 passed`, period/lifecycle `24 passed`, full `160 passed`, JS syntax,
   range diff-check, and clean worktree. T-007 awaits local owner acceptance.
+- 2026-08-09 repository owner (delegated one-session authority): accepted and
+  fast-forward integrated `7dd358c` into `finapp-v2-develop`; no push was
+  performed. T-007 is done; T-008 is the next ordered task and still requires
+  its own task file and independent readiness review before claim.
