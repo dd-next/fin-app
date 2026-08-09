@@ -1,13 +1,13 @@
 ---
 id: T-006
 title: Implement redistribution allowance policy and pure dispatch
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §7.2, §7.3
 blocked-by: [T-003, T-005]
 branch: task/T-006-redistribute-policy
-base-commit:
-implementer:
+base-commit: 73001f95f4fe66203a9c65b65aa7ca0f69e6dfad
+implementer: Codex
 readiness-reviewed-by: /root/t006_readiness_review (Codex same-vendor fallback)
 readiness-reviewed-commit: 43856a7
 readiness-verdict: ready
@@ -132,3 +132,6 @@ the review; the implementer records it verbatim following
 - 2026-08-09 Codex: drafted bounded T-006 pure redistribution/dispatch after
   local T-005 acceptance; readiness, promotion, claim, implementation, and
   review remain; no open question.
+- 2026-08-09 Codex: readiness passed at `43856a7`, owner promoted at
+  `73001f9`, and the exact task branch was claimed from that integration HEAD;
+  pure implementation and review remain; no open question.
