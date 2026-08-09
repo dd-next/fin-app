@@ -871,20 +871,23 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
         "start_date": (today - timedelta(days=4)).isoformat(),
         "end_date": (today - timedelta(days=2)).isoformat(),
     }
-    rejected = await client.patch(
+    resulting_ended = await client.patch(
         f"/api/v1/account-periods/{state_period['id']}", json=moved_to_ended
     )
-    assert rejected.status_code == 409
-    unchanged = (
+    assert resulting_ended.status_code == 200, resulting_ended.text
+    assert resulting_ended.json()["status"] == "ended"
+    ended_state = (
         await client.get(f"/api/v1/account-periods/{state_period['id']}")
     ).json()
-    assert unchanged["end_date"] == (today + timedelta(days=1)).isoformat()
+    assert ended_state["start_date"] == moved_to_ended["start_date"]
+    assert ended_state["end_date"] == moved_to_ended["end_date"]
+    assert ended_state["closed_at"] is None
     confirmed = await client.patch(
         f"/api/v1/account-periods/{state_period['id']}",
         json={**moved_to_ended, "confirm_ended_period": True},
     )
     assert confirmed.status_code == 409
-    assert confirmed.json()["detail"] == "Start date changes require snapshot replay"
+    assert confirmed.json()["detail"] == "Ended account period is read-only"
     moved_to_future = {
         "start_date": (today + timedelta(days=3)).isoformat(),
         "end_date": (today + timedelta(days=5)).isoformat(),

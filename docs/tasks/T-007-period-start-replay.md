@@ -21,26 +21,26 @@ snapshot and replay partition without changing the posted ledger balance.
 
 ## Acceptance
 
-- [ ] Creating with an explicit workspace-local Start date in the past or on
+- [x] Creating with an explicit workspace-local Start date in the past or on
       today succeeds, while a future Start date and `end_date < start_date`
       fail before any period row is persisted. The existing create path keeps
       deriving `snapshot_at` and exact `opening_balance`; T-008 owns making an
       omitted Start date default to today. Create also rejects without a row
       when the derived `snapshot_at` is at or after the first workspace-local
       instant following the inclusive `end_date`.
-- [ ] PATCH evaluates lifecycle state before applying the update: a period
+- [x] PATCH evaluates lifecycle state before applying the update: a period
       that is current at the start of the serialized operation may change
       `start_date` alone or together with `end_date`; an already ended or
       manually closed period remains read-only. A selected future Start date,
       null field, or resulting `end_date < start_date` is rejected
       deterministically and leaves every stored period field unchanged.
-- [ ] A current period may atomically move to a valid resulting-ended range.
+- [x] A current period may atomically move to a valid resulting-ended range.
       That response uses the strict `< first local instant after end_date`
       ended replay cutoff, the stored row is immediately read-only afterward,
       a leg exactly at the end boundary is excluded, and the account may then
       accept a successor under the T-004 rules. The edit does not invent
       `closed_at` or `closing_balance`.
-- [ ] A successful Start-date change recomputes `snapshot_at` as the exact
+- [x] A successful Start-date change recomputes `snapshot_at` as the exact
       maximum of the new workspace-local day boundary and every eligible
       predecessor boundary. Eligibility is evaluated at the serialized
       workspace-local today: same account, edited target excluded, and either
@@ -50,7 +50,7 @@ snapshot and replay partition without changing the posted ledger balance.
       its inclusive `end_date`; the maximum boundary is selected across all
       such rows. `opening_balance` is then recomputed from posted legs with
       `created_at <= snapshot_at`, using `Decimal` only.
-- [ ] The canonical window must remain chronological: create and PATCH reject
+- [x] The canonical window must remain chronological: create and PATCH reject
       atomically with HTTP `422` detail `Period snapshot must precede end
       boundary` when derived `snapshot_at >= period_end_boundary`, where
       `period_end_boundary` is the first workspace-local instant after the
@@ -58,12 +58,12 @@ snapshot and replay partition without changing the posted ledger balance.
       window excludes the equality leg while opening would otherwise absorb
       it; a later predecessor boundary is rejected for the same reason. The
       target period and complete ledger remain byte-for-byte unchanged.
-- [ ] The edit atomically persists the selected dates, recomputed
+- [x] The edit atomically persists the selected dates, recomputed
       `snapshot_at`, and recomputed `opening_balance`. SQLite reserves the
       writer before reading lifecycle state, predecessors, ledger snapshot, or
       successor eligibility; any validation or replay failure rolls back the
       complete update.
-- [ ] Replaying the new canonical window changes no `Transaction` or
+- [x] Replaying the new canonical window changes no `Transaction` or
       `TransactionLeg`, creates no movement, and leaves the exact live account
       balance unchanged. For a resulting-current period, `period_movements`
       includes every later posted leg exactly once, excludes legs at the
@@ -71,33 +71,33 @@ snapshot and replay partition without changing the posted ledger balance.
       opening plus window to that unchanged live balance. A resulting-ended
       period instead uses its strict historical cutoff and is never passed to
       the current-only reconciliation input.
-- [ ] Backward and forward Start-date moves cover pre-boundary corrections and
+- [x] Backward and forward Start-date moves cover pre-boundary corrections and
       posted/voided legs without double counting. A leg exactly at the new
       snapshot boundary is represented in opening only; a later leg is replayed
       only; 18-place Decimal values remain exact.
-- [ ] A same-local-day manually closed predecessor remains the effective
+- [x] A same-local-day manually closed predecessor remains the effective
       boundary when later than the selected local-day boundary. Changing the
       successor Start date cannot cross or absorb that accepted predecessor
       window, and the equality leg at the close boundary remains in successor
       opening but outside successor replay.
-- [ ] Successor/current-period eligibility is checked in the same serialized
+- [x] Successor/current-period eligibility is checked in the same serialized
       transaction. The endpoint reserves the writer before loading the target,
       so a stale PATCH that waits behind an operation which ended/closed that
       target and accepted a successor must re-read lifecycle state, return
       `409`, and leave both periods and every ledger row unchanged. A PATCH
       that serializes first has the deterministic resulting-current or
       resulting-ended behavior above and never creates a second current row.
-- [ ] Original date-range overlap with distinct closed/ended history is allowed
+- [x] Original date-range overlap with distinct closed/ended history is allowed
       for both Start-date and end-date-only edits, superseding the old all-row
       `ensure_no_overlap` behavior when the resulting canonical window remains
       chronological. A distinct same-account current row is a `409` conflict;
       invalid snapshot chronology returns the `422` above; different accounts
       remain independent.
-- [ ] Existing valid end-date-only PATCH behavior remains compatible except for
+- [x] Existing valid end-date-only PATCH behavior remains compatible except for
       the explicitly superseded all-history overlap rejection. The obsolete
       legacy assertion that every Start-date change returns `409` is replaced
       only where the accepted v2.1 contract supersedes it.
-- [ ] Focused tests cover create past/today/future and invalid range; backward,
+- [x] Focused tests cover create past/today/future and invalid range; backward,
       forward, and simultaneous Start/end edits; already ended/closed rejection;
       exact timezone and same-day predecessor boundaries; exact ledger and
       replay/reconciliation invariants; rollback; resulting-ended strict cutoff,
@@ -261,6 +261,84 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Pass 1
+
+- Reviewer task name/vendor: `/root/t007_start_replay_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `e573478`; modified
+  `app/periods.py`, directly inspected untracked
+  `tests/test_period_start_replay_v2.py`, and modified
+  `tests/test_periods_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only implementation review of base/HEAD `e573478` with manifest `M app/periods.py; M tests/test_periods_v2.py; ?? tests/test_period_start_replay_v2.py` (untracked file inspected directly).
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — The focused suite does not cover several explicit T-007 acceptance branches, so regressions in the new guard paths can pass. `tests/test_period_start_replay_v2.py` has only six tests and never sends a future `start_date` to a still-current target, never sends `start_date: null`, never proves an end-date-only edit may overlap closed/ended history, and never exercises `ensure_no_other_current_period` with a distinct same-account current row or proves PATCH independence for another account. The legacy future-PATCH assertions at `tests/test_periods_v2.py:891-905` run only after that target was changed to `ended`, so they receive lifecycle `409` rather than testing the new future-date `422`; the stale test at `tests/test_period_start_replay_v2.py:430-500` likewise rejects a now-closed target before the distinct-current guard. These are required by `docs/tasks/T-007-period-start-replay.md` acceptance bullets 2, 10-11, and 13. Add focused mutation-neutral assertions for current-target future/null rejection, end-only historical overlap success, and same-account distinct-current/different-account PATCH behavior.
+  >
+  > P3 — The file-backed stale-PATCH test uses `asyncio.sleep(0.05)` (`tests/test_period_start_replay_v2.py:470`) and the authenticated request can block first while `require_user` writes/commits `AuthSession.last_seen_at`, before reaching the handler’s `BEGIN IMMEDIATE`. The code itself does place `BEGIN IMMEDIATE` as the first handler DB statement at `app/periods.py:604`, and the eventual lifecycle re-read is correct, but the fixture does not specifically prove that lock acquisition point. Prefer a deterministic hook/event at handler entry or otherwise document that this test proves end-state serialization while code inspection proves lock placement.
+  >
+  > Additional evidence run: focused new suite `6 passed`; period/lifecycle regressions `24 passed`; full suite `159 passed`; `node --check app/static/app.js` passed; `git diff --check` passed. No files were edited and no branch was switched; HEAD remained `e573478` on `task/T-007-period-start-replay`.
+  >
+  > Verdict: **CHANGES REQUIRED** (P2 coverage gap).
+- Resolution: added mutation-neutral current-target future/null assertions,
+  end-only historical-overlap success, direct distinct-current guard coverage,
+  and cross-account PATCH independence. Replaced the timing sleep with an
+  awaitable reserve helper and events that pause after auth, observe the exact
+  writer-reservation attempt, and release it only after the accepted lifecycle
+  transition/successor is staged. Updated focused result: `7 passed`; legacy
+  period/lifecycle result remains `24 passed`; diff-check passed.
+- Verdict: changes required; behavior/coverage changed, so fresh re-review is
+  required.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t007_start_replay_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `e573478`; modified
+  `app/periods.py`, modified task file, directly inspected untracked focused
+  test module, and bounded legacy assertion update.
+- Findings (verbatim, P0–P3):
+
+  > Read-only re-review of base/HEAD `e573478` with manifest `M app/periods.py; M docs/tasks/T-007-period-start-replay.md; M tests/test_periods_v2.py; ?? tests/test_period_start_replay_v2.py` (untracked file inspected directly).
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Pass-1 findings are closed:
+  >
+  > - Current-target future and null Start mutations return deterministic mutation-neutral `422` responses.
+  > - End-only PATCH succeeds across accepted closed history while preserving the replay snapshot.
+  > - A distinct same-account current row returns `409`; a different account remains independent.
+  > - `reserve_period_writer()` is the first PATCH handler database action, before target, lifecycle, predecessor, ledger, or successor reads.
+  > - The file-backed concurrency test now pauses deterministically after authentication at the exact reservation helper, observes the blocked `BEGIN IMMEDIATE` attempt behind a staged close/successor transaction without timing sleeps, and proves the stale request re-reads the closed target and cannot revive it.
+  >
+  > The broader T-007 invariants remain satisfied: exact `Decimal` snapshot replay; posted-ledger derivation; future/range/canonical chronology validation; target exclusion and precise closed/naturally-ended predecessor selection; equality-boundary partitioning; resulting-ended strict cutoff and immutability; historical overlap; rollback and ledger mutation neutrality; one-current-period protection; cross-account isolation; and no T-008/T-009 scope drift.
+  >
+  > Additional evidence run:
+  >
+  > - `pytest tests/test_period_start_replay_v2.py -q` — `7 passed`
+  > - `pytest tests/test_periods_v2.py tests/test_period_lifecycle_v2.py -q` — `24 passed`
+  > - Full `pytest -q` — `160 passed`
+  > - `node --check app/static/app.js` — passed
+  > - `git diff --check` — passed
+  >
+  > No files were edited and no branch was switched. HEAD remained `e573478` on `task/T-007-period-start-replay`.
+  >
+  > Verdict: **APPROVED**.
+- Resolution: no further changes required; Pass-1 P2 and P3 are closed.
+- Reviewer checks: focused `7 passed`; period/lifecycle `24 passed`; full
+  `160 passed`; JS syntax and diff-check passed.
+- Verdict: approved; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -285,3 +363,16 @@ ends. Date · agent · what landed · what is left · open questions.
   `task/T-007-period-start-replay` was atomically claimed from that promotion
   HEAD and records the full base hash above. Implementation and block review
   remain; no open question.
+- 2026-08-09 Codex: implemented atomic Start-date replay and received one P2
+  coverage finding plus a P3 concurrency-fixture concern. Added all missing
+  focused branches and deterministic post-auth lock events. Focused gate is
+  now `7 passed`; period/lifecycle regressions `24 passed`; fresh re-review
+  remains; no open question.
+- 2026-08-09 Codex: fresh block re-review approved the complete manifest with
+  no P0–P3 findings after closure. Independent evidence includes focused
+  `7 passed`, regression `24 passed`, full `160 passed`, JS syntax, and
+  diff-check. Local gate repetition and task commit remain; no open question.
+- 2026-08-09 Codex: repeated the complete local gate after recording approval:
+  full pytest `160 passed`; `node --check app/static/app.js` and
+  `git diff --check` passed. The reviewed logical block is ready for its
+  task-level implementation commit; final clean-range review remains.

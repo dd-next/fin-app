@@ -76,6 +76,11 @@ def workspace_day_boundary(workspace: Workspace, day: date) -> datetime:
     )
 
 
+async def reserve_period_writer(session: AsyncSession) -> None:
+    """Reserve SQLite period writes before reading mutable lifecycle state."""
+    await session.execute(text("BEGIN IMMEDIATE"))
+
+
 async def posted_balance_at(
     session: AsyncSession,
     *,
@@ -103,21 +108,19 @@ async def initial_snapshot_at(
     start_date: date,
     workspace: Workspace,
     today: date,
+    exclude_period_id: int | None = None,
 ) -> datetime:
     snapshot_at = workspace_day_boundary(workspace, start_date)
-    predecessors = list(
-        (
-            await session.execute(
-                select(AccountPeriod).where(
-                    AccountPeriod.account_id == account_id,
-                    or_(
-                        AccountPeriod.closed_at.is_not(None),
-                        AccountPeriod.end_date < today,
-                    ),
-                )
-            )
-        ).scalars()
+    statement = select(AccountPeriod).where(
+        AccountPeriod.account_id == account_id,
+        or_(
+            AccountPeriod.closed_at.is_not(None),
+            AccountPeriod.end_date < today,
+        ),
     )
+    if exclude_period_id is not None:
+        statement = statement.where(AccountPeriod.id != exclude_period_id)
+    predecessors = list((await session.execute(statement)).scalars())
     for predecessor in predecessors:
         predecessor_boundary = predecessor.closed_at or workspace_day_boundary(
             workspace, predecessor.end_date + timedelta(days=1)
@@ -255,27 +258,6 @@ async def require_private_period(
     return period, account
 
 
-async def ensure_no_overlap(
-    session: AsyncSession,
-    *,
-    account_id: int,
-    start_date: date,
-    end_date: date,
-    exclude_period_id: int | None = None,
-) -> None:
-    statement = select(AccountPeriod.id).where(
-        AccountPeriod.account_id == account_id,
-        AccountPeriod.start_date <= end_date,
-        AccountPeriod.end_date >= start_date,
-    )
-    if exclude_period_id is not None:
-        statement = statement.where(AccountPeriod.id != exclude_period_id)
-    if (await session.execute(statement.limit(1))).scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=409, detail="Account period dates overlap an existing period"
-        )
-
-
 async def ensure_no_current_period(
     session: AsyncSession,
     *,
@@ -291,6 +273,32 @@ async def ensure_no_current_period(
             select(AccountPeriod.id)
             .where(
                 AccountPeriod.account_id == account_id,
+                AccountPeriod.closed_at.is_(None),
+                AccountPeriod.start_date <= today,
+                AccountPeriod.end_date >= today,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if current_id is not None:
+        raise HTTPException(
+            status_code=409, detail="Account already has a current period"
+        )
+
+
+async def ensure_no_other_current_period(
+    session: AsyncSession,
+    *,
+    account_id: int,
+    today: date,
+    exclude_period_id: int,
+) -> None:
+    current_id = (
+        await session.execute(
+            select(AccountPeriod.id)
+            .where(
+                AccountPeriod.account_id == account_id,
+                AccountPeriod.id != exclude_period_id,
                 AccountPeriod.closed_at.is_(None),
                 AccountPeriod.start_date <= today,
                 AccountPeriod.end_date >= today,
@@ -494,7 +502,7 @@ async def create_account_period(
     # SQLite begins deferred transactions by default. Reserve the writer before
     # the current-period guard and snapshot reads so concurrent creates cannot
     # both observe the same account as eligible.
-    await session.execute(text("BEGIN IMMEDIATE"))
+    await reserve_period_writer(session)
     account = await require_owned_account(session, account_id, user.id)
     workspace = await session.get(Workspace, account.workspace_id)
     assert workspace is not None
@@ -517,6 +525,13 @@ async def create_account_period(
         workspace=workspace,
         today=today,
     )
+    if snapshot_at >= workspace_day_boundary(
+        workspace, body.end_date + timedelta(days=1)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Period snapshot must precede end boundary",
+        )
     period = AccountPeriod(
         account_id=account.id,
         asset_id=account.asset_id,
@@ -588,6 +603,10 @@ async def patch_account_period(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    # Start-date replay is a financial boundary change. Reserve the SQLite
+    # writer before loading lifecycle or ledger state so a stale request must
+    # observe any predecessor/successor accepted ahead of it.
+    await reserve_period_writer(session)
     period, account = await require_private_period(session, period_id, user.id)
     workspace = await session.get(Workspace, account.workspace_id)
     assert workspace is not None
@@ -603,22 +622,45 @@ async def patch_account_period(
         raise HTTPException(status_code=422, detail="Period fields cannot be null")
     if "funding_amount" in changed_fields:
         raise HTTPException(status_code=422, detail="Funding amount is not editable")
-    if "start_date" in changed_fields:
-        raise HTTPException(
-            status_code=409,
-            detail="Start date changes require snapshot replay",
-        )
     start_date = body.start_date if "start_date" in changed_fields else period.start_date
     end_date = body.end_date if "end_date" in changed_fields else period.end_date
+    if start_date > today:
+        raise HTTPException(status_code=422, detail="Start date must not be in the future")
     if end_date < start_date:
         raise HTTPException(status_code=422, detail="End date must not precede start date")
-    await ensure_no_overlap(
+    await ensure_no_other_current_period(
         session,
         account_id=account.id,
-        start_date=start_date,
-        end_date=end_date,
         exclude_period_id=period.id,
+        today=today,
     )
+    snapshot_at = period.snapshot_at
+    opening_balance = period.opening_balance
+    if "start_date" in changed_fields:
+        snapshot_at = await initial_snapshot_at(
+            session,
+            account_id=account.id,
+            start_date=start_date,
+            workspace=workspace,
+            today=today,
+            exclude_period_id=period.id,
+        )
+        opening_balance = await posted_balance_at(
+            session,
+            account_id=account.id,
+            boundary=snapshot_at,
+        )
+    if snapshot_at >= workspace_day_boundary(
+        workspace, end_date + timedelta(days=1)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Period snapshot must precede end boundary",
+        )
+    if "start_date" in changed_fields:
+        period.start_date = start_date
+        period.snapshot_at = snapshot_at
+        period.opening_balance = opening_balance
     if "end_date" in changed_fields:
         period.end_date = end_date
     await session.commit()
