@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: Synchronize the period API and lifecycle response surface
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6–§9; design/MOBILE-BACKEND-GAP-AUDIT.md period API rows
 blocked-by: [T-004, T-005, T-006, T-007]
