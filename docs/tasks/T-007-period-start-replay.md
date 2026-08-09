@@ -1,7 +1,7 @@
 ---
 id: T-007
 title: Implement atomic period Start-date snapshot replay
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §5, §8; design/MOBILE-BACKEND-GAP-AUDIT.md period start date
 blocked-by: [T-002, T-003, T-004]
@@ -376,3 +376,6 @@ ends. Date · agent · what landed · what is left · open questions.
   full pytest `160 passed`; `node --check app/static/app.js` and
   `git diff --check` passed. The reviewed logical block is ready for its
   task-level implementation commit; final clean-range review remains.
+- 2026-08-09 Codex: committed the approved implementation as `439ca04` and
+  moved T-007 to review. Final clean-range review and local owner acceptance
+  remain; no open question.
