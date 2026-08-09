@@ -257,6 +257,84 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Pass 1 — close, expiry, and closed-ledger behavior
+
+- Reviewer task name/vendor: `/root/t004_close_expiry_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `96d1368`; modified
+  `app/periods.py`, `tests/test_periods_v2.py`, and
+  `tests/test_operations_undo_v2.py`; directly inspected untracked
+  `tests/test_period_lifecycle_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — Closed-snapshot immutability is not verified for all newly enabled mutation paths required by T-004. The focused test preserves snapshots only across Correction, Delete, a new Spend, and Undo (`tests/test_period_lifecycle_v2.py:154-190`). Account reassignment (`tests/test_periods_v2.py:952-966`, `tests/test_periods_v2.py:1003-1013`), Adjustment/reconcile (`tests/test_periods_v2.py:1014-1023`), and Exchange (`tests/test_periods_v2.py:1073-1083`, `tests/test_periods_v2.py:1195-1207`) assert success or live balance changes but never compare the closed period’s `snapshot_at`, `opening_balance`, `closed_at`, and `closing_balance` before and after. This leaves the explicit T-004 acceptance invariant unproved for those paths. Add persisted-state comparisons around each distinct post-close path, or a focused parameterized test that exercises them and asserts all four snapshot fields remain unchanged.
+  >
+  > P3 — The final assertion in the closed Undo regression fetches the earlier naturally ended `period`, not `closed_period` (`tests/test_operations_undo_v2.py:371-373`). It therefore provides no evidence about the closed period involved in the Undo and appears to be a stale assertion. Point it at `closed_period` and preferably compare its stored snapshot state, or remove it as redundant once the focused lifecycle test owns that proof.
+  >
+  > Missing tests:
+  >
+  > - Immutable stored snapshots after moving a transaction into and out of a closed-period account.
+  > - Immutable stored snapshots after assigning an unassigned transaction to a closed-period account.
+  > - Immutable stored snapshots after reconcile/Adjustment against a closed-period account.
+  > - Immutable stored snapshots after Exchange involving a closed-period account.
+  >
+  > The implementation itself correctly removes only the closed-ledger guard, keeps ended confirmation behavior, rejects edits/close on naturally ended periods, restricts manual close to `current`, and captures one UTC cutoff used for the posted-ledger balance. The focused close test also proves exact-boundary inclusion, high-precision Decimal storage, and unchanged ledger rows.
+  >
+  > Verdict: **changes required** because the P2 coverage gap must be closed and re-reviewed. Successor selection/current-period creation behavior was intentionally not reviewed in this pass.
+- Resolution: added exact four-field snapshot comparisons around closed-account
+  reassignment, assignment, reconcile/Adjustment, shared Exchange, and Undo;
+  the stale Undo assertion now checks the actual closed period.
+- Reviewer checks: targeted lifecycle/legacy modules `29 passed`; `git
+  diff --check` passed before review.
+- Verdict: changes required; corrected and submitted for fresh re-review.
+
+### Pass 2 — close/expiry re-review
+
+- Reviewer task name/vendor: `/root/t004_close_expiry_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `96d1368`; complete current
+  block working tree including untracked `tests/test_period_lifecycle_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only re-review verdict: **changes required**. P0: None. P1: None. P2 — prior snapshot-immutability coverage is still not fully closed: `tests/test_period_lifecycle_v2.py:179-190` performs a new Spend and then Undo but compares the stored snapshot only after Undo, so it does not prove the new Spend itself left all four fields unchanged; likewise `tests/test_periods_v2.py:965-980` moves one transaction into and another out of the closed account but compares only after both operations, not after each distinct reassignment. Add an immediate `stored_snapshot == closed_snapshot` assertion after the new Spend and after each reassignment (at minimum after move-in before move-out), then re-review. P3: None; stale Undo assertion is fixed and checks `closed_period`. Unassigned assignment, reconcile/Adjustment, shared Exchange, Correction, Delete, and Undo now have direct stored-snapshot comparisons. Production close/expiry behavior reviewed against §§4–5 is otherwise sound for this block: ended GET/list are write-neutral, ended edit/close reject, close is current-only and stores one UTC-cutoff posted balance atomically without ledger mutation, and closed ledger operations are no longer permanently blocked. Successor block not reviewed. I reran the exact target: 29 passed; `git diff --check` passed.
+- Resolution: added immediate stored-snapshot equality assertions after the new
+  closed-period Spend and after each direction of closed-account reassignment.
+- Reviewer checks: reviewer reran the exact target — `29 passed`; `git diff
+  --check` passed.
+- Verdict: changes required; corrected and submitted for fresh re-review.
+
+### Pass 3 — close/expiry final review
+
+- Reviewer task name/vendor: `/root/t004_close_expiry_final_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `96d1368`; complete current
+  block working tree including untracked `tests/test_period_lifecycle_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Final bounded read-only review, base `96d1368`, complete current working-tree manifest including untracked `tests/test_period_lifecycle_v2.py`:
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None. The prior coverage gap is closed: the focused lifecycle test now asserts the stored period state immediately after the new post-close Spend and again after Undo; the reassignment regression asserts the four-field stored snapshot immediately after moving a transaction into the closed account and again after moving one out. Direct snapshot comparisons also remain present after Correction, Delete, unassigned-account assignment, reconcile/Adjustment, shared Exchange, and closed-period Undo.
+  >
+  > P3: None.
+  >
+  > Production close/expiry behavior remains sound for this bounded block against `ACCOUNT_PERIODS-v2.1.md` §§4–5: status uses the workspace-local date; GET/list do not write natural-expiry state; ended periods retain null closing fields and reject edit/close; manual close is current-only and records one UTC cutoff plus the exact posted-ledger balance in the same transaction without modifying ledger rows; closed lifecycle state no longer permanently blocks otherwise authorized ledger operations, and those paths do not rewrite stored snapshots. Successor selection/creation remains explicitly out of scope for this review.
+  >
+  > Target evidence supplied and consistent with the inspected manifest: `29 passed`; `git diff --check` passed.
+  >
+  > Verdict: **APPROVED** for T-004 block 1 (close, expiry, and post-close ledger behavior).
+- Resolution: none required.
+- Reviewer checks: targeted lifecycle/legacy modules `29 passed`; `git
+  diff --check` passed.
+- Verdict: approved; prior P2/P3 findings are closed.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it

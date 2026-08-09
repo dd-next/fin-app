@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from tests.conftest import register
 from tests.test_ledger_v2 import create_account
-from tests.test_periods_v2 import create_period, local_today
+from tests.test_periods_v2 import create_period, local_today, stored_snapshot
 from tests.test_sharing_v2 import accept, invitation, login
 
 
@@ -359,16 +359,14 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     assert (
         await client.post(f"/api/v1/account-periods/{closed_period['id']}/close")
     ).status_code == 200
-    closed_rejected = await client.post(
+    closed_snapshot = await stored_snapshot(client, closed_period["id"])
+    closed_undo = await client.post(
         f"/api/v1/operations/accounts/{closed_account['id']}/undo",
-        json={
-            "transaction_id": closed_operation.json()["id"],
-            "confirm_ended_period": True,
-        },
+        json={"transaction_id": closed_operation.json()["id"]},
     )
-    assert closed_rejected.status_code == 409
-    assert closed_rejected.json()["detail"] == "Closed account period is read-only"
-    assert (await candidate(client, closed_account["id"]))["id"] == closed_operation.json()["id"]
+    assert closed_undo.status_code == 200, closed_undo.text
+    assert await candidate(client, closed_account["id"]) is None
     assert (
-        await client.get(f"/api/v1/account-periods/{period['id']}")
-    ).status_code == 200
+        await client.get(f"/api/v1/transactions/{closed_operation.json()['id']}")
+    ).json()["status"] == "deleted"
+    assert await stored_snapshot(client, closed_period["id"]) == closed_snapshot

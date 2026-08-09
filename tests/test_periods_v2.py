@@ -33,6 +33,18 @@ async def create_period(client, account_id, funding, start=None, end=None):
     return response.json()
 
 
+async def stored_snapshot(client, period_id):
+    async with client._finapp_test_sessions() as session:
+        period = await session.get(AccountPeriod, period_id)
+        assert period is not None
+        return (
+            period.snapshot_at,
+            period.opening_balance,
+            period.closed_at,
+            period.closing_balance,
+        )
+
+
 async def create_plan_rule(
     client,
     workspace_id,
@@ -662,13 +674,14 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60"},
     )
-    assert rejected.status_code == 422
-    assert rejected.json()["detail"] == "Funding amount is not editable"
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"] == "Ended account period is read-only"
     confirmed = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60", "confirm_ended_period": True},
     )
-    assert confirmed.status_code == 422
+    assert confirmed.status_code == 409
+    assert confirmed.json()["detail"] == "Ended account period is read-only"
 
     overlap = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
@@ -704,7 +717,7 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
     ).status_code == 409
 
 
-async def test_ended_transaction_confirmation_and_closed_record_rejection(client):
+async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     await register(client)
     account = await create_account(client, "Guarded USD", "USD")
     today = local_today()
@@ -776,28 +789,19 @@ async def test_ended_transaction_confirmation_and_closed_record_rejection(client
         await client.post(f"/api/v1/account-periods/{current['id']}/close")
     ).status_code == 200
     closed_transaction_id = current_expense.json()["id"]
-    assert (
-        await client.patch(
-            f"/api/v1/transactions/{closed_transaction_id}",
-            json={"amount": "20", "confirm_ended_period": True},
-        )
-    ).status_code == 409
-    assert (
-        await client.post(
-            f"/api/v1/transactions/{closed_transaction_id}/delete",
-            json={"confirm_ended_period": True},
-        )
-    ).status_code == 409
-    assert (
-        await client.post(
-            "/api/v1/operations/spend",
-            json={
-                "account_id": account["id"],
-                "amount": "5",
-                "confirm_ended_period": True,
-            },
-        )
-    ).status_code == 409
+    corrected_closed = await client.patch(
+        f"/api/v1/transactions/{closed_transaction_id}", json={"amount": "20"}
+    )
+    assert corrected_closed.status_code == 200, corrected_closed.text
+    deleted_closed = await client.post(
+        f"/api/v1/transactions/{closed_transaction_id}/delete"
+    )
+    assert deleted_closed.status_code == 200, deleted_closed.text
+    later_closed = await client.post(
+        "/api/v1/operations/spend",
+        json={"account_id": account["id"], "amount": "5"},
+    )
+    assert later_closed.status_code == 201, later_closed.text
 
 
 async def test_shared_users_cannot_discover_owner_private_periods(client):
@@ -844,8 +848,7 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
             "confirm_ended_period": True,
         },
     )
-    assert hidden_guard.status_code == 409
-    assert hidden_guard.json()["detail"] == "Transaction cannot be changed"
+    assert hidden_guard.status_code == 201, hidden_guard.text
 
     await login(client, "alice")
     owner_period = await client.get(f"/api/v1/account-periods/{period['id']}")
@@ -953,30 +956,29 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     assert (
         await client.post(f"/api/v1/account-periods/{closed_period['id']}/close")
     ).status_code == 200
+    closed_snapshot = await stored_snapshot(client, closed_period["id"])
     outside = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": plain_account["id"], "amount": "3"},
     )
     assert outside.status_code == 201
-    assert (
-        await client.patch(
-            f"/api/v1/transactions/{outside.json()['id']}",
-            json={"account_id": closed_account["id"], "confirm_ended_period": True},
-        )
-    ).status_code == 409
-    assert (
-        await client.get(f"/api/v1/transactions/{outside.json()['id']}")
-    ).json()["legs"][0]["account_id"] == plain_account["id"]
-    assert (
-        await client.patch(
-            f"/api/v1/transactions/{inside_closed.json()['id']}",
-            json={"account_id": plain_account["id"], "confirm_ended_period": True},
-        )
-    ).status_code == 409
-    still_closed = (
+    moved_into_closed = await client.patch(
+        f"/api/v1/transactions/{outside.json()['id']}",
+        json={"account_id": closed_account["id"]},
+    )
+    assert moved_into_closed.status_code == 200, moved_into_closed.text
+    assert moved_into_closed.json()["legs"][0]["account_id"] == closed_account["id"]
+    assert await stored_snapshot(client, closed_period["id"]) == closed_snapshot
+    moved_out_of_closed = await client.patch(
+        f"/api/v1/transactions/{inside_closed.json()['id']}",
+        json={"account_id": plain_account["id"]},
+    )
+    assert moved_out_of_closed.status_code == 200, moved_out_of_closed.text
+    moved = (
         await client.get(f"/api/v1/transactions/{inside_closed.json()['id']}")
     ).json()
-    assert still_closed["legs"][0]["account_id"] == closed_account["id"]
+    assert moved["legs"][0]["account_id"] == plain_account["id"]
+    assert await stored_snapshot(client, closed_period["id"]) == closed_snapshot
 
 
 async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
@@ -1013,27 +1015,30 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
     assert (
         await client.post(f"/api/v1/account-periods/{current_period['id']}/close")
     ).status_code == 200
+    current_snapshot = await stored_snapshot(client, current_period["id"])
     closed_unassigned_id = await seed_unassigned_transaction(client, amount="3")
-    rejected_closed_assign = await client.post(
+    closed_assign = await client.post(
         f"/api/v1/transactions/{closed_unassigned_id}/assign-account",
-        json={"account_id": current_account["id"], "confirm_ended_period": True},
+        json={"account_id": current_account["id"]},
     )
-    assert rejected_closed_assign.status_code == 409
+    assert closed_assign.status_code == 200, closed_assign.text
     closed_assignment_state = (
         await client.get(f"/api/v1/transactions/{closed_unassigned_id}")
     ).json()
-    assert closed_assignment_state["status"] == "unassigned"
-    assert closed_assignment_state["legs"][0]["account_id"] is None
+    assert closed_assignment_state["status"] == "posted"
+    assert closed_assignment_state["legs"][0]["account_id"] == current_account["id"]
+    assert await stored_snapshot(client, current_period["id"]) == current_snapshot
     reconcile = await client.post(
         f"/api/v1/accounts/{current_account['id']}/reconcile",
         json={"target_balance": "80"},
     )
-    assert reconcile.status_code == 409
+    assert reconcile.status_code == 200, reconcile.text
     assert Decimal(
         (
             await client.get(f"/api/v1/accounts/{current_account['id']}")
         ).json()["balance"]
-    ) == Decimal("100")
+    ) == Decimal("80")
+    assert await stored_snapshot(client, current_period["id"]) == current_snapshot
 
     source = await create_account(client, "Fee root USD", "USD", "1000")
     target = await create_account(client, "Fee root VND", "VND", "0")
@@ -1073,17 +1078,16 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         json={**exchange_body, "confirm_ended_period": True},
     )
     assert second_exchange.status_code == 201, second_exchange.text
-    assert (
-        await client.post(f"/api/v1/account-periods/{ended['id']}/close")
-    ).status_code == 200
-    rejected_closed_void = await client.post(
+    ended_close = await client.post(f"/api/v1/account-periods/{ended['id']}/close")
+    assert ended_close.status_code == 409
+    confirmed_ended_void = await client.post(
         f"/api/v1/transactions/{second_exchange.json()['id']}/delete",
         json={"confirm_ended_period": True},
     )
-    assert rejected_closed_void.status_code == 409
+    assert confirmed_ended_void.status_code == 200, confirmed_ended_void.text
     assert (
         await client.get(f"/api/v1/transactions/{second_exchange.json()['id']}")
-    ).json()["status"] == "posted"
+    ).json()["status"] == "deleted"
     balance_before_closed_create = Decimal(
         (await client.get(f"/api/v1/accounts/{source['id']}")).json()["balance"]
     )
@@ -1091,10 +1095,10 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
         "/api/v1/operations/exchange",
         json={**exchange_body, "confirm_ended_period": True},
     )
-    assert closed_exchange.status_code == 409
+    assert closed_exchange.status_code == 201, closed_exchange.text
     assert Decimal(
         (await client.get(f"/api/v1/accounts/{source['id']}")).json()["balance"]
-    ) == balance_before_closed_create
+    ) < balance_before_closed_create
 
 
 async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
@@ -1207,13 +1211,17 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     ).status_code == 404
 
     await login(client, "alice")
+    ended_close = await client.post(f"/api/v1/account-periods/{period['id']}/close")
+    assert ended_close.status_code == 409
+    successor = await create_period(client, fee_account["id"], "100", today, today)
     assert (
-        await client.post(f"/api/v1/account-periods/{period['id']}/close")
+        await client.post(f"/api/v1/account-periods/{successor['id']}/close")
     ).status_code == 200
+    closed_snapshot = await stored_snapshot(client, successor["id"])
     await login(client, "bob")
     closed_exchange = await client.post(
         "/api/v1/operations/exchange",
-        json={**exchange_body, "confirm_ended_period": True},
+        json={**exchange_body, "local_date": today.isoformat()},
     )
-    assert closed_exchange.status_code == 409
-    assert closed_exchange.json()["detail"] == "Transaction cannot be changed"
+    assert closed_exchange.status_code == 201, closed_exchange.text
+    assert await stored_snapshot(client, successor["id"]) == closed_snapshot

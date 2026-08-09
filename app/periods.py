@@ -226,13 +226,6 @@ def enforce_transaction_period_impact(
     confirmed: bool,
     workspace_owner: bool,
 ) -> None:
-    if impact.closed:
-        detail = (
-            "Closed account period is read-only"
-            if workspace_owner
-            else "Transaction cannot be changed"
-        )
-        raise HTTPException(status_code=409, detail=detail)
     if impact.ended and not confirmed:
         detail = (
             "Ended account period change requires explicit confirmation"
@@ -566,6 +559,8 @@ async def patch_account_period(
         return await account_period_out(session, period, account)
     if period.closed_at is not None:
         raise HTTPException(status_code=409, detail="Closed account period is read-only")
+    if period_status(period, today) == "ended":
+        raise HTTPException(status_code=409, detail="Ended account period is read-only")
     if any(getattr(body, field) is None for field in changed_fields):
         raise HTTPException(status_code=422, detail="Period fields cannot be null")
     if "funding_amount" in changed_fields:
@@ -579,14 +574,6 @@ async def patch_account_period(
     end_date = body.end_date if "end_date" in changed_fields else period.end_date
     if end_date < start_date:
         raise HTTPException(status_code=422, detail="End date must not precede start date")
-    if (
-        (period.end_date < today or end_date < today)
-        and not body.confirm_ended_period
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail="Ended account period change requires explicit confirmation",
-        )
     await ensure_no_overlap(
         session,
         account_id=account.id,
@@ -608,8 +595,15 @@ async def close_account_period(
     session: AsyncSession = Depends(get_session),
 ):
     period, account = await require_private_period(session, period_id, user.id)
-    if period.closed_at is not None:
+    workspace = await session.get(Workspace, account.workspace_id)
+    assert workspace is not None
+    status = period_status(period, workspace_today(workspace))
+    if status == "closed":
         raise HTTPException(status_code=409, detail="Account period is already closed")
+    if status == "ended":
+        raise HTTPException(status_code=409, detail="Ended account period is read-only")
+    if status != "current":
+        raise HTTPException(status_code=409, detail="Only a current period can be closed")
     closed_at = datetime.now(UTC).replace(tzinfo=None)
     closing_balance = await posted_balance_at(
         session, account_id=account.id, boundary=closed_at
