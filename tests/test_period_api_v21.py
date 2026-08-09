@@ -1,5 +1,6 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, localcontext
+from pathlib import Path
 
 from sqlalchemy import select
 
@@ -9,6 +10,48 @@ from app.periods import current_period_allowance, workspace_day_boundary
 from tests.conftest import register
 from tests.test_ledger_v2 import create_account
 from tests.test_periods_v2 import add_test_leg, create_period, local_today
+
+
+COMMON_PERIOD_KEYS = {
+    "id",
+    "account_id",
+    "asset",
+    "created_by_user_id",
+    "start_date",
+    "end_date",
+    "snapshot_at",
+    "opening_balance",
+    "rollover_policy",
+    "funding_amount",
+    "planned",
+    "status",
+    "created_at",
+    "closed_at",
+    "closing_balance",
+    "remaining",
+}
+CURRENT_PERIOD_KEYS = COMMON_PERIOD_KEYS | {"current_balance", "available_today"}
+
+
+async def stored_period_contract_state(client, period_id):
+    async with client._finapp_test_sessions() as session:
+        period = await session.get(AccountPeriod, period_id)
+        assert period is not None
+        transactions = list((await session.execute(select(Transaction))).scalars())
+        legs = list((await session.execute(select(TransactionLeg))).scalars())
+        rebases = list((await session.execute(select(RebaseEvent))).scalars())
+        return (
+            period.start_date,
+            period.end_date,
+            period.snapshot_at,
+            period.opening_balance,
+            period.rollover_policy,
+            period.closed_at,
+            period.closing_balance,
+            len(transactions),
+            len(legs),
+            len(rebases),
+        )
 
 
 async def set_transaction_day(client, transaction_id, day):
@@ -182,7 +225,7 @@ async def test_available_today_never_blocks_repeated_overspend(client):
     assert first.status_code == 201, first.text
     after_first = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert after_first.status_code == 200
-    assert after_first.json()["remaining"] == "-10"
+    assert after_first.json()["remaining"] == "-10.00"
     assert after_first.json()["available_today"] == "-10.00"
 
     second = await client.post(
@@ -192,7 +235,7 @@ async def test_available_today_never_blocks_repeated_overspend(client):
     assert second.status_code == 201, second.text
     after_second = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert after_second.status_code == 200
-    assert after_second.json()["remaining"] == "-15"
+    assert after_second.json()["remaining"] == "-15.00"
     assert after_second.json()["available_today"] == "-15.00"
 
 
@@ -220,3 +263,353 @@ async def test_current_allowance_ignores_dormant_rebase_rows(client):
     assert after.status_code == 200
     assert after.json()["available_today"] == before.json()["available_today"]
     assert after.json()["remaining"] == before.json()["remaining"]
+
+
+async def test_create_defaults_current_lookup_and_exact_lifecycle_shapes(client):
+    await register(client)
+    account = await create_account(client, "Lifecycle shape USD", "USD", "100")
+    today = local_today()
+    created = await client.post(
+        f"/api/v1/accounts/{account['id']}/periods",
+        json={"end_date": (today + timedelta(days=2)).isoformat()},
+    )
+    assert created.status_code == 201, created.text
+    current = created.json()
+    assert set(current) == CURRENT_PERIOD_KEYS
+    assert current["status"] == "current"
+    assert current["start_date"] == today.isoformat()
+    assert current["rollover_policy"] == "redistribute_remaining_days"
+    assert current["closed_at"] is None
+    assert current["closing_balance"] is None
+    assert current["opening_balance"] == current["funding_amount"] == "0.00"
+    assert current["current_balance"] == current["remaining"] == "100.00"
+    assert current["planned"] == "0.00"
+
+    lookup = await client.get(
+        f"/api/v1/accounts/{account['id']}/periods/current"
+    )
+    assert lookup.status_code == 200
+    assert lookup.json() == current
+
+    closed = await client.post(
+        f"/api/v1/account-periods/{current['id']}/close"
+    )
+    assert closed.status_code == 200, closed.text
+    closed_payload = closed.json()
+    assert set(closed_payload) == COMMON_PERIOD_KEYS
+    assert closed_payload["status"] == "closed"
+    assert closed_payload["closed_at"] is not None
+    assert closed_payload["closing_balance"] == "100.00"
+    assert closed_payload["remaining"] == closed_payload["closing_balance"]
+    assert "current_balance" not in closed_payload
+    assert "available_today" not in closed_payload
+    assert (
+        await client.get(f"/api/v1/accounts/{account['id']}/periods/current")
+    ).json() is None
+
+    ended_account = await create_account(client, "Ended shape USD", "USD", "0")
+    ended = await client.post(
+        f"/api/v1/accounts/{ended_account['id']}/periods",
+        json={
+            "start_date": (today - timedelta(days=4)).isoformat(),
+            "end_date": (today - timedelta(days=2)).isoformat(),
+        },
+    )
+    assert ended.status_code == 201, ended.text
+    ended_payload = ended.json()
+    assert set(ended_payload) == COMMON_PERIOD_KEYS
+    assert ended_payload["status"] == "ended"
+    assert ended_payload["closed_at"] is None
+    assert ended_payload["closing_balance"] is None
+    assert ended_payload["remaining"] is None
+    assert "current_balance" not in ended_payload
+    assert "available_today" not in ended_payload
+
+    closed_history = (
+        await client.get(
+            f"/api/v1/accounts/{account['id']}/periods?scope=history"
+        )
+    ).json()
+    ended_history = (
+        await client.get(
+            f"/api/v1/accounts/{ended_account['id']}/periods?scope=history"
+        )
+    ).json()
+    history = closed_history + ended_history
+    assert {item["status"] for item in history} == {"ended", "closed"}
+    assert all(set(item) == COMMON_PERIOD_KEYS for item in history)
+
+
+async def test_create_and_patch_policy_transition_without_financial_mutation(client):
+    await register(client)
+    account = await create_account(client, "Policy transition USD", "USD", "0")
+    explicit_redistribute_account = await create_account(
+        client, "Explicit redistribution USD", "USD", "0"
+    )
+    today = local_today()
+    start = today - timedelta(days=1)
+    end = today + timedelta(days=1)
+    async with client._finapp_test_sessions() as session:
+        transaction_count = len(
+            list((await session.execute(select(Transaction))).scalars())
+        )
+        leg_count = len(list((await session.execute(select(TransactionLeg))).scalars()))
+        rebase_count = len(
+            list((await session.execute(select(RebaseEvent))).scalars())
+        )
+    explicit_redistribution = await client.post(
+        f"/api/v1/accounts/{explicit_redistribute_account['id']}/periods",
+        json={
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "rollover_policy": "redistribute_remaining_days",
+        },
+    )
+    assert explicit_redistribution.status_code == 201, explicit_redistribution.text
+    assert (
+        explicit_redistribution.json()["rollover_policy"]
+        == "redistribute_remaining_days"
+    )
+    explicit_state = await stored_period_contract_state(
+        client, explicit_redistribution.json()["id"]
+    )
+    assert explicit_state[4] == "redistribute_remaining_days"
+    assert explicit_state[7:] == (transaction_count, leg_count, rebase_count)
+
+    async with client._finapp_test_sessions() as session:
+        workspace = await session.get(Workspace, account["workspace_id"])
+        assert workspace is not None
+        start_boundary = workspace_day_boundary(workspace, start)
+    await add_test_leg(client, account["id"], "120", start_boundary)
+
+    created = await client.post(
+        f"/api/v1/accounts/{account['id']}/periods",
+        json={
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "rollover_policy": "carry_next_day",
+            "funding_amount": "999999",
+        },
+    )
+    assert created.status_code == 201, created.text
+    carried = created.json()
+    assert carried["rollover_policy"] == "carry_next_day"
+    assert carried["opening_balance"] == carried["funding_amount"] == "120.00"
+    spent = await client.post(
+        "/api/v1/operations/spend",
+        json={"account_id": account["id"], "amount": "30"},
+    )
+    assert spent.status_code == 201, spent.text
+    before = await client.get(f"/api/v1/account-periods/{carried['id']}")
+    assert before.status_code == 200
+    state_before = await stored_period_contract_state(client, carried["id"])
+
+    patched = await client.patch(
+        f"/api/v1/account-periods/{carried['id']}",
+        json={"rollover_policy": "redistribute_remaining_days"},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["rollover_policy"] == "redistribute_remaining_days"
+    assert patched.json()["available_today"] != before.json()["available_today"]
+    state_after = await stored_period_contract_state(client, carried["id"])
+    assert state_after[:4] == state_before[:4]
+    assert state_after[4] == "redistribute_remaining_days"
+    assert state_after[5:] == state_before[5:]
+
+    combined_end = end + timedelta(days=1)
+    combined = await client.patch(
+        f"/api/v1/account-periods/{carried['id']}",
+        json={
+            "start_date": start.isoformat(),
+            "end_date": combined_end.isoformat(),
+            "rollover_policy": "carry_next_day",
+            "confirm_ended_period": True,
+        },
+    )
+    assert combined.status_code == 200, combined.text
+    assert combined.json()["start_date"] == start.isoformat()
+    assert combined.json()["end_date"] == combined_end.isoformat()
+    assert combined.json()["rollover_policy"] == "carry_next_day"
+    combined_state = await stored_period_contract_state(client, carried["id"])
+    assert combined_state[0] == state_after[0]
+    assert combined_state[1] == combined_end
+    assert combined_state[2:4] == state_after[2:4]
+    assert combined_state[4] == "carry_next_day"
+    assert combined_state[5:] == state_after[5:]
+
+
+async def test_patch_can_return_ended_shape_then_current_lookup_is_null(client):
+    await register(client)
+    account = await create_account(client, "Resulting ended USD", "USD", "10")
+    today = local_today()
+    current = await create_period(
+        client,
+        account["id"],
+        "999",
+        today - timedelta(days=1),
+        today + timedelta(days=1),
+    )
+    ended = await client.patch(
+        f"/api/v1/account-periods/{current['id']}",
+        json={
+            "start_date": (today - timedelta(days=4)).isoformat(),
+            "end_date": (today - timedelta(days=2)).isoformat(),
+        },
+    )
+    assert ended.status_code == 200, ended.text
+    assert set(ended.json()) == COMMON_PERIOD_KEYS
+    assert ended.json()["status"] == "ended"
+    assert ended.json()["remaining"] is None
+    assert (
+        await client.get(f"/api/v1/accounts/{account['id']}/periods/current")
+    ).json() is None
+
+
+async def test_period_request_validation_is_exhaustive_and_mutation_neutral(client):
+    await register(client)
+    account = await create_account(client, "Validation USD", "USD", "25")
+    today = local_today()
+    create_route = f"/api/v1/accounts/{account['id']}/periods"
+    async with client._finapp_test_sessions() as session:
+        original_transactions = len(
+            list((await session.execute(select(Transaction))).scalars())
+        )
+        original_legs = len(
+            list((await session.execute(select(TransactionLeg))).scalars())
+        )
+    forbidden = {
+        "snapshot_at": datetime.now(UTC).isoformat(),
+        "opening_balance": "1",
+        "closing_balance": "1",
+        "current_balance": "1",
+        "account_balance": "1",
+        "remaining": "1",
+        "planned": "1",
+        "account_id": account["id"],
+        "asset_id": account["asset"]["id"],
+        "created_by_user_id": 1,
+        "status": "current",
+        "created_at": datetime.now(UTC).isoformat(),
+        "closed_at": datetime.now(UTC).isoformat(),
+    }
+    invalid_create_bodies = [
+        {"end_date": today.isoformat(), key: value}
+        for key, value in forbidden.items()
+    ] + [
+        {"end_date": today.isoformat(), "start_date": None},
+        {"end_date": today.isoformat(), "rollover_policy": None},
+        {"end_date": today.isoformat(), "funding_amount": None},
+        {"end_date": today.isoformat(), "funding_amount": "not-a-decimal"},
+        {"end_date": today.isoformat(), "rollover_policy": "unknown"},
+        {
+            "start_date": (today + timedelta(days=1)).isoformat(),
+            "end_date": (today + timedelta(days=2)).isoformat(),
+        },
+        {
+            "start_date": today.isoformat(),
+            "end_date": (today - timedelta(days=1)).isoformat(),
+        },
+    ]
+    for body in invalid_create_bodies:
+        response = await client.post(create_route, json=body)
+        assert response.status_code == 422, (body, response.text)
+    async with client._finapp_test_sessions() as session:
+        assert list((await session.execute(select(AccountPeriod))).scalars()) == []
+        assert len(list((await session.execute(select(Transaction))).scalars())) == (
+            original_transactions
+        )
+        assert len(list((await session.execute(select(TransactionLeg))).scalars())) == (
+            original_legs
+        )
+
+    valid = await client.post(create_route, json={"end_date": today.isoformat()})
+    assert valid.status_code == 201, valid.text
+    period_id = valid.json()["id"]
+    before = await stored_period_contract_state(client, period_id)
+    patch_route = f"/api/v1/account-periods/{period_id}"
+    for key, value in forbidden.items():
+        response = await client.patch(patch_route, json={key: value})
+        assert response.status_code == 422, (key, response.text)
+    for body in (
+        {},
+        {"confirm_ended_period": True},
+        {"start_date": None},
+        {"end_date": None},
+        {"rollover_policy": None},
+        {"rollover_policy": "unknown"},
+    ):
+        response = await client.patch(patch_route, json=body)
+        assert response.status_code == 422, (body, response.text)
+    for body in (
+        {"funding_amount": "1"},
+        {"funding_amount": None},
+        {"funding_amount": "not-a-decimal"},
+        {"funding_amount": "1", "end_date": today.isoformat()},
+    ):
+        response = await client.patch(patch_route, json=body)
+        assert response.status_code == 422, (body, response.text)
+        assert response.json()["detail"] == "Funding amount is not editable"
+    assert await stored_period_contract_state(client, period_id) == before
+
+
+async def test_response_quantization_preserves_stored_exact_money(client):
+    await register(client)
+    today = local_today()
+    usd = await create_account(client, "Round half up USD", "USD", "0")
+    eth = await create_account(client, "Exact ETH", "ETH", "0")
+    for account, amount in (
+        (usd, "1.005"),
+        (eth, "0.123456789012345678"),
+    ):
+        async with client._finapp_test_sessions() as session:
+            workspace = await session.get(Workspace, account["workspace_id"])
+            assert workspace is not None
+            boundary = workspace_day_boundary(workspace, today)
+        await add_test_leg(client, account["id"], amount, boundary)
+    usd_period = await create_period(client, usd["id"], "999", today, today)
+    eth_period = await create_period(client, eth["id"], "999", today, today)
+    assert usd_period["opening_balance"] == "1.01"
+    assert usd_period["current_balance"] == "1.01"
+    assert eth_period["opening_balance"] == "0.123456789012345678"
+    assert eth_period["current_balance"] == "0.123456789012345678"
+    async with client._finapp_test_sessions() as session:
+        usd_row = await session.get(AccountPeriod, usd_period["id"])
+        assert usd_row is not None
+        assert usd_row.opening_balance == Decimal("1.005")
+
+
+async def test_period_routes_capture_one_coherent_reference_time(client, monkeypatch):
+    await register(client)
+    account = await create_account(client, "Coherent list USD", "USD", "10")
+    today = local_today()
+    await create_period(
+        client,
+        account["id"],
+        "999",
+        today - timedelta(days=3),
+        today - timedelta(days=2),
+    )
+    await create_period(client, account["id"], "999", today, today)
+    fixed = datetime.now(UTC).replace(tzinfo=None)
+    calls = []
+
+    class CountingDateTime(datetime):
+        @classmethod
+        def now(cls, timezone=None):
+            calls.append(timezone)
+            aware = fixed.replace(tzinfo=UTC)
+            return aware if timezone is None else aware.astimezone(timezone)
+
+    monkeypatch.setattr("app.periods.datetime", CountingDateTime)
+    response = await client.get(f"/api/v1/accounts/{account['id']}/periods")
+    assert response.status_code == 200, response.text
+    assert {item["status"] for item in response.json()} == {"current", "ended"}
+    assert calls == [UTC]
+
+
+def test_period_routes_do_not_query_legacy_plan_or_rebase_inputs():
+    source = Path("app/periods.py").read_text()
+    assert "PlanOccurrence" not in source
+    assert "PlanRule" not in source
+    assert "RebaseEvent" not in source
+    assert "compute_budget" not in source

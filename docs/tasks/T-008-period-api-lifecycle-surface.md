@@ -343,6 +343,88 @@ the review; the implementer records it verbatim following
   regressions `31 passed`; diff-check passed.
 - Verdict: approved; no P0–P3 findings.
 
+### Block 2 — period request/response/routes, Pass 1
+
+- Reviewer task name/vendor: `/root/t008_api_routes_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `93e7297`; complete
+  uncommitted manifest in `app/schemas.py`, `app/periods.py`,
+  `tests/test_period_api_v21.py`, and bounded superseded assertions in
+  `tests/test_periods_v2.py`, `tests/test_period_start_replay_v2.py`,
+  `tests/test_operations_v2.py`, and `tests/test_operations_undo_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only implementation review of T-008 Block 2 at uncommitted manifest over `93e7297`.
+  >
+  > P0: None.
+  >
+  > P1 — Transitional PATCH `funding_amount` does not always return the frozen exact error contract. `AccountPeriodPatch.funding_amount` is validated as `DecimalAmount` before the handler, so a supplied invalid Decimal such as `"not-a-decimal"` returns Pydantic’s structured `decimal_parsing` response instead of HTTP `422` detail `Funding amount is not editable`. The task explicitly requires that detail for transitional PATCH `funding_amount` always, alone or combined. Accept the dormant value without Decimal pre-validation so the handler can reject every supplied value uniformly, and add invalid-value coverage alongside valid/null/combined cases.
+  >
+  > P2 — Required policy-request coverage is incomplete. The focused tests prove omitted-policy create, explicit `carry_next_day` create, and a redistribution PATCH combined with ignored `confirm_ended_period`, but they do not prove explicit `redistribute_remaining_days` create, a genuinely policy-only PATCH without the compatibility flag, or a combined multi-business-field PATCH containing policy with Start/end. The task explicitly requires create defaults/explicit policies plus policy-only and combined PATCH coverage. Add those cases with persistence, immediate response, and ledger/transaction/Rebase mutation-neutral assertions.
+  >
+  > P3: None.
+  >
+  > Verdict: CHANGES REQUIRED. The response unions and exact current/ended/closed key separation, `current|null` route, one captured naive UTC reference per route, close cutoff/timestamp reuse, Decimal presentation including 18 places, removal of Plan/Rebase consumption, lifecycle guards, owner-private 404 behavior, and Block 2 scope boundaries otherwise match the reviewed contract.
+  >
+  > Evidence:
+  >
+  > - `56 passed`:
+  >   `tests/test_period_api_v21.py`, `tests/test_periods_v2.py`,
+  >   `tests/test_period_lifecycle_v2.py`,
+  >   `tests/test_period_start_replay_v2.py`,
+  >   `tests/test_operations_v2.py`,
+  >   `tests/test_operations_undo_v2.py`.
+  > - `git diff --check` passed.
+  > - Schema probe confirmed `"not-a-decimal"` fails before the route with `decimal_parsing`.
+  > - No files edited, no branch switched, no commit created.
+- Resolution: PATCH keeps the legacy member dormant as `object | None`, so
+  every supplied JSON value reaches the one exact handler rejection while
+  create retains Decimal validation. Focused coverage now includes invalid
+  PATCH funding, explicit redistribution create, a policy-only PATCH, and a
+  combined Start/end/policy PATCH with response, persistence, and
+  transaction/leg/Rebase neutrality assertions.
+- Verdict: changes required; fresh re-review completed below.
+
+### Block 2 — period request/response/routes, Pass 2
+
+- Reviewer task name/vendor: `/root/t008_api_routes_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `93e7297`; complete
+  corrected Block 2 working-tree manifest listed in Pass 1.
+- Findings (verbatim, P0–P3):
+
+  > Read-only re-review of T-008 Block 2 fixes over `93e7297`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: APPROVED.
+  >
+  > Both prior findings are closed:
+  >
+  > - `AccountPeriodCreate.funding_amount` remains `DecimalAmount | None`, and invalid create funding still fails Decimal validation with `decimal_parsing`.
+  > - `AccountPeriodPatch.funding_amount` is now a dormant `object | None`; strings, mappings, arrays, null, and numbers preserve `model_fields_set` and reach the handler, which uniformly returns HTTP `422` detail `Funding amount is not editable`. Focused coverage includes invalid Decimal text, valid, null, and combined cases.
+  > - Explicit redistribution create now checks immediate response, persisted policy, and unchanged transaction/leg/Rebase counts.
+  > - A genuine policy-only PATCH checks immediate recalculated response, persistence, and unchanged financial state.
+  > - Combined Start/end/policy PATCH checks immediate response, persisted fields/snapshot state, and unchanged transaction/leg/Rebase counts; ignored `confirm_ended_period` is also exercised.
+  >
+  > Evidence:
+  >
+  > - `tests/test_period_api_v21.py`: `11 passed`.
+  > - Bounded lifecycle/period/operations regression set: `45 passed`.
+  > - Combined reviewed total: `56 passed`.
+  > - `git diff --check` passed.
+  > - No files edited, no branch switched, no commit created.
+- Resolution: all P0–P2 findings are closed; no further changes required.
+- Reviewer checks: focused `11 passed`; bounded regressions `45 passed`;
+  diff-check passed.
+- Verdict: approved; no P0–P3 findings.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -368,3 +450,9 @@ ends. Date · agent · what landed · what is left · open questions.
   independently approved with no P0–P3 findings. Focused `4 passed`, pure
   policies `27 passed`, period regressions `31 passed`, and diff-check passed.
   Block 2 request/response/routes remains; no open question.
+- 2026-08-09 Codex: Block 2 period request/response/routes implemented. Review
+  Pass 1 found one P1 uniform legacy-funding rejection defect and one P2
+  policy-coverage gap; both were fixed and Pass 2 approved with no P0–P3.
+  Focused `11 passed`, bounded regressions `45 passed`, full suite
+  `171 passed`, node syntax and diff-check passed. Block 3 Transactions-filter
+  parity remains; no open question.

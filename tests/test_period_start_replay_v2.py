@@ -222,7 +222,7 @@ async def test_start_replay_moves_backward_and_forward_without_ledger_change(cli
         json={"start_date": (today - timedelta(days=2)).isoformat()},
     )
     assert backward.status_code == 200, backward.text
-    assert backward.json()["funding_amount"] == "5.000000000000000001"
+    assert backward.json()["funding_amount"] == "5.00000000"
 
     reference_time = forward_boundary + timedelta(hours=1)
     async with client._finapp_test_sessions() as session:

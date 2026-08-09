@@ -93,10 +93,10 @@ async def test_operations_actions_replay_selected_account_periods(client):
     assert added.status_code == 201, added.text
     assert (
         await client.get(f"/api/v1/account-periods/{source_period['id']}")
-    ).json()["remaining"] == "-60"
+    ).json()["remaining"] == "-60.00"
     assert (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
-    ).json()["remaining"] == "55"
+    ).json()["remaining"] == "55.00"
 
 
 async def test_operations_routes_keep_transaction_validation(client):

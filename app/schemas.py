@@ -198,9 +198,12 @@ class AccountSummaryOut(BaseModel):
 class AccountPeriodCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    start_date: date
+    start_date: date | None = None
     end_date: date
-    funding_amount: DecimalAmount
+    rollover_policy: Literal[
+        "carry_next_day", "redistribute_remaining_days"
+    ] | None = None
+    funding_amount: DecimalAmount | None = None
 
 
 class AccountPeriodPatch(BaseModel):
@@ -208,24 +211,54 @@ class AccountPeriodPatch(BaseModel):
 
     start_date: date | None = None
     end_date: date | None = None
-    funding_amount: DecimalAmount | None = None
+    rollover_policy: Literal[
+        "carry_next_day", "redistribute_remaining_days"
+    ] | None = None
+    funding_amount: object | None = None
     confirm_ended_period: bool = False
 
 
-class AccountPeriodOut(BaseModel):
+class AccountPeriodCommonOut(BaseModel):
     id: int
     account_id: int
     asset: AssetOut
     created_by_user_id: int
     start_date: date
     end_date: date
+    snapshot_at: datetime
+    opening_balance: Decimal
+    rollover_policy: Literal["carry_next_day", "redistribute_remaining_days"]
     funding_amount: Decimal
+    planned: Decimal
+    created_at: datetime
+
+
+class AccountPeriodCurrentOut(AccountPeriodCommonOut):
+    status: Literal["current"]
+    closed_at: None = None
+    closing_balance: None = None
+    current_balance: Decimal
     available_today: Decimal
     remaining: Decimal
-    planned: Decimal
-    status: Literal["upcoming", "current", "ended", "closed"]
-    created_at: datetime
-    closed_at: datetime | None
+
+
+class AccountPeriodEndedOut(AccountPeriodCommonOut):
+    status: Literal["ended"]
+    closed_at: None = None
+    closing_balance: None = None
+    remaining: None = None
+
+
+class AccountPeriodClosedOut(AccountPeriodCommonOut):
+    status: Literal["closed"]
+    closed_at: datetime
+    closing_balance: Decimal
+    remaining: Decimal
+
+
+AccountPeriodOut = (
+    AccountPeriodCurrentOut | AccountPeriodEndedOut | AccountPeriodClosedOut
+)
 
 
 class TransactionLegOut(BaseModel):

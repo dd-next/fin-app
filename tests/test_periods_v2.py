@@ -107,7 +107,7 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     account = await create_account(client, "Period USD", "USD", "900")
     period = await create_period(client, account["id"], "900")
     assert period["status"] == "current"
-    assert period["remaining"] == "900"
+    assert period["remaining"] == "900.00"
 
     spent = await client.post(
         "/api/v1/operations/spend",
@@ -120,7 +120,7 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert spent.status_code == 201, spent.text
     leg_created_at = spent.json()["legs"][0]["created_at"]
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "875"
+    assert replayed["remaining"] == "875.00"
 
     corrected = await client.patch(
         f"/api/v1/transactions/{spent.json()['id']}", json={"amount": "40"}
@@ -128,14 +128,14 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert corrected.status_code == 200, corrected.text
     assert corrected.json()["legs"][0]["created_at"] == leg_created_at
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "860"
+    assert replayed["remaining"] == "860.00"
 
     voided = await client.post(
         f"/api/v1/transactions/{spent.json()['id']}/delete"
     )
     assert voided.status_code == 200, voided.text
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "900"
+    assert replayed["remaining"] == "900.00"
 
 
 async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
@@ -192,7 +192,7 @@ async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
         today + timedelta(days=2),
     )
 
-    assert successor["funding_amount"] == "150"
+    assert successor["funding_amount"] == "150.00"
     async with client._finapp_test_sessions() as session:
         successor_row = await session.get(AccountPeriod, successor["id"])
         assert successor_row is not None
@@ -337,7 +337,8 @@ async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeyp
     monkeypatch.setattr("app.periods.datetime", FrozenDateTime)
     closed = await client.post(f"/api/v1/account-periods/{period['id']}/close")
     assert closed.status_code == 200, closed.text
-    closed_available = closed.json()["available_today"]
+    assert "available_today" not in closed.json()
+    assert "current_balance" not in closed.json()
 
     async with client._finapp_test_sessions() as session:
         closed_row = await session.get(AccountPeriod, period["id"])
@@ -358,8 +359,9 @@ async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeyp
         assert closed_row.closing_balance == Decimal("95")
     closed_again = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert closed_again.status_code == 200
-    assert closed_again.json()["remaining"] == "95"
-    assert closed_again.json()["available_today"] == closed_available
+    assert closed_again.json()["remaining"] == "95.00"
+    assert "available_today" not in closed_again.json()
+    assert "current_balance" not in closed_again.json()
 
 
 async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation(client):
@@ -394,7 +396,9 @@ async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation
     response = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert response.status_code == 200
     assert response.json()["status"] == "ended"
-    assert response.json()["remaining"] == "-10"
+    assert response.json()["remaining"] is None
+    assert "available_today" not in response.json()
+    assert "current_balance" not in response.json()
     async with client._finapp_test_sessions() as session:
         period_row = await session.get(AccountPeriod, period["id"])
         assert period_row is not None
@@ -450,8 +454,8 @@ async def test_transfer_replays_signed_legs_in_both_account_periods(client):
     target_out = (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
     ).json()
-    assert source_out["remaining"] == "875"
-    assert target_out["remaining"] == "225"
+    assert source_out["remaining"] == "875.00"
+    assert target_out["remaining"] == "225.00"
 
 
 async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
@@ -496,7 +500,7 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     vnd_out = (
         await client.get(f"/api/v1/account-periods/{vnd_period['id']}")
     ).json()
-    assert usd_out["remaining"] == "910"
+    assert usd_out["remaining"] == "910.00"
     assert vnd_out["remaining"] == "2510000"
 
     voided = await client.post(
@@ -509,7 +513,7 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     vnd_out = (
         await client.get(f"/api/v1/account-periods/{vnd_period['id']}")
     ).json()
-    assert usd_out["remaining"] == "1015"
+    assert usd_out["remaining"] == "1015.00"
     assert vnd_out["remaining"] == "10000"
 
 
@@ -610,8 +614,8 @@ async def test_current_history_and_planned_is_informational(client):
     ).json()
     assert [item["id"] for item in current_items] == [current["id"]]
     assert [item["id"] for item in history_items] == [past["id"]]
-    assert current_items[0]["planned"] == "70"
-    assert current_items[0]["remaining"] == "-7"
+    assert current_items[0]["planned"] == "0.00"
+    assert current_items[0]["remaining"] == "-7.00"
 
 
 def test_budget_replay_is_pure_and_preserves_full_decimal_precision():
@@ -674,14 +678,14 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60"},
     )
-    assert rejected.status_code == 409
-    assert rejected.json()["detail"] == "Ended account period is read-only"
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == "Funding amount is not editable"
     confirmed = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60", "confirm_ended_period": True},
     )
-    assert confirmed.status_code == 409
-    assert confirmed.json()["detail"] == "Ended account period is read-only"
+    assert confirmed.status_code == 422
+    assert confirmed.json()["detail"] == "Funding amount is not editable"
 
     overlap = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
@@ -711,7 +715,7 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
             f"/api/v1/account-periods/{current['id']}",
             json={"funding_amount": "130", "confirm_ended_period": True},
         )
-    ).status_code == 409
+    ).status_code == 422
     assert (
         await client.post(f"/api/v1/account-periods/{current['id']}/close")
     ).status_code == 409
@@ -749,9 +753,12 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     )
     assert posted.status_code == 201, posted.text
     transaction_id = posted.json()["id"]
-    assert (
+    ended_out = (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "0"
+    ).json()
+    assert ended_out["remaining"] is None
+    assert "available_today" not in ended_out
+    assert "current_balance" not in ended_out
 
     rejected_patch = await client.patch(
         f"/api/v1/transactions/{transaction_id}", json={"amount": "20"}
@@ -764,7 +771,7 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     assert confirmed_patch.status_code == 200, confirmed_patch.text
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "0"
+    ).json()["remaining"] is None
     assert (
         await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     ).status_code == 409
@@ -775,7 +782,7 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     assert confirmed_void.status_code == 200, confirmed_void.text
     assert (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] == "0"
+    ).json()["remaining"] is None
 
     current = await create_period(
         client, account["id"], "100", today - timedelta(days=1), today + timedelta(days=1)
@@ -819,6 +826,9 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
         await client.get(f"/api/v1/accounts/{account['id']}/periods")
     ).status_code == 404
     assert (
+        await client.get(f"/api/v1/accounts/{account['id']}/periods/current")
+    ).status_code == 404
+    assert (
         await client.post(
             f"/api/v1/accounts/{account['id']}/periods",
             json={
@@ -854,6 +864,27 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
     owner_period = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert owner_period.status_code == 200
     assert owner_period.json()["status"] == "closed"
+
+    await register(client, "charlie")
+    foreign_period_routes = (
+        ("get", f"/api/v1/accounts/{account['id']}/periods", None),
+        ("get", f"/api/v1/accounts/{account['id']}/periods/current", None),
+        (
+            "post",
+            f"/api/v1/accounts/{account['id']}/periods",
+            {"end_date": local_today().isoformat()},
+        ),
+        ("get", f"/api/v1/account-periods/{period['id']}", None),
+        (
+            "patch",
+            f"/api/v1/account-periods/{period['id']}",
+            {"end_date": local_today().isoformat()},
+        ),
+        ("post", f"/api/v1/account-periods/{period['id']}/close", None),
+    )
+    for method, route, body in foreign_period_routes:
+        response = await client.request(method, route, json=body)
+        assert response.status_code == 404, (method, route, response.text)
 
 
 async def test_resulting_period_state_and_moved_leg_membership_are_guarded(client):

@@ -95,10 +95,10 @@ async def test_transfer_undo_consumes_every_root_leg_and_replays_periods(client)
     assert await balance(client, target["id"]) == Decimal("2")
     assert (
         await client.get(f"/api/v1/account-periods/{source_period['id']}")
-    ).json()["remaining"] == "99"
+    ).json()["remaining"] == "99.00"
     assert (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
-    ).json()["remaining"] == "2"
+    ).json()["remaining"] == "2.00"
 
 
 async def test_undo_rejects_a_stale_candidate_confirmed_in_another_tab(client):
