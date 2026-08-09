@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: Enforce account-period close, expiry, and successor lifecycle
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §4–§5
 blocked-by: [T-002]
