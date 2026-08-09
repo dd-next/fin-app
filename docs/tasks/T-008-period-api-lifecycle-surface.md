@@ -1,13 +1,13 @@
 ---
 id: T-008
 title: Synchronize the period API and lifecycle response surface
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6–§9; design/MOBILE-BACKEND-GAP-AUDIT.md period API rows
 blocked-by: [T-004, T-005, T-006, T-007]
 branch: task/T-008-period-api-lifecycle-surface
-base-commit:
-implementer:
+base-commit: 16cb6b59b337b65f6551a67337a8eba76f982c09
+implementer: Codex
 readiness-reviewed-by: /root/t008_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: c6a1b8f
 readiness-verdict: ready
@@ -315,3 +315,7 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: readiness Pass 2 approved T-008 with no P0–P2 findings;
   its wording-only P3 was resolved. Readiness evidence is complete. Owner
   promotion, exact branch claim, and implementation remain; no open question.
+- 2026-08-09 Codex: owner promoted T-008 at `16cb6b5`; exact branch
+  `task/T-008-period-api-lifecycle-surface` was atomically claimed from that
+  promotion HEAD and records the full base hash above. Block 1 allowance
+  projection is next; no open question.
