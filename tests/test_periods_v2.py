@@ -406,7 +406,7 @@ async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation
         ) == [(period_row.end_date, Decimal("-10"))]
 
 
-async def test_same_account_overlap_rejected_cross_account_overlap_allowed(client):
+async def test_same_account_current_rejected_cross_account_current_allowed(client):
     await register(client)
     first = await create_account(client, "First period USD", "USD")
     second = await create_account(client, "Second period USD", "USD")
@@ -423,7 +423,7 @@ async def test_same_account_overlap_rejected_cross_account_overlap_allowed(clien
         },
     )
     assert overlap.status_code == 409
-    assert "overlap" in overlap.json()["detail"].lower()
+    assert overlap.json()["detail"] == "Account already has a current period"
     await create_period(client, second["id"], "50", start, end)
 
 

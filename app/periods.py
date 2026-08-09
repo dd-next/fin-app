@@ -7,7 +7,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import require_user
@@ -102,25 +102,28 @@ async def initial_snapshot_at(
     account_id: int,
     start_date: date,
     workspace: Workspace,
+    today: date,
 ) -> datetime:
     snapshot_at = workspace_day_boundary(workspace, start_date)
-    predecessor = (
-        await session.execute(
-            select(AccountPeriod)
-            .where(
-                AccountPeriod.account_id == account_id,
-                AccountPeriod.end_date < start_date,
+    predecessors = list(
+        (
+            await session.execute(
+                select(AccountPeriod).where(
+                    AccountPeriod.account_id == account_id,
+                    or_(
+                        AccountPeriod.closed_at.is_not(None),
+                        AccountPeriod.end_date < today,
+                    ),
+                )
             )
-            .order_by(AccountPeriod.end_date.desc(), AccountPeriod.id.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
-    if predecessor is None:
-        return snapshot_at
-    predecessor_boundary = predecessor.closed_at or workspace_day_boundary(
-        workspace, predecessor.end_date + timedelta(days=1)
+        ).scalars()
     )
-    return max(snapshot_at, predecessor_boundary)
+    for predecessor in predecessors:
+        predecessor_boundary = predecessor.closed_at or workspace_day_boundary(
+            workspace, predecessor.end_date + timedelta(days=1)
+        )
+        snapshot_at = max(snapshot_at, predecessor_boundary)
+    return snapshot_at
 
 
 def period_status(period: AccountPeriod, today: date) -> str:
@@ -270,6 +273,34 @@ async def ensure_no_overlap(
     if (await session.execute(statement.limit(1))).scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=409, detail="Account period dates overlap an existing period"
+        )
+
+
+async def ensure_no_current_period(
+    session: AsyncSession,
+    *,
+    account_id: int,
+    start_date: date,
+    end_date: date,
+    today: date,
+) -> None:
+    if not (start_date <= today <= end_date):
+        return
+    current_id = (
+        await session.execute(
+            select(AccountPeriod.id)
+            .where(
+                AccountPeriod.account_id == account_id,
+                AccountPeriod.closed_at.is_(None),
+                AccountPeriod.start_date <= today,
+                AccountPeriod.end_date >= today,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if current_id is not None:
+        raise HTTPException(
+            status_code=409, detail="Account already has a current period"
         )
 
 
@@ -460,24 +491,31 @@ async def create_account_period(
     user: User = Depends(require_user),
     session: AsyncSession = Depends(get_session),
 ):
+    # SQLite begins deferred transactions by default. Reserve the writer before
+    # the current-period guard and snapshot reads so concurrent creates cannot
+    # both observe the same account as eligible.
+    await session.execute(text("BEGIN IMMEDIATE"))
     account = await require_owned_account(session, account_id, user.id)
     workspace = await session.get(Workspace, account.workspace_id)
     assert workspace is not None
+    today = workspace_today(workspace)
     if body.end_date < body.start_date:
         raise HTTPException(status_code=422, detail="End date must not precede start date")
-    if body.start_date > workspace_today(workspace):
+    if body.start_date > today:
         raise HTTPException(status_code=422, detail="Start date must not be in the future")
-    await ensure_no_overlap(
+    await ensure_no_current_period(
         session,
         account_id=account.id,
         start_date=body.start_date,
         end_date=body.end_date,
+        today=today,
     )
     snapshot_at = await initial_snapshot_at(
         session,
         account_id=account.id,
         start_date=body.start_date,
         workspace=workspace,
+        today=today,
     )
     period = AccountPeriod(
         account_id=account.id,

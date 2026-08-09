@@ -335,6 +335,67 @@ the review; the implementer records it verbatim following
   diff --check` passed.
 - Verdict: approved; prior P2/P3 findings are closed.
 
+### Pass 4 — successor creation review
+
+- Reviewer task name/vendor: `/root/t004_successor_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `e4946bd`; modified
+  `app/periods.py`, `tests/test_period_lifecycle_v2.py`, and
+  `tests/test_periods_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > Bounded read-only review of `e4946bd..working tree` (`app/periods.py`, `tests/test_period_lifecycle_v2.py`, `tests/test_periods_v2.py`) against T-004 successor acceptance, ACCOUNT_PERIODS-v2.1 §§4–5, and ADR-0005:
+  >
+  > P0: None.
+  >
+  > P1 — The same-account current-period guard is still a check-then-insert race under SQLite, so the implementation does not enforce the required invariant atomically. `create_account_period` performs a normal SELECT in `ensure_no_current_period`, then separately reads predecessors/balance and inserts before commit (`app/periods.py:502-529`); `AccountPeriod` has no uniqueness constraint capable of rejecting the second current row (`app/models.py:513-529`), and the default deferred SQLite transaction does not acquire a write lock on those reads (`app/db.py:23-29`). Two concurrent create requests can both observe no current period and both proceed; the new tests cover only sequential rejection (`tests/test_period_lifecycle_v2.py:315-336`). Acquire the SQLite write reservation before the guard/snapshot reads (or provide an equivalent serialization mechanism that remains within the no-schema-change scope), then add a focused concurrent-create test proving exactly one 201 and one conflict and exactly one persisted current row. The guard, predecessor selection, posted-balance snapshot, and insert must all remain in that serialized transaction.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: **changes required**. Apart from the concurrency defect, the bounded diff correctly permits closed/ended original-range overlaps, keeps accounts independent, chooses the maximum eligible historical close/end boundary, preserves naive-UTC boundary conventions and Decimal ledger reconstruction, and the same-day/manual-close and non-UTC/two-predecessor tests prove equality partitioning as requested. No T-007 start-edit or T-008 API-contract scope drift was introduced. `git diff --check e4946bd -- app/periods.py tests/test_period_lifecycle_v2.py tests/test_periods_v2.py` passed.
+- Resolution: `BEGIN IMMEDIATE` now reserves the SQLite writer before account
+  guard, predecessor selection, exact posted-balance reconstruction, and
+  successor insert; a file-backed scratch SQLite concurrency test proves one
+  `201`, one `409`, and exactly one persisted current row.
+- Reviewer checks: bounded diff inspection; `git diff --check` passed.
+- Verdict: changes required; corrected and submitted for fresh re-review.
+
+### Pass 5 — successor creation re-review
+
+- Reviewer task name/vendor: `/root/t004_successor_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `e4946bd`; complete
+  successor-block working tree.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Verdict: **APPROVED**.
+  >
+  > `BEGIN IMMEDIATE` is acquired before all endpoint account-guard, predecessor, balance, and insert operations. Authentication commits the shared request session before handler entry, so the reservation does not nest inside an active auth transaction.
+  >
+  > The file-backed scratch test uses separate request-scoped sessions with the pooled SQLite engine and concurrent requests. It proves one `201`, one `409`, the expected conflict detail, and exactly one persisted current period.
+  >
+  > Re-verified:
+  >
+  > - Lifecycle tests: `8 passed`
+  > - Periods + Undo tests: `25 passed`
+  > - Bounded `git diff --check`: passed
+  > - Same-day/manual-close and natural-expiry boundaries, overlap rules, Decimal precision, timezone handling, and equality partitioning remain correct.
+  > - No schema, T-007, or T-008 scope drift.
+- Resolution: none required.
+- Reviewer checks: lifecycle `8 passed`; periods plus Undo `25 passed`;
+  bounded `git diff --check` passed.
+- Verdict: approved; prior concurrency P1 is closed.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
