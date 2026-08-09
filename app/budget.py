@@ -112,6 +112,40 @@ def _asset_precision_quantum(quantum: Decimal) -> Decimal:
     return normalized
 
 
+def _prepare_allowance_inputs(
+    pool_start: Decimal,
+    start_date: date,
+    end_date: date,
+    effects: Iterable[DatedAmount],
+    today: date | None,
+    quantum: Decimal,
+) -> tuple[Decimal, date, int, int, dict[date, Decimal], Decimal]:
+    if end_date < start_date:
+        raise ValueError("end_date must not precede start_date")
+    normalized_quantum = _asset_precision_quantum(quantum)
+    reference_day = today if today is not None else date.today()
+    reference_day = _clamp_day(reference_day, start_date, end_date)
+    total = days_total(start_date, end_date)
+    remaining_days = (end_date - reference_day).days + 1
+    net_by_day: dict[date, Decimal] = {}
+    for day, effect in effects:
+        if day < start_date or day > end_date or day > reference_day:
+            raise ValueError(
+                "effects must be assigned within the period through the reference day"
+            )
+        net_by_day[day] = _exact_sum(
+            (net_by_day.get(day, ZERO), Decimal(effect))
+        )
+    return (
+        Decimal(pool_start),
+        reference_day,
+        total,
+        remaining_days,
+        net_by_day,
+        normalized_quantum,
+    )
+
+
 def days_total(start_date: date, end_date: date) -> int:
     """Number of days in the period, inclusive of both endpoints."""
     return (end_date - start_date).days + 1
@@ -132,25 +166,16 @@ def compute_carry_next_day(
     the bounded reference day. Negative values are outflows; positive values
     are inflows.
     """
-    if end_date < start_date:
-        raise ValueError("end_date must not precede start_date")
-    quantum = _asset_precision_quantum(quantum)
-    reference_day = today if today is not None else date.today()
-    reference_day = _clamp_day(reference_day, start_date, end_date)
-    total = days_total(start_date, end_date)
-    remaining_days = (end_date - reference_day).days + 1
-
-    net_by_day: dict[date, Decimal] = {}
-    for day, effect in effects:
-        if day < start_date or day > end_date or day > reference_day:
-            raise ValueError(
-                "effects must be assigned within the period through the reference day"
-            )
-        net_by_day[day] = _exact_sum(
-            (net_by_day.get(day, ZERO), Decimal(effect))
-        )
-
-    pool_start = Decimal(pool_start)
+    (
+        pool_start,
+        reference_day,
+        total,
+        remaining_days,
+        net_by_day,
+        quantum,
+    ) = _prepare_allowance_inputs(
+        pool_start, start_date, end_date, effects, today, quantum
+    )
     daily_base = _quotient(pool_start, total)
     carry = ZERO
     balance_after_day = pool_start
@@ -185,6 +210,77 @@ def compute_carry_next_day(
         daily_base=round_to_quantum(daily_base, quantum),
         available_today=round_to_quantum(available_today, quantum),
     )
+
+
+def compute_redistribute_remaining_days(
+    pool_start: Decimal,
+    start_date: date,
+    end_date: date,
+    effects: Iterable[DatedAmount],
+    *,
+    today: date | None = None,
+    quantum: Decimal = TWO_PLACES,
+) -> AllowanceResult:
+    """Redistribute exact start-of-day balance across remaining period days."""
+    (
+        pool_start,
+        reference_day,
+        total,
+        remaining_days,
+        net_by_day,
+        quantum,
+    ) = _prepare_allowance_inputs(
+        pool_start, start_date, end_date, effects, today, quantum
+    )
+    current_balance = _exact_sum((pool_start, *net_by_day.values()))
+    today_net = net_by_day.get(reference_day, ZERO)
+    start_of_day_balance = _difference(current_balance, today_net)
+    daily_base = _quotient(start_of_day_balance, remaining_days)
+    available_today = _exact_sum((daily_base, today_net))
+    return AllowanceResult(
+        days_total=total,
+        days_remaining=remaining_days,
+        current_balance=current_balance,
+        daily_base_exact=daily_base,
+        carry_exact=ZERO,
+        available_before_today_effects_exact=daily_base,
+        today_net=today_net,
+        available_today_exact=available_today,
+        daily_base=round_to_quantum(daily_base, quantum),
+        available_today=round_to_quantum(available_today, quantum),
+    )
+
+
+def compute_allowance(
+    pool_start: Decimal,
+    start_date: date,
+    end_date: date,
+    effects: Iterable[DatedAmount],
+    *,
+    rollover_policy: str = "redistribute_remaining_days",
+    today: date | None = None,
+    quantum: Decimal = TWO_PLACES,
+) -> AllowanceResult:
+    """Dispatch exact allowance calculation by the persisted period policy."""
+    if rollover_policy == "carry_next_day":
+        return compute_carry_next_day(
+            pool_start,
+            start_date,
+            end_date,
+            effects,
+            today=today,
+            quantum=quantum,
+        )
+    if rollover_policy == "redistribute_remaining_days":
+        return compute_redistribute_remaining_days(
+            pool_start,
+            start_date,
+            end_date,
+            effects,
+            today=today,
+            quantum=quantum,
+        )
+    raise ValueError("Unknown rollover_policy")
 
 
 def days_elapsed(start_date: date, end_date: date, today: date) -> int:

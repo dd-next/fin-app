@@ -127,6 +127,28 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Pass 1
+
+- Reviewer task name/vendor: `/root/t006_redistribute_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `7b17f66`; modified
+  `app/budget.py`; directly inspected untracked
+  `tests/test_budget_redistribute_v2.py`.
+- Findings (verbatim, P0–P3):
+
+  > T-006 implementation review verdict: APPROVED.
+  >
+  > P0: No findings.
+  > P1: No findings.
+  > P2: No findings.
+  > P3: No findings.
+  >
+  > Reviewed read-only, no branch switch or edits: base/HEAD `7b17f66`; uncommitted `app/budget.py` plus untracked `tests/test_budget_redistribute_v2.py`; task contract and ACCOUNT_PERIODS-v2.1 §§7.2–7.3; T-005 carry/result contract. The shared `_prepare_allowance_inputs` refactor preserves carry behavior and validation; redistribution derives current balance through bounded D, removes/adds `today_net` exactly once, divides exact start-of-day balance by inclusive remaining days, keeps zero carry, freshly redistributes per reference day, and makes final-day exact allowance equal current balance. Negative/one-day/bounded dates, assigned-effect and quantum validation, both dispatcher paths/default/unknown behavior, frozen result, Decimal exact/presentation separation, pure imports, and legacy/domain/API boundaries are correctly covered. Given evidence: redistribution 11 passed; carry+legacy 39 passed; diff-check passed. Review was read-only; no files changed and no branch switch was performed.
+- Resolution: none required.
+- Reviewer checks: redistribution `11 passed`; carry plus legacy `39 passed`;
+  `git diff --check` passed.
+- Verdict: approved; no P0–P3 findings.
+
 ## Session log
 
 - 2026-08-09 Codex: drafted bounded T-006 pure redistribution/dispatch after
