@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: Synchronize the period API and lifecycle response surface
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6–§9; design/MOBILE-BACKEND-GAP-AUDIT.md period API rows
 blocked-by: [T-004, T-005, T-006, T-007]
@@ -521,3 +521,6 @@ ends. Date · agent · what landed · what is left · open questions.
   opening adjustment; the assertion was corrected and Pass 2 approved with no
   P0–P3. Focused `17 passed`, full suite `173 passed`, node syntax and
   diff-check passed. T-008 is ready for owner acceptance; no open question.
+- 2026-08-09 repository owner: accepted T-008 by fast-forward integration
+  after all three logical blocks passed independent review and every P0–P2
+  finding was closed. T-009 is next; no open question.
