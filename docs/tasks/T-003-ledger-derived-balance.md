@@ -1,16 +1,16 @@
 ---
 id: T-003
 title: Derive current_balance from the ledger and compute the reconciliation input
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §6, §6.1
 blocked-by: [T-002]
 branch: task/T-003-ledger-derived-balance
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t003_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: 32f7f17
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -118,6 +118,37 @@ a pre-period correction.
 - Resolution: internal/public boundary, one-reference-time rule, closed-history
   isolation, and the focused test matrix are now explicit.
 - Verdict: not ready; corrected and submitted for fresh readiness review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t003_readiness_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `32f7f17`.
+- Findings (verbatim, P0–P3):
+
+  > - P0: None.
+  > - P1: None.
+  > - P2: None.
+  > - P3: None.
+  >
+  > All prior findings are closed:
+  >
+  > - `current_balance` is an immutable internal result only; no
+  >   `app/schemas.py` or public JSON change before T-008.
+  > - One captured UTC `reference_time` governs both the shared ledger-balance
+  >   query and strict `snapshot_at < created_at <= T` window.
+  > - Closed periods are isolated from live balance, reconciliation, and later
+  >   reference times.
+  > - Focused tests explicitly cover boundary/post-T/non-posted behavior,
+  >   pre-period correction/Delete/Undo, Accounts-service equality, movement
+  >   directions, 18-place precision, pure-budget delivery, and immutable
+  >   closed history.
+  >
+  > Scope is bounded M, T-002 is accepted and the only blocker is satisfied,
+  > Touches/Out-of-scope align with the specifications, and verification
+  > includes targeted/full tests plus repository checks.
+- Resolution: none required.
+- Verdict: ready.
 
 ## Review
 

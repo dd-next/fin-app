@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
 | Last full suite | **116 passed** (2026-08-09, T-002 acceptance) |
-| Active work | T-002 accepted; T-003 ledger-derived balance is next for readiness review |
+| Active work | T-002 accepted; T-003 ledger-derived balance is readiness-approved and ready to claim |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002 accepted; T-003 is next for readiness review.**
+Status: **T-002 accepted; T-003 is readiness-approved for implementation.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
