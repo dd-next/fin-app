@@ -1,13 +1,13 @@
 ---
 id: T-009
 title: Remove legacy period money contracts
-status: todo
+status: in-progress
 size: S
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §9–§10
 blocked-by: [T-008]
 branch: task/T-009-remove-legacy-period-contracts
-base-commit:
-implementer:
+base-commit: 79fb477fa42397b0d4fa4ffe2cdf6ec52595d185
+implementer: Codex
 readiness-reviewed-by: /root/t009_readiness_review (Codex same-vendor fallback)
 readiness-reviewed-commit: 6c8d9cf
 readiness-verdict: ready
@@ -227,3 +227,9 @@ ends. Date · agent · what landed · what is left · open questions.
   open question.
 - 2026-08-09 repository owner: promoted T-009 from backlog to todo after READY
   evidence at `6c8d9cf`. Exact task-branch claim is next; no open question.
+- 2026-08-09 Codex: atomically claimed exact branch
+  `task/T-009-remove-legacy-period-contracts` from promotion HEAD
+  `79fb477fa42397b0d4fa4ffe2cdf6ec52595d185`. No implementation code was
+  started. Next session should read this task and implement the one mechanical
+  producer/consumer removal block, then run the listed gates and obtain a
+  fresh read-only implementation review; no open question.
