@@ -1,13 +1,13 @@
 ---
 id: T-007
 title: Implement atomic period Start-date snapshot replay
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §5, §8; design/MOBILE-BACKEND-GAP-AUDIT.md period start date
 blocked-by: [T-002, T-003, T-004]
 branch: task/T-007-period-start-replay
-base-commit:
-implementer:
+base-commit: 1f48429689412f61737fbda5afcfbd78d05d6d23
+implementer: Codex
 readiness-reviewed-by: /root/t007_readiness_final (Codex same-vendor fallback)
 readiness-reviewed-commit: 568d7e1
 readiness-verdict: ready
@@ -281,3 +281,7 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-09 Codex: readiness Pass 3 approved T-007 with no P0–P3 findings;
   readiness evidence is complete. Owner promotion, exact branch claim, and
   implementation remain; no open question.
+- 2026-08-09 Codex: owner promoted T-007 at `1f48429`; exact branch
+  `task/T-007-period-start-replay` was atomically claimed from that promotion
+  HEAD and records the full base hash above. Implementation and block review
+  remain; no open question.

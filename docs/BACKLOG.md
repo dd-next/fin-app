@@ -35,7 +35,7 @@ backend gap remains open.
 | [T-004](tasks/T-004-period-lifecycle.md) | Lifecycle: manual close, natural expiry, successor rules | done | M | periods §4, §5 | T-002 |
 | [T-005](tasks/T-005-carry-next-day-policy.md) | `carry_next_day` policy in pure `app/budget.py` | done | M | periods §7.1, §7.3 | T-003 |
 | [T-006](tasks/T-006-redistribute-policy.md) | `redistribute_remaining_days` policy in pure `app/budget.py` | done | M | periods §7.2, §7.3 | T-003, T-005 |
-| [T-007](tasks/T-007-period-start-replay.md) | Period create/edit Start date semantics and snapshot replay | todo | M | periods §8 + audit | T-002, T-003, T-004 |
+| [T-007](tasks/T-007-period-start-replay.md) | Period create/edit Start date semantics and snapshot replay | in-progress | M | periods §8 + audit | T-002, T-003, T-004 |
 | T-008 | Period API and lifecycle surface | backlog | M | periods §9 | T-004, T-005, T-006, T-007 |
 | T-009 | Remove `funding_amount` / `remaining` / `planned` contracts | backlog | S | periods §3, §10 | T-008 |
 | T-010 | Owner-private period permissions for shared accounts | backlog | M | periods §11 | T-008 |
