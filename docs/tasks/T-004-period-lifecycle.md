@@ -8,8 +8,8 @@ blocked-by: [T-002]
 branch: task/T-004-period-lifecycle
 base-commit: 74556f7e7859f4d65d5c5004e971456a517d21a3
 implementer: Codex
-readiness-reviewed-by: /root/t004_readiness_rereview (Codex same-vendor fallback)
-readiness-reviewed-commit: f03b8e8
+readiness-reviewed-by: /root/t004_scope_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: f371904
 readiness-verdict: ready
 ---
 
@@ -196,6 +196,27 @@ Append-only readiness passes. The reviewer checks this definition against
 - Resolution: the new focused module now runs unfiltered in its own command;
   the narrow selector applies only to the two legacy regression modules.
 - Verdict: not ready; corrected and submitted for fresh scope re-review.
+
+### Pass 4 — claimed-scope amendment re-review
+
+- Reviewer task name/vendor: `/root/t004_scope_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `f371904`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None. Prior scope-review P2 is closed: `tests/test_period_lifecycle_v2.py` now runs unfiltered, while `-k "lifecycle or ended_transaction or resulting_period_state or undo_period_guards"` is limited to the two legacy modules and matches their relevant existing test names.
+  >
+  > P3: None.
+  >
+  > The legacy touches remain bounded and required by `ACCOUNT_PERIODS-v2.1.md` §5: the named assertions currently encode the superseded rule rejecting Correction/Delete/Undo after manual close. No implementation file beyond `app/periods.py` is implied. The shared guard, status, close, predecessor selection, snapshot derivation, and creation behavior all live there; transaction Correction/Delete and Operations Undo already invoke that guard through existing paths.
+  >
+  > Verdict: **ready for implementation**. Reviewed `f3719041ed21a8b36601156cf132e6115807b28f` read-only; worktree was clean and `git diff --check f371904^ f371904` passed. No tests run.
+- Resolution: none required.
+- Verdict: ready for implementation.
 
 ## Review
 
