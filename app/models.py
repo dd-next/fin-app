@@ -512,6 +512,21 @@ class PlanOccurrence(Base):
 
 class AccountPeriod(Base):
     __tablename__ = "account_period"
+    __table_args__ = (
+        CheckConstraint(
+            "end_date >= start_date", name="ck_account_period_date_order"
+        ),
+        CheckConstraint(
+            "rollover_policy IN ('carry_next_day', "
+            "'redistribute_remaining_days')",
+            name="ck_account_period_rollover_policy",
+        ),
+        CheckConstraint(
+            "(closed_at IS NULL AND closing_balance IS NULL) OR "
+            "(closed_at IS NOT NULL AND closing_balance IS NOT NULL)",
+            name="ck_account_period_closing_pair",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int] = mapped_column(
@@ -525,11 +540,16 @@ class AccountPeriod(Base):
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    funding_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    opening_balance: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    rollover_policy: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="redistribute_remaining_days"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closing_balance: Mapped[Decimal | None] = mapped_column(ExactDecimal, nullable=True)
 
     account: Mapped[Account] = relationship(back_populates="periods")
     creator: Mapped[User] = relationship(foreign_keys=[created_by_user_id])

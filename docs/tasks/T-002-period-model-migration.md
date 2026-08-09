@@ -159,12 +159,78 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
 
 ### Pass 1
 
-- Reviewer task name/vendor:
-- Reviewed base/head or working-tree manifest:
+- Reviewer task name/vendor: `/root/t002_migration_block_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `8300fd0`; modified
+  `app/models.py`, modified `tests/test_migrations_v2.py`, and untracked
+  `alembic/versions/0002_period_snapshot_model.py` inspected directly.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Reviewer checks:
-- Verdict:
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — Core predecessor/timezone snapshot path is untested. Migration
+  > computes the required later-of boundary at
+  > `0002_period_snapshot_model.py:142`, including predecessor close/end
+  > handling at lines 143–149, but the populated fixture creates only one
+  > period per account and uses UTC exclusively
+  > (`test_migrations_v2.py:185`, `test_migrations_v2.py:252`). Add a
+  > same-account successor whose local start boundary is earlier than its
+  > predecessor boundary, with a leg exactly at that selected boundary;
+  > preferably use a non-UTC DST-observing workspace timezone. Assert exact
+  > snapshot/opening balance and no double counting.
+  >
+  > P2 — Populated downgrade is not verified. `downgrade()` reconstructs
+  > legacy rows and rebuilds both FK-linked tables at
+  > `0002_period_snapshot_model.py:315`, but no test exercises populated
+  > `0002 → 0001` or confirms preserved period/rebase IDs, relationships,
+  > indexes, constraints, and readable Decimal funding. Add a populated
+  > downgrade test, ideally followed by re-upgrade, because SQLite table
+  > replacement is non-transactional DDL.
+  >
+  > P3: None.
+- Resolution: added the non-UTC predecessor-later exact-boundary fixture and a
+  populated downgrade/re-upgrade round trip; the latter exposed and fixed raw
+  SQLite date/datetime normalization in `downgrade()`.
+- Reviewer checks: initial migration suite `8 passed`; direct tracked and
+  untracked inspection.
+- Verdict: changes required; corrected and submitted for re-review.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t002_migration_block_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `8300fd0`; same complete
+  tracked/untracked migration-block manifest after Pass 1 fixes.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None. The prior boundary-test gap is closed: the America/New_York
+  > fixture has a non-overlapping same-account predecessor whose manual
+  > `closed_at` is two hours after its natural/local successor boundary; the
+  > successor snapshot is asserted equal to that later predecessor boundary,
+  > and the posted leg exactly at that timestamp is reflected once in the
+  > asserted opening balance (200 - 50 = 150). The prior downgrade gap is also
+  > closed: a populated 5-row database is upgraded, downgraded to 0001, checked
+  > for retained rows, exact Decimal funding, dependent rebase linkage,
+  > recreated indexes, and then successfully upgraded back to 0002. Direct
+  > code inspection confirms explicit IDs are carried through both table
+  > replacements.
+  >
+  > P3: The round-trip test could be stronger by asserting the full period-ID
+  > set and representative snapshot/balance values after the final re-upgrade,
+  > rather than only counts/version; this is optional hardening because the
+  > initial populated-upgrade test already asserts the full ID set and exact
+  > derived values and the migration explicitly inserts source IDs.
+- Resolution: no P0–P2 changes required; P3 not duplicated because the primary
+  populated-upgrade test already asserts the full ID set and exact values.
+- Reviewer checks: `.venv/bin/python -m pytest tests/test_migrations_v2.py -q`
+  — `9 passed`; `git diff --check` — passed.
+- Verdict: approved for the migration block; both prior P2 findings are closed.
 
 ## Session log
 
@@ -173,3 +239,8 @@ with `DATABASE_URL` unset because the repository fallback is `./finapp.db`.
   is starting with the migration/backfill block, followed by model invariants
   and transitional period reads. Nothing implemented yet; no open product
   question.
+- 2026-08-09 Codex: implemented and independently approved the schema/model
+  migration block. Empty, populated, rejected-incompatible, non-UTC successor,
+  and populated downgrade/re-upgrade coverage passes (`9 passed`). Remaining:
+  transitional period-domain reads/writes required to keep the application
+  runnable on the new non-null snapshot model, then task gates and acceptance.
