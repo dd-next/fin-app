@@ -1,7 +1,7 @@
 ---
 id: T-007
 title: Implement atomic period Start-date snapshot replay
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §5, §8; design/MOBILE-BACKEND-GAP-AUDIT.md period start date
 blocked-by: [T-002, T-003, T-004]
