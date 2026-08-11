@@ -39,8 +39,8 @@ dependencies are still unchanged.
 - [ ] Only the quote creator may execute it, and execution rechecks current
       transaction-create/edit permission on both quoted accounts. Hidden,
       foreign-workspace, inaccessible, or archived accounts preserve accepted
-      privacy/error semantics. Same-asset execution retains the accepted shared
-      editor/contributor behavior. Cross-asset execution rechecks owner-only
+      privacy/error semantics. Same-asset execution retains shipped owner/editor
+      `edit` behavior and denies contributor/viewer. Cross-asset execution rechecks owner-only
       workspace authorization and never exposes private rate state to shared or
       foreign users.
 - [ ] A cross-asset quote is stale and non-consumable when the workspace's
@@ -56,6 +56,11 @@ dependencies are still unchanged.
       Main/rate dependency mismatch is `409 Transfer quote is stale`; and an
       executed quote, including the loser of a concurrent race after the winner
       commits, is `409 Transfer quote has already been executed`.
+- [ ] After visibility/creator and current permission/privacy checks, conflict
+      precedence is deterministic: `executed` wins over expiry and staleness;
+      for an open quote, expiry (`now >= expires_at`) wins over staleness; stale
+      is evaluated only for an unexpired open quote. Tests cover executed plus
+      expired/stale, open expired plus stale, and exact-boundary expiry.
 - [ ] Before reading mutable quote/Main/rate/account state, execution reserves
       the SQLite writer with the accepted `BEGIN IMMEDIATE` pattern; on a
       row-locking database it locks the quote, workspace, dependency-rate, and
@@ -97,8 +102,9 @@ dependencies are still unchanged.
 - [ ] Before and after a no-fee quoted execution, Account summary Total capital
       is identical at Main precision. Same-asset transfers are exactly neutral;
       cross-asset execution is allowed only while the exact quote-time Main and
-      manual-rate dependencies still match, so T-013Q's neutrality proof is the
-      live valuation proof at execution. Stale updated/deleted-rate cases mutate
+      manual-rate dependencies still match, and T-013Q requires exact incoming
+      and outgoing Main values to be equal before rounding, so arbitrary other
+      account balances cannot change the aggregate. Stale updated/deleted-rate cases mutate
       no balance or summary. Both account balances and active/ended period
       projections change by their exact signed quote legs on success.
 - [ ] Existing `POST /api/v1/operations/transfer` remains same-asset-only and
@@ -174,6 +180,24 @@ BUILD_PLAN, and REVIEW_PROTOCOL.
   readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t013_readiness_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `cddefcf..508055f` (combined split-task pass).
+- Findings (verbatim, P0–P3): the complete combined verbatim block is recorded
+  under [`T-013Q` Readiness Pass 2](T-013Q-transfer-quote.md#pass-2). The
+  T-013E-specific P1 was the invalid aggregate-neutrality proof and the P2 was
+  unfrozen overlapping-conflict precedence; combined verdict: **NOT READY**.
+- Resolution: execution now relies on exact pre-rounding Main-value equality,
+  retains shipped owner/editor permission with contributor denied, and applies
+  deterministic permissions → executed → expired → stale precedence. Fresh
+  re-review is required.
+- Reviewer checks: direct committed docs/spec/code/test inspection;
+  `git diff --check cddefcf 508055f` passed; no application tests run for
+  documentation-only readiness.
+- Verdict: not ready; corrected and submitted for fresh re-review.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -191,3 +215,7 @@ the review; the implementer records it verbatim following
   exact errors are frozen, database serialization is explicit, and successful
   linkage is permanent. Fresh readiness re-review remains; no application code
   or database was changed.
+- 2026-08-11 Codex: readiness Pass 2 corrected contributor authorization,
+  aggregate-neutrality proof, dependency snapshot constraints, and conflict
+  precedence. Fresh readiness re-review remains; no application code or
+  database was changed.

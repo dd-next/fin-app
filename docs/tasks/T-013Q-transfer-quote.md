@@ -33,9 +33,9 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       unsupported scale/precision return input-derived `422` before a quote row
       is written. Auto/external sources remain unavailable.
 - [ ] The source and destination are distinct, active accounts in one
-      workspace. A same-asset quote retains the accepted transaction-create/
-      edit permission on both accounts, including eligible editor/contributor
-      callers. A cross-asset quote is owner-only because it consumes and returns
+      workspace. A same-asset quote retains the shipped `edit` permission on
+      both accounts: owner/editor are eligible and contributor/viewer are
+      denied. A cross-asset quote is owner-only because it consumes and returns
       information derived from owner-private workspace manual rates; shared
       editor/contributor/viewer and foreign users receive the accepted generic
       owner-private `404 Workspace not found` without learning whether a pair or
@@ -72,11 +72,15 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       legacy/canonical, legacy/legacy, Main on either side, repeating quotients,
       18-place underflow, maximum integer digits, and a poisoned ambient Decimal
       context.
-- [ ] A quote is accepted only when the outgoing and incoming values, each
-      independently converted by the selected manual rates and rounded at the
-      Main asset presentation boundary, are equal. An amount that cannot be
-      represented in the destination precision without changing displayed
-      Total capital returns deterministic `422` and writes nothing.
+- [ ] A quote is accepted only when exact outgoing Main value equals exact
+      incoming Main value before any Main/presentation rounding. This remains
+      neutral for every unrelated balance because Account summary sums exact
+      valued balances before one final Main quantization. An amount that
+      destination precision cannot represent with exact Main equality returns
+      deterministic `422 Transfer amount cannot preserve Total capital` and
+      writes nothing. Tests include adversarial unrelated balances where
+      independently rounded legs look equal but aggregate rounding would change
+      Total capital.
 - [ ] The `201` response contains exactly `id`, `workspace_id`,
       `created_by_user_id`, `from_account`, `to_account`, `from_amount`,
       `to_amount`, `rate`, `rate_source`, `created_at`, and `expires_at`; all are
@@ -123,6 +127,17 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       stored value, direction, and updated-at snapshot fields; `status`;
       `created_at`; `expires_at`; nullable `executed_at`; and nullable unique
       `executed_transaction_id`.
+- [ ] Each dependency tuple is exactly nullable positive integer rate-row ID,
+      nullable Numeric(38,18) stored value, nullable `String(24)` direction, and
+      nullable UTC `DateTime` updated-at. Named checks enforce all-or-none tuple
+      nullability, positive stored value, and direction exactly
+      `asset_to_main | main_to_asset_legacy`. Identity quotes require both
+      dependency tuples absent, equal asset IDs, equal amounts, and rate `1`.
+      Cross-asset quotes require a tuple absent exactly for a side whose asset
+      equals quoted Main and a complete valid tuple for every non-Main side.
+      Named checks also require distinct account IDs. SQLite tests exercise
+      every invalid partial/direction/value/identity/cross combination and the
+      actual PostgreSQL migration operations compile with the same constraints.
 - [ ] Status is exactly `open | executed`. Named checks enforce positive
       amounts/rate, `rate_source = 'manual'`, `expires_at > created_at`, and
       `(status = 'open' AND executed_at IS NULL AND executed_transaction_id IS NULL)
@@ -149,7 +164,8 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       or require `finapp.db` or legacy v1 rows.
 - [ ] ADR-0009 records persisted five-minute single-use quotes, manual
       Asset-to-Main cross-rate derivation (including exact legacy divide
-      semantics), destination quantization, displayed Total-capital neutrality,
+      semantics), destination quantization, exact pre-rounding Main-value
+      equality for aggregate Total-capital neutrality,
       owner-only cross-asset privacy, stale-on-rate/Main-change execution,
       immutable rate dependency snapshots, empty-only downgrade, and the
       decision not to add background cleanup; `docs/DECISIONS.md` indexes it.
@@ -276,6 +292,51 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
   readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t013_readiness_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `cddefcf..508055f` (both split tasks).
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — The Total-capital neutrality proof is still insufficient.
+  >
+  > - T-013Q accepts when the two leg valuations are independently rounded to Main precision and compare equal (`docs/tasks/T-013Q-transfer-quote.md:75-79`).
+  > - Account summary instead sums exact valued balances first and rounds only the aggregate (`app/accounts.py:159-181`).
+  > - Therefore equal independently rounded legs do not guarantee unchanged Total capital. Example with 2-decimal Main: exact outgoing `0.014` and incoming `0.01` both display `0.01`, so the quote passes; with an unrelated exact valued balance of `0.001`, aggregate capital changes from `0.015 → 0.011`, displayed `0.02 → 0.01`.
+  > - This contradicts T-013E’s unconditional unchanged-summary requirement (`docs/tasks/T-013E-transfer-execution.md:97-103`) and Phase 14’s Total-capital invariant (`docs/BUILD_PLAN-v2.md:213-216`). Require exact Main-value equality, or another proof valid for arbitrary existing balances, with an adversarial aggregate-rounding regression.
+  >
+  > P1 — Same-asset contributor authorization contradicts shipped permissions.
+  >
+  > - T-013Q promises eligible editor/contributor same-asset quoting (`docs/tasks/T-013Q-transfer-quote.md:35-44`), and T-013E says execution retains editor/contributor behavior (`docs/tasks/T-013E-transfer-execution.md:39-45`).
+  > - Shipped `edit` permission is owner/editor only (`app/access.py:11-18`), and transfer checks `edit` on both accounts (`app/transactions.py:208-213`).
+  > - Existing regression coverage explicitly accepts editor/editor and rejects a transfer involving a contributor (`tests/test_operations_v2.py:181-203`).
+  > - Freeze contributor as denied for same-asset quote/execute, or explicitly authorize and scope a permission-model change. “Preserve existing routes” currently favors denial.
+  >
+  > P1 — The quote migration contract still does not fully specify the dependency snapshot state.
+  >
+  > - T-013Q names nullable dependency ID/value/direction/timestamp fields (`docs/tasks/T-013Q-transfer-quote.md:116-125`) but does not freeze their modeled types or enforce all-or-none tuples, permitted direction values, positive stored values, or when source/target tuples must be absent/present.
+  > - The listed checks only cover effective amounts/rate, source literal, expiry, and open/executed linkage (`docs/tasks/T-013Q-transfer-quote.md:126-135`).
+  > - Because execution treats these snapshots as the immutable stale-check authority (`docs/tasks/T-013Q-transfer-quote.md:136-142`), partial or malformed persisted tuples leave execution behavior undefined. Specify exact types and named dependency-integrity checks, then exercise them on SQLite and PostgreSQL DDL compilation.
+  >
+  > P2 — Overlapping execute conflict precedence is not frozen.
+  >
+  > - T-013E gives exact messages for executed, expired, and stale states (`docs/tasks/T-013E-transfer-execution.md:52-58`) but does not state which wins when states overlap naturally: an executed quote later expires or becomes stale, or an open quote is both expired and stale.
+  > - Freeze and test a deterministic validation order, including exact-boundary expiry plus executed/expired and expired/stale combinations.
+  >
+  > P3: None.
+- Resolution: quote acceptance now requires exact pre-rounding Main-value
+  equality and an adversarial aggregate regression; contributor is denied under
+  shipped `edit`; dependency tuple types/presence/direction/value checks and
+  dialect tests are exact; execute conflict precedence is permissions, then
+  executed, then expiry, then staleness. Fresh re-review is required.
+- Reviewer checks: direct committed docs/spec/code/test inspection;
+  `git diff --check cddefcf 508055f` passed; no application tests run for
+  documentation-only readiness.
+- Verdict: not ready; corrected and submitted for fresh re-review.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -293,3 +354,8 @@ the review; the implementer records it verbatim following
   shapes/arithmetic/state/FKs/downgrade, expiry boundaries, and post-execution
   single use are now explicit. Fresh readiness re-review remains; no application
   code or database was changed.
+- 2026-08-11 Codex: readiness Pass 2 returned three P1 and one P2. Quote
+  neutrality now requires exact Main-value equality before rounding; same-asset
+  permissions match shipped owner/editor rules; dependency tuple constraints
+  and execution conflict precedence are exact. Fresh readiness re-review
+  remains; no application code or database was changed.
