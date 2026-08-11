@@ -41,7 +41,7 @@ backend gap remains open.
 | [T-010](tasks/T-010-owner-private-period-permissions.md) | Owner-private period permissions for shared accounts | done | M | periods §11 | T-008, T-009 |
 | [T-012](tasks/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | done | M | audit: rates | T-001 |
 | [T-013Q](tasks/T-013Q-transfer-quote.md) | Exact one-amount same/cross-asset Transfer quote | done | M | audit: transfer | T-012 |
-| [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | todo | M | audit: transfer | T-013Q |
+| [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | in-progress | M | audit: transfer | T-013Q |
 | T-014 | Financial-date feed: Planned plus adjustment/exchange projections | backlog | L | audit: feed | T-001 |
 | T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014 |
 | T-016 | Category merge/delete for transactions and Plan rules | backlog | M | audit: categories | T-001 |

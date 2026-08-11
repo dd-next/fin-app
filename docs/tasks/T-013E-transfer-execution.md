@@ -1,13 +1,13 @@
 ---
 id: T-013E
 title: Execute a bound Transfer quote atomically
-status: todo
+status: in-progress
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-013Q]
 branch: task/T-013E-transfer-execution
-base-commit:
-implementer:
+base-commit: f7b0d12ec12cec58fc7801a1af56b552ec809821
+implementer: Codex
 readiness-reviewed-by: /root/t013_readiness_confirmation (Codex same-vendor fallback)
 readiness-reviewed-commit: dacb871
 readiness-verdict: ready
@@ -243,6 +243,31 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Initial claim review
+
+- Reviewer task name/vendor: `/root/t013q_domain_api_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: branch `task/T-013E-transfer-execution` at HEAD/base
+  `f7b0d12ec12cec58fc7801a1af56b552ec809821`; modified only
+  `docs/BACKLOG.md`, `docs/PROGRESS.md`, and this task file.
+- Findings (verbatim, P0–P3):
+
+  > Reviewed manifest: branch `task/T-013E-transfer-execution` at HEAD/base `f7b0d12ec12cec58fc7801a1af56b552ec809821`, with only three modified documentation files: `docs/BACKLOG.md`, `docs/PROGRESS.md`, and `docs/tasks/T-013E-transfer-execution.md`; no untracked files. The complete tracked diff is the bounded `todo` → `in-progress` claim metadata/session handoff. `git diff --check` passed (line-ending warnings only).
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Approved.
+  >
+  > The accepted integration commit `f7b0d12` records T-013Q as `done`, T-013E as readiness-approved `todo`, and readiness commit `dacb871` is its ancestor. Reflog shows the exact branch was created from that HEAD, which is still unchanged. The task records the full immutable base commit, implementer `Codex`, and `in-progress`; BACKLOG and PROGRESS consistently mirror the claim and name the exact branch without claiming implementation evidence. The manifest is cleanly bounded to claim documentation, and no files were edited by the reviewer.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3 findings.
+
 ## Session log
 
 - 2026-08-11 Codex: drafted the bounded execution half of T-013. It remains
@@ -268,3 +293,10 @@ the review; the implementer records it verbatim following
 - 2026-08-11 repository owner: accepted T-013Q and promoted the already
   readiness-approved, now-unblocked T-013E from `backlog` to `todo`. Exact
   branch claim from the resulting integration commit is next.
+- 2026-08-11 Codex: confirmed clean accepted integration HEAD
+  `f7b0d12ec12cec58fc7801a1af56b552ec809821`, the exact task branch was absent,
+  and atomically claimed `task/T-013E-transfer-execution`. Recorded the
+  immutable base and implementer; atomic execution implementation is next.
+- 2026-08-11 Codex: fresh read-only initial-claim review approved the exact
+  three-file lifecycle manifest with no P0–P3 findings. The claim is ready for
+  its first task commit; no application or database file changed.

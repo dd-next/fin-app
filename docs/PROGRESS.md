@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `finapp-v2-develop` |
+| Branch | `task/T-013E-transfer-execution` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **322 passed** (2026-08-11, T-013Q final implementation gate) |
-| Active work | T-002–T-013Q accepted; readiness-approved T-013E is `todo` and next for exact branch claim |
+| Active work | T-002–T-013Q accepted; T-013E is claimed and implementing atomic bound-quote execution |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-013Q accepted; readiness-approved T-013E is unblocked,
-promoted to `todo`, and next for exact branch claim.**
+Status: **T-002–T-013Q accepted; T-013E is `in-progress` on its exact task
+branch.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -98,7 +98,7 @@ promoted to `todo`, and next for exact branch claim.**
   records immutable dependencies for T-013E. Fresh cumulative review approved
   the full manifest with no open P0–P3; full pytest `322`, Node syntax, and
   diff checks passed. Reviewed commit `9f02bf1` was accepted locally by
-  fast-forward; T-013E is now unblocked and promoted to `todo`.
+  fast-forward; T-013E was unblocked and claimed from integration `f7b0d12`.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 
