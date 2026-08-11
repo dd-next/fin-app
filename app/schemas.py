@@ -170,6 +170,39 @@ class TransferQuoteOut(BaseModel):
     expires_at: datetime
 
 
+class TransferQuoteExecute(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    local_date: date | None = Field(
+        default=None,
+        json_schema_extra={"default": None},
+    )
+    occurred_at: datetime | None = Field(
+        default=None,
+        json_schema_extra={"default": None},
+    )
+    note: str | None = Field(
+        default=None,
+        strict=True,
+        max_length=2000,
+        json_schema_extra={"default": None},
+    )
+    counterparty: str | None = Field(
+        default=None,
+        strict=True,
+        max_length=160,
+        json_schema_extra={"default": None},
+    )
+    confirm_ended_period: bool = Field(default=False, strict=True)
+
+    @field_validator("local_date", "occurred_at", mode="before")
+    @classmethod
+    def require_iso_string_or_null(cls, value):
+        if value is not None and not isinstance(value, str):
+            raise ValueError("Financial time must be an ISO string or null")
+        return value
+
+
 class AuthContextOut(BaseModel):
     user: UserOut
     workspace: WorkspaceOut

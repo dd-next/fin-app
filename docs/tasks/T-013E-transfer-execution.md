@@ -22,7 +22,7 @@ dependencies are still unchanged.
 
 ## Acceptance
 
-- [ ] `POST /api/v1/operations/transfer/quotes/{quote_id}/execute` requires a
+- [x] `POST /api/v1/operations/transfer/quotes/{quote_id}/execute` requires a
       positive integer path ID and a JSON object body; `{}` is valid and an
       omitted/non-object body is `422`. The body has exactly five optional
       properties and no required properties: `local_date` is ISO `date` string
@@ -32,18 +32,18 @@ dependencies are still unchanged.
       null); and `confirm_ended_period` is boolean (default false). Unknown
       members are `422` and do not consume the quote. It accepts no amount,
       account, asset, rate, fee, status, creator, or workspace override.
-- [ ] OpenAPI freezes the execute request's exact property/required/type/
+- [x] OpenAPI freezes the execute request's exact property/required/type/
       format/max-length/default/additional-property sets, positive integer path
       type, `201` success status, existing `TransactionOut` response reference,
       and documented `404`/`409`/`422` errors.
-- [ ] Only the quote creator may execute it, and execution rechecks current
+- [x] Only the quote creator may execute it, and execution rechecks current
       owner authorization and current `edit` permission on both quoted accounts.
       Hidden, foreign-workspace, inaccessible, or archived accounts preserve
       accepted privacy/error semantics. Both identity and cross-asset execution
       are owner-only; the preserved direct same-asset transfer route retains
       shipped editor behavior. The quote surface never exposes private rate
       state to shared or foreign users.
-- [ ] A cross-asset quote is stale and non-consumable when the workspace's
+- [x] A cross-asset quote is stale and non-consumable when the workspace's
       current Main ID differs from the quoted Main ID or any source/target
       manual-rate dependency row is missing or differs in ID, exact stored
       value, direction, or updated timestamp. A historical Main switch away and
@@ -52,19 +52,19 @@ dependencies are still unchanged.
       For same-asset execution, an applicable current manual row tagged legacy
       also makes the quote stale; Main/canonical/fallback/unvalued linear paths
       remain eligible without persisting a private rate dependency.
-- [ ] Execution atomically claims a quote only when status is `open`, it has
+- [x] Execution atomically claims a quote only when status is `open`, it has
       not expired under one captured server clock (`now < expires_at`), and no
       executed transaction is linked. Errors are exact: hidden/unknown is `404
       Transfer quote not found`; expiry is `409 Transfer quote has expired`;
       Main/rate dependency mismatch is `409 Transfer quote is stale`; and an
       executed quote, including the loser of a concurrent race after the winner
       commits, is `409 Transfer quote has already been executed`.
-- [ ] After visibility/creator and current permission/privacy checks, conflict
+- [x] After visibility/creator and current permission/privacy checks, conflict
       precedence is deterministic: `executed` wins over expiry and staleness;
       for an open quote, expiry (`now >= expires_at`) wins over staleness; stale
       is evaluated only for an unexpired open quote. Tests cover executed plus
       expired/stale, open expired plus stale, and exact-boundary expiry.
-- [ ] Before reading mutable quote/Main/rate/account state, execution reserves
+- [x] Before reading mutable quote/Main/rate/account state, execution reserves
       the SQLite writer with the accepted `BEGIN IMMEDIATE` pattern; on a
       row-locking database it locks the quote, workspace, dependency-rate, and
       participating account rows through commit. A final conditional quote
@@ -73,36 +73,36 @@ dependencies are still unchanged.
       one committed root transaction and one set of legs, period effects,
       captured exchange rates, and Undo cursor updates; the losing transaction
       rolls back every provisional row before returning the executed error.
-- [ ] Same-asset execution creates the existing `transfer` root with equal
+- [x] Same-asset execution creates the existing `transfer` root with equal
       signed legs. Cross-asset execution creates the existing `exchange` root
       with the quote's exact source/destination amounts and the existing two
       direction-tagged captured transaction rates derived from the actual
       legs. Both use `origin=operations`; no fee child is created by this
       one-amount mobile command.
-- [ ] Execution never recalculates destination amount from current manual
+- [x] Execution never recalculates destination amount from current manual
       rates. The quote's captured amounts are the only leg amounts. Unchanged
       dependency rows produce legs and captured transaction exchange rates
       byte-for-value identical to the quote contract; updated/deleted rate rows
       produce `409 stale` before claim/transaction mutation.
-- [ ] The transaction write, quote `executed` transition/link, period replay or
+- [x] The transaction write, quote `executed` transition/link, period replay or
       ended-period guard, and creator/account Undo cursor advancement commit in
       one database transaction. Any validation, permission, period-confirmation,
       constraint, or injected flush/commit failure rolls all of them back and
       leaves the still-valid quote open for a corrected retry.
-- [ ] Existing exact financial-time precedence, workspace-local date, future
+- [x] Existing exact financial-time precedence, workspace-local date, future
       date guards, ended-period confirmation, signed-leg replay for both
       accounts, closed-history immutability, and owner-private shared-period
       behavior remain unchanged and are focused-regression protected.
-- [ ] The response is the existing full `TransactionOut`; the quote row links
+- [x] The response is the existing full `TransactionOut`; the quote row links
       exactly that root transaction. Transaction detail, soft delete, creator-
       scoped persistent Undo, and voided captured-rate eligibility behave the
       same as for the corresponding shipped explicit transfer/exchange.
-- [ ] After successful execution, correction, soft Delete, or Undo of the root
+- [x] After successful execution, correction, soft Delete, or Undo of the root
       never reopens or unlinks the immutable quote and never makes it executable
       again. The quote remains `executed` and points to the same root; ordinary
       transaction status alone controls whether its captured exchange rates are
       eligible as valuation fallback.
-- [ ] Before and after a no-fee quoted execution, Account summary Total capital
+- [x] Before and after a no-fee quoted execution, Account summary Total capital
       is identical at Main precision. Same-asset transfers are exactly neutral;
       cross-asset execution is allowed only while the exact quote-time Main and
       canonical manual-rate dependencies still match. T-013Q rejects legacy
@@ -112,7 +112,7 @@ dependencies are still unchanged.
       updated/deleted-rate cases mutate
       no balance or summary. Both account balances and active/ended period
       projections change by their exact signed quote legs on success.
-- [ ] Existing `POST /api/v1/operations/transfer` remains same-asset-only and
+- [x] Existing `POST /api/v1/operations/transfer` remains same-asset-only and
       existing `POST /api/v1/operations/exchange` remains explicit two-amount
       with optional fee for the preserved desktop. Their OpenAPI and regression
       behavior do not change.
@@ -125,6 +125,8 @@ dependencies are still unchanged.
 
 - `app/schemas.py`
 - `app/transfer_quotes.py`
+- `app/main.py` only to preserve the four explicit OpenAPI `default: null`
+  members that FastAPI otherwise removes from its generated schema
 - `app/operations.py` and `app/transactions.py` only to reuse the existing
   atomic transfer/exchange creation path without weakening legacy routes
 - `app/operations_undo.py` only if the shared commit boundary requires a
@@ -268,6 +270,75 @@ the review; the implementer records it verbatim following
 - Resolution: none required.
 - Verdict: approved with no open P0–P3 findings.
 
+### Implementation review Pass 1
+
+- Reviewer task name/vendor: `/root/t013q_domain_api_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: application/test block on task HEAD `4e428d7`, including
+  latest strict JSON-boundary validation; modified `app/schemas.py` and
+  `app/transfer_quotes.py`, plus untracked execution test file.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — The frozen OpenAPI contract omits the specified `null` defaults for four optional fields.
+  >
+  > - `docs/tasks/T-013E-transfer-execution.md:28-32` requires `local_date`, `occurred_at`, `note`, and `counterparty` to have default `null`, and lines 35-38 require OpenAPI to freeze exact default sets.
+  > - The generated `TransferQuoteExecute` schema from `app/schemas.py:173-184` has no `default` member for any of those four fields. Only `confirm_ended_period` exposes its required `false` default.
+  > - `tests/test_transfer_quote_execution_v21.py:99-109` checks formats/max lengths but does not assert the nullable branches or the four missing defaults.
+  > - Runtime omission/null handling is correct, and the latest strict pre-validation correctly rejects non-string JSON time values, but the published schema still does not meet the explicitly frozen contract.
+  >
+  > P2 — Cross-asset execution privacy is not regression-tested.
+  >
+  > - `docs/tasks/T-013E-transfer-execution.md:39-45` explicitly requires both identity and cross-asset execution to remain owner-only without exposing private rate state to shared or foreign users.
+  > - `tests/test_transfer_quote_execution_v21.py:340-355` exercises only a same-asset quote and only a shared editor. There is no execution attempt against a cross-asset quote after rate state exists, so an ordering regression that evaluates stale/private dependencies before rejecting the caller would not be caught.
+  > - Add at least one cross-asset shared or unrelated-user execution assertion for generic `404 Transfer quote not found`, quote remaining open, and zero transaction/leg/rate/Undo mutation.
+  >
+  > P2 — The five-minute execution boundary lacks the required neighboring-clock coverage.
+  >
+  > - T-013Q froze clock-controlled just-before, exact-boundary, and just-after behavior; T-013E implements `now >= expires_at`.
+  > - `tests/test_transfer_quote_execution_v21.py:298-318` covers only the exact five-minute boundary. No test proves success immediately before expiry or rejection immediately after expiry while preserving the quote and mutation counts.
+  > - Add clock-controlled `expires_at - ε`, `expires_at`, and `expires_at + ε` cases.
+  >
+  > P3: None.
+  >
+  > Verdict: Not approved. The implementation’s atomic transaction structure, SQLite `BEGIN IMMEDIATE`, PostgreSQL row locks plus conditional claim, rollback path, conflict precedence, persisted-amount execution, dependency comparison, permanent execution linkage, period guard reuse, and concurrent single-winner behavior otherwise appear coherent. The latest strict JSON-boundary correction was included in this review. I relied on the supplied gates (`7 focused passed`; `50 combined passed`) and did not run additional suites. No files edited.
+- Resolution: preserved explicit null defaults in the published schema; added
+  cross-asset non-owner privacy/mutation coverage; added one-microsecond-before,
+  exact-boundary, and one-microsecond-after TTL coverage.
+- Verdict: not approved; one P1 and two P2 findings fixed and submitted for
+  fresh review.
+
+### Implementation review Pass 2
+
+- Reviewer task name/vendor: `/root/t013q_domain_api_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: complete corrected tracked/untracked T-013E application,
+  OpenAPI, and focused-test manifest, including bounded `app/main.py` wrapper.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Approved.
+  >
+  > All prior findings are closed:
+  >
+  > - The execute component now exposes explicit `default: null` for `local_date`, `occurred_at`, `note`, and `counterparty`, retains their exact nullable string/date/date-time and max-length shapes, and keeps `confirm_ended_period` defaulted to `false`. The bounded `app.openapi` wrapper changes only `TransferQuoteExecute`, operates on FastAPI’s generated/cached schema, and does not alter runtime validation or unrelated components.
+  > - Cross-asset privacy now covers a non-owner who has workspace-adjacent shared access but no access to the quoted accounts. Execution returns generic `404 Transfer quote not found`, leaves the quote open, and creates no transaction, legs, captured rates, or Undo mutation.
+  > - TTL coverage now proves success one microsecond before expiry and rejection at and one microsecond after expiry. Boundary failures retain the open quote and are mutation-neutral; the exact-boundary case also confirms expiry wins over staleness.
+  >
+  > The latest strict JSON boundary validation is coherent with the frozen API: non-string dates/timestamps, coerced note/counterparty values, and non-boolean confirmation inputs are rejected. No new regression found in atomicity, concurrency, permission ordering, Decimal-only captured-amount execution, dependency staleness, rollback, period guards, Undo, or PostgreSQL locking semantics.
+  >
+  > I relied on the supplied focused result, `7 passed in 3.26s`, and did not run broader suites. No files edited.
+- Resolution: none required; all prior findings are closed.
+- Verdict: approved with no open P0–P3 findings.
+
 ## Session log
 
 - 2026-08-11 Codex: drafted the bounded execution half of T-013. It remains
@@ -300,3 +371,9 @@ the review; the implementer records it verbatim following
 - 2026-08-11 Codex: fresh read-only initial-claim review approved the exact
   three-file lifecycle manifest with no P0–P3 findings. The claim is ready for
   its first task commit; no application or database file changed.
+- 2026-08-11 Codex: implemented strict atomic quote execution by reusing the
+  accepted transfer/exchange, period, captured-rate, and Undo paths. Focused
+  execution passed `7`; combined quote/operations/period/Undo passed `50`.
+  Implementation Pass 1 found one OpenAPI P1 and two coverage P2 gaps; all
+  were corrected, and fresh Pass 2 approved with no open P0–P3. Full task gate
+  and final status remain.

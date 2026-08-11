@@ -1,14 +1,16 @@
-"""Owner-private exact transfer quote creation."""
+"""Owner-private exact transfer quote creation and atomic execution."""
 
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Path
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.access import require_account_action
 from app.auth import require_user
 from app.db import get_session
 from app.ledger import (
@@ -23,17 +25,24 @@ from app.models import (
     Account,
     Asset,
     ManualValuationRate,
+    Transaction,
     TransferQuote,
     User,
     Workspace,
     utcnow,
 )
+from app.operations import operations_transaction_out, record_undo_candidate
 from app.schemas import (
     AssetOut,
+    ExchangeIn,
+    TransactionOut,
     TransferQuoteAccountOut,
     TransferQuoteCreate,
+    TransferQuoteExecute,
     TransferQuoteOut,
+    TransferIn,
 )
+from app.transactions import _create_exchange, _create_transfer
 
 
 router = APIRouter(prefix="/operations/transfer/quotes", tags=["operations"])
@@ -178,6 +187,168 @@ def quote_out(quote: TransferQuote) -> TransferQuoteOut:
         rate_source="manual",
         created_at=quote.created_at,
         expires_at=quote.expires_at,
+    )
+
+
+async def reserve_quote_writer(session: AsyncSession) -> None:
+    """Serialize SQLite before reading mutable quote dependencies."""
+    bind = session.get_bind()
+    if bind.dialect.name == "sqlite":
+        await session.execute(text("BEGIN IMMEDIATE"))
+
+
+async def locked_quote(
+    session: AsyncSession,
+    quote_id: int,
+) -> TransferQuote | None:
+    return (
+        await session.execute(
+            select(TransferQuote)
+            .where(TransferQuote.id == quote_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
+async def locked_workspace(
+    session: AsyncSession,
+    workspace_id: int,
+) -> Workspace | None:
+    return (
+        await session.execute(
+            select(Workspace)
+            .where(Workspace.id == workspace_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
+async def locked_quote_accounts(
+    session: AsyncSession,
+    quote: TransferQuote,
+) -> dict[int, Account]:
+    accounts = list(
+        (
+            await session.execute(
+                select(Account)
+                .options(selectinload(Account.asset))
+                .where(Account.id.in_((quote.from_account_id, quote.to_account_id)))
+                .with_for_update()
+            )
+        ).scalars()
+    )
+    return {account.id: account for account in accounts}
+
+
+async def locked_manual_rate(
+    session: AsyncSession,
+    rate_id: int,
+) -> ManualValuationRate | None:
+    return (
+        await session.execute(
+            select(ManualValuationRate)
+            .where(ManualValuationRate.id == rate_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
+async def locked_manual_rate_for_pair(
+    session: AsyncSession,
+    *,
+    workspace_id: int,
+    main_asset_id: int,
+    asset_id: int,
+) -> ManualValuationRate | None:
+    return (
+        await session.execute(
+            select(ManualValuationRate)
+            .where(
+                ManualValuationRate.workspace_id == workspace_id,
+                ManualValuationRate.main_asset_id == main_asset_id,
+                ManualValuationRate.asset_id == asset_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+
+async def dependency_matches(
+    session: AsyncSession,
+    quote: TransferQuote,
+    *,
+    side: str,
+) -> bool:
+    rate_id = getattr(quote, f"{side}_manual_rate_id")
+    if rate_id is None:
+        return True
+    rate = await locked_manual_rate(session, rate_id)
+    asset_id = quote.from_asset_id if side == "source" else quote.to_asset_id
+    return bool(
+        rate is not None
+        and rate.workspace_id == quote.workspace_id
+        and rate.main_asset_id == quote.main_asset_id
+        and rate.asset_id == asset_id
+        and Decimal(rate.rate_value)
+        == Decimal(getattr(quote, f"{side}_manual_rate_value"))
+        and rate.direction
+        == getattr(quote, f"{side}_manual_rate_direction")
+        and rate.updated_at
+        == getattr(quote, f"{side}_manual_rate_updated_at")
+    )
+
+
+async def quote_is_stale(
+    session: AsyncSession,
+    quote: TransferQuote,
+    workspace: Workspace,
+    source: Account,
+    target: Account,
+) -> bool:
+    if (
+        workspace.base_asset_id != quote.main_asset_id
+        or source.asset_id != quote.from_asset_id
+        or target.asset_id != quote.to_asset_id
+    ):
+        return True
+    if quote.from_asset_id == quote.to_asset_id:
+        if quote.from_asset_id == quote.main_asset_id:
+            return False
+        current = await locked_manual_rate_for_pair(
+            session,
+            workspace_id=quote.workspace_id,
+            main_asset_id=quote.main_asset_id,
+            asset_id=quote.from_asset_id,
+        )
+        return bool(
+            current is not None
+            and current.direction != "asset_to_main"
+        )
+    return not (
+        await dependency_matches(session, quote, side="source")
+        and await dependency_matches(session, quote, side="target")
+    )
+
+
+def execution_command(
+    quote: TransferQuote,
+    body: TransferQuoteExecute,
+) -> TransferIn | ExchangeIn:
+    common = body.model_dump()
+    if quote.from_asset_id == quote.to_asset_id:
+        return TransferIn(
+            from_account_id=quote.from_account_id,
+            to_account_id=quote.to_account_id,
+            amount=Decimal(quote.from_amount),
+            **common,
+        )
+    return ExchangeIn(
+        from_account_id=quote.from_account_id,
+        from_amount=Decimal(quote.from_amount),
+        to_account_id=quote.to_account_id,
+        to_amount=Decimal(quote.to_amount),
+        fee=None,
+        **common,
     )
 
 
@@ -329,3 +500,119 @@ async def create_transfer_quote(
         ) from error
     await session.refresh(quote)
     return quote_out(quote)
+
+
+@router.post(
+    "/{quote_id}/execute",
+    response_model=TransactionOut,
+    status_code=201,
+    responses={
+        404: {"description": "Transfer quote not found"},
+        409: {"description": "Transfer quote conflict"},
+        422: {"description": "Validation error"},
+    },
+)
+async def execute_transfer_quote(
+    quote_id: Annotated[int, Path(gt=0)],
+    body: TransferQuoteExecute,
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    await reserve_quote_writer(session)
+    try:
+        quote = await locked_quote(session, quote_id)
+        if quote is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Transfer quote not found",
+            )
+        workspace = await locked_workspace(session, quote.workspace_id)
+        if (
+            workspace is None
+            or workspace.archived_at is not None
+            or workspace.owner_user_id != user.id
+            or quote.created_by_user_id != user.id
+        ):
+            raise HTTPException(
+                status_code=404,
+                detail="Transfer quote not found",
+            )
+
+        accounts = await locked_quote_accounts(session, quote)
+        source = accounts.get(quote.from_account_id)
+        target = accounts.get(quote.to_account_id)
+        if (
+            source is None
+            or target is None
+            or source.workspace_id != workspace.id
+            or target.workspace_id != workspace.id
+        ):
+            raise HTTPException(status_code=404, detail="Account not found")
+        source, _ = await require_account_action(
+            session, source.id, user.id, "edit"
+        )
+        target, _ = await require_account_action(
+            session, target.id, user.id, "edit"
+        )
+
+        if quote.status == "executed" or quote.executed_transaction_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer quote has already been executed",
+            )
+        now = utcnow()
+        if now >= quote.expires_at:
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer quote has expired",
+            )
+        if await quote_is_stale(session, quote, workspace, source, target):
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer quote is stale",
+            )
+
+        command = execution_command(quote, body)
+        if isinstance(command, TransferIn):
+            transaction = await _create_transfer(
+                session,
+                user,
+                command,
+                origin="operations",
+                commit=False,
+            )
+        else:
+            transaction = await _create_exchange(
+                session,
+                user,
+                command,
+                origin="operations",
+                commit=False,
+            )
+        await record_undo_candidate(session, transaction, user)
+        claimed = await session.execute(
+            update(TransferQuote)
+            .where(
+                TransferQuote.id == quote.id,
+                TransferQuote.status == "open",
+                TransferQuote.executed_at.is_(None),
+                TransferQuote.executed_transaction_id.is_(None),
+            )
+            .values(
+                status="executed",
+                executed_at=now,
+                executed_transaction_id=transaction.id,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Transfer quote has already been executed",
+            )
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    await session.refresh(transaction)
+    return await operations_transaction_out(session, transaction, user)

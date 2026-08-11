@@ -43,6 +43,21 @@ app.include_router(periods_router, prefix="/api/v1")
 app.include_router(operations_router, prefix="/api/v1")
 app.include_router(transfer_quotes_router, prefix="/api/v1")
 
+_generated_openapi = app.openapi
+
+
+def openapi_with_explicit_null_defaults():
+    """Preserve frozen null defaults that FastAPI otherwise omits."""
+    schema = _generated_openapi()
+    execute = schema["components"]["schemas"].get("TransferQuoteExecute")
+    if execute is not None:
+        for field in ("local_date", "occurred_at", "note", "counterparty"):
+            execute["properties"][field]["default"] = None
+    return schema
+
+
+app.openapi = openapi_with_explicit_null_defaults
+
 
 @app.get("/health")
 async def health():
