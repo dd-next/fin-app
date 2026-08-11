@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `task/T-014F-financial-date-transaction-feed` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **329 passed** (2026-08-11, T-013E final implementation gate) |
-| Active work | T-002–T-013E accepted; T-014F is claimed and implementing stable persisted financial-date feed; T-014P remains blocked |
+| Last full suite | **333 passed** (2026-08-11, T-014F final implementation gate) |
+| Active work | T-002–T-013E accepted; T-014F final gates passed and awaits owner acceptance; T-014P remains blocked |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-013E accepted; T-014F is `in-progress` on its exact task
-branch; T-014P remains blocked.**
+Status: **T-002–T-013E accepted; T-014F is independently approved in `review`,
+all final gates passed, and owner acceptance is next; T-014P remains blocked.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -106,6 +106,14 @@ branch; T-014P remains blocked.**
   accepted locally by fast-forward.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
+- T-014F adds the closed persisted transaction feed and detail projection with
+  strict versioned cursors, stable financial-date ordering, exact signed legs,
+  accepted visibility/redaction, and no change to `/transactions`. Two P2
+  coverage findings were closed in the existing four focused tests; fresh
+  re-review approved with no open P0–P3. Focused/adjacent `33 passed`, full
+  pytest `333 passed`, Node syntax, and diff checks passed. Owner acceptance is
+  next; T-014P remains blocked until then. Detailed evidence:
+  [`tasks/T-014F-financial-date-transaction-feed.md`](tasks/T-014F-financial-date-transaction-feed.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

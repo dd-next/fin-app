@@ -472,6 +472,26 @@ class TransactionPageOut(BaseModel):
     next_cursor: int | None
 
 
+class TransactionFeedTransactionOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["transaction"]
+    key: str = Field(pattern=r"^transaction:[1-9][0-9]*$")
+    financial_date: date
+    mobile_type: Literal["income", "expense", "transfer", "adjustment"]
+    transaction_type: Literal[
+        "income", "expense", "transfer", "exchange", "adjustment"
+    ]
+    transaction: TransactionOut
+
+
+class TransactionFeedPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TransactionFeedTransactionOut]
+    next_cursor: str | None
+
+
 SharedRole = Literal["editor", "contributor", "viewer"]
 
 

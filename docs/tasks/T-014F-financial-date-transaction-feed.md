@@ -1,7 +1,7 @@
 ---
 id: T-014F
 title: Expose a stable financial-date feed for persisted transactions
-status: in-progress
+status: review
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md feed ordering and adjustment/exchange rows
 blocked-by: [T-001]
@@ -21,26 +21,26 @@ the richer existing desktop transaction API.
 
 ## Acceptance
 
-- [ ] Add authenticated `GET /api/v1/transaction-feed` with query parameters
+- [x] Add authenticated `GET /api/v1/transaction-feed` with query parameters
       `filter` (default `all`, exact enum `all|income|expense|transfer`),
       `cursor` (optional opaque versioned string), and `limit` (integer default
       `50`, inclusive `1..100`). Unknown/duplicate parameters, malformed or
       unsupported-version cursors, non-integer limits, and invalid filter
       values are `422` and perform no database write.
-- [ ] The response is exactly `{items, next_cursor}` with no extra properties.
+- [x] The response is exactly `{items, next_cursor}` with no extra properties.
       Every item in this task is a closed discriminated transaction projection:
       `kind="transaction"`, stable `key="transaction:<positive id>"`,
       `financial_date`, `mobile_type`, `transaction_type`, and the existing
       full `TransactionOut` under `transaction`. IDs and Decimal values are
       never copied into an alternative lossy representation.
-- [ ] Mapping is exact: domain `income|expense|transfer` keeps the same
+- [x] Mapping is exact: domain `income|expense|transfer` keeps the same
       `mobile_type`; `exchange` maps to mobile `transfer` while retaining
       `transaction_type="exchange"` and both exact signed amount legs in the nested
       detail; `adjustment` maps to mobile `adjustment`, remains identifiable as
       a non-convertible balance correction, and retains its signed leg.
       Exchange and adjustment appear only under `filter=all`; the three named
       filters select only their matching domain transaction type.
-- [ ] Feed visibility and redaction exactly reuse the accepted transaction
+- [x] Feed visibility and redaction exactly reuse the accepted transaction
       list/detail rules: primary-workspace rows, visible shared-account legs,
       and creator-owned unassigned rows are eligible; inaccessible legs stay
       redacted through `has_hidden_legs`; foreign/hidden detail IDs return the
@@ -50,34 +50,34 @@ the richer existing desktop transaction API.
       task performs no Plan materialization and adds no Plan projection/detail
       field beyond that existing compatibility value; private period/rate state
       is neither queried nor exposed.
-- [ ] Persisted items order descending by the stable total key
+- [x] Persisted items order descending by the stable total key
       `(financial_date, sort_at, kind_rank, item_id)`, where
       `financial_date=Transaction.local_date`, `sort_at=occurred_at`,
       `kind_rank=1`, and `item_id=Transaction.id`. The opaque cursor encodes
       that complete last-item key plus version `1`; continuation applies a
       strict lexicographic `<` predicate. A fixed dataset produces no duplicate
       or omitted items across pages, including equal dates/timestamps.
-- [ ] A correction that changes `local_date` or `occurred_at` moves the row to
+- [x] A correction that changes `local_date` or `occurred_at` moves the row to
       its new financial position on a fresh read regardless of ID. Soft Delete
       keeps the row in the same financial position with nested status
       `deleted`; it never removes or re-dates history. Account/period filters on
       the existing `/api/v1/transactions` route retain their accepted snapshot
       and financial-date-independent membership semantics.
-- [ ] Add authenticated
+- [x] Add authenticated
       `GET /api/v1/transaction-feed/transaction/{transaction_id}` using the
       same closed transaction projection as the list. This is the common
       Transaction-details data route that T-014P extends with a `planned`
       discriminator; a positive integer ID is required and hidden/foreign IDs
       return `404 Feed item not found`.
-- [ ] OpenAPI freezes the list/detail query/path bounds, exact item/page
+- [x] OpenAPI freezes the list/detail query/path bounds, exact item/page
       property and required sets, `additionalProperties: false`, discriminator
       constant, enum mappings, cursor string/null shapes, existing nested
       `TransactionOut` reference, and documented `404`/`422` errors.
-- [ ] Existing `GET /api/v1/transactions` filters, integer ID cursor,
+- [x] Existing `GET /api/v1/transactions` filters, integer ID cursor,
       `TransactionPageOut`, detail/correction/Delete routes, explicit
       adjustment/exchange identity, and desktop behavior remain byte-shape
       compatible and regression protected. No existing route is repurposed.
-- [ ] Focused feed ordering/mapping/pagination/privacy/OpenAPI tests, existing
+- [x] Focused feed ordering/mapping/pagination/privacy/OpenAPI tests, existing
       transaction/period tests, full pytest, Node syntax, and diff/status gates
       pass on isolated fixtures.
 
@@ -225,6 +225,116 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - Resolution: none required.
 - Verdict: approved with no open P0–P3.
 
+### Implementation review Pass 1
+
+- Reviewer task name/vendor: `/root/t014f_impl_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed HEAD: `908f5f2309c8948e3f912f2f75e07dc40417ffd8`.
+- Reviewed manifest: modified `app/main.py`, `app/schemas.py`; untracked
+  `app/transaction_feed.py`, `tests/test_transaction_feed_v21.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only implementation review for T-014F at HEAD `908f5f2309c8948e3f912f2f75e07dc40417ffd8`.
+  >
+  > Verdict: **CHANGES REQUIRED**
+  >
+  > - P0: none.
+  > - P1: none. The initially found permissive Base64 cursor handling is closed in the latest worktree: decoding now validates the URL-safe alphabet and canonical unpadded encoding, with malformed-character and extra-padding regressions.
+  > - P2 — The OpenAPI regression does not freeze the full acceptance contract. `tests/test_transaction_feed_v21.py:46-74` verifies only part of the list schema. It does not assert the detail operation and positive-ID bound, detail `404`/`422`, the exact item property-name set, page required set, `mobile_type`/`transaction_type` enums, or cursor request/response `string|null` shapes. An accidental contract drift in any of those explicitly frozen fields would pass.
+  > - P2 — Several explicitly required new feed branches lack meaningful regression coverage. `tests/test_transaction_feed_v21.py:78-92` does not exercise an unsupported cursor version; `:126-140` proves `local_date` correction but not `occurred_at` correction/reordering; `:182-200` does not assert the adjustment’s exact signed leg or the `income` filter; and no test exercises creator-owned unassigned visibility, despite its separate predicate at `app/transaction_feed.py:184-188`. Existing transaction tests protect the legacy route but do not protect these new feed behaviors.
+  > - P3: none.
+  >
+  > Evidence: focused `4 passed in 1.69s`; adjacent `29 passed in 10.17s`; combined `33 passed`; `git diff --check` passed with informational line-ending warnings only. No files were edited.
+- Resolution: expanded the existing four tests rather than adding optional test
+  cases. They now freeze the complete list/detail OpenAPI contract and cover
+  unsupported/noncanonical cursors, `occurred_at` reordering, exact adjustment
+  sign, every filter, and creator-owned unassigned visibility.
+- Verdict: changes required; corrected and submitted for fresh re-review.
+
+### Implementation review Pass 2
+
+- Reviewer task name/vendor: `/root/t014f_impl_review`, same reviewer follow-up
+  used to confirm the immediate fixes; this pass does not replace the required
+  fresh independent corrected-manifest review below.
+- Reviewed HEAD and manifest: the same HEAD and complete corrected worktree as
+  Pass 1.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014F re-review at HEAD `908f5f2309c8948e3f912f2f75e07dc40417ffd8`: **APPROVED**.
+  >
+  > Exact reviewed manifest:
+  >
+  > `M app/main.py`, `M app/schemas.py`, `?? app/transaction_feed.py`, `?? tests/test_transaction_feed_v21.py`.
+  >
+  > - P0: none.
+  > - P1: none.
+  > - P2: none.
+  > - P3: none.
+  >
+  > Both prior P2 findings are closed. The tests now freeze the list/detail OpenAPI shapes, bounds, enums, required/property sets, nullable cursor shapes, nested `TransactionOut`, and detail errors. They also cover unsupported-version and noncanonical cursors, `occurred_at` reordering, exact signed adjustment preservation, every named filter, and creator-owned unassigned visibility.
+  >
+  > Production inspection confirms stable lexicographic financial-date pagination, exact Decimal preservation through the existing serializer, exchange/adjustment mapping, accepted visibility/redaction and Plan-link compatibility, generic hidden-detail `404`, soft-delete retention, and no changes to the existing `/transactions` contract.
+  >
+  > Evidence: focused gate supplied `4 passed in 1.97s`; reviewer rerun `4 passed in 1.82s`; adjacent regression gate `29 passed in 10.17s`; combined evidence `33 passed`; `git diff --check` passed with informational line-ending warnings only. No files were edited.
+- Resolution: none required; both Pass 1 P2 findings are closed.
+- Verdict: approved with no open P0–P3.
+
+### Cumulative process review Pass 3
+
+- Reviewer task name/vendor: `/root/t014f_impl_review`, original implementation
+  reviewer.
+- Reviewed HEAD and manifest: HEAD
+  `908f5f2309c8948e3f912f2f75e07dc40417ffd8`; modified `app/main.py`,
+  `app/schemas.py`, BACKLOG, PROGRESS, and this task; untracked feed module and
+  focused test.
+- Findings (verbatim, P0–P3):
+
+  > Verdict: **CHANGES REQUIRED — process evidence only**
+  >
+  > - P0: none.
+  > - P1: none.
+  > - P2 — The corrected coverage was not reviewed by a fresh reviewer agent as required by `docs/REVIEW_PROTOCOL-v2.md` step 5. Pass 1 and Pass 2 both used the same live identity, `/root/t014f_impl_review`, through successive turns, while `docs/tasks/T-014F-financial-date-transaction-feed.md:256` describes Pass 2 as “fresh Codex.” A new independent read-only reviewer identity must inspect the corrected complete manifest; its verbatim verdict must be recorded, and the inaccurate “fresh” characterization of Pass 2 should be corrected.
+  > - P3: none.
+  >
+  > Technical assessment: all T-014F acceptance items are implemented and covered; the prior cursor and coverage findings are closed. Lifecycle state is now consistent across task, BACKLOG, and PROGRESS: `review`, final gates passed, awaiting owner acceptance, with T-014P still blocked.
+  >
+  > Gate evidence reviewed: focused `4 passed`; focused + adjacent `33 passed`; full pytest `333 passed in 92.73s`; bundled Node syntax check passed; `git diff --check` passed with informational line-ending warnings only. No files were edited.
+- Resolution: corrected Pass 2's reviewer description and assigned the complete
+  corrected manifest to a new independent read-only reviewer identity.
+- Verdict: changes required; resolved by Pass 4.
+
+### Fresh corrected-manifest review Pass 4
+
+- Reviewer task name/vendor: `/root/t014f_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed branch/base/range: branch
+  `task/T-014F-financial-date-transaction-feed`, accepted base
+  `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c`, HEAD
+  `908f5f2309c8948e3f912f2f75e07dc40417ffd8`, committed range
+  `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c..908f5f2309c8948e3f912f2f75e07dc40417ffd8`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only final corrected-manifest review for T-014F: **APPROVED**.
+  >
+  > Complete reviewed working-tree manifest: `M app/main.py`, `M app/schemas.py`, `M docs/BACKLOG.md`, `M docs/PROGRESS.md`, `M docs/tasks/T-014F-financial-date-transaction-feed.md`, `?? app/transaction_feed.py` (SHA-256 `9D1E78DE9C0E5FD3CFF16549427EB3F9814A8EDA092D3FF49A4ABB194D0C8111`), `?? tests/test_transaction_feed_v21.py` (SHA-256 `6F04D309B44599121DEE69CB7AB8A1A117502DD9EA15DEAD39B5791B2DC6FDFD`).
+  >
+  > - P0: none.
+  > - P1: none.
+  > - P2: none.
+  > - P3: none.
+  >
+  > The previous cursor finding is closed: cursor decoding now enforces the URL-safe alphabet, canonical unpadded Base64, exact versioned payload keys and types, supported version, naive timestamp, valid rank, and positive item ID. The previous coverage findings are also closed: the four focused tests now freeze the list/detail OpenAPI contracts and cover unsupported/noncanonical cursors, both financial-date and timestamp reordering, exact signed adjustment and exchange legs, all filters, creator-owned unassigned visibility, Plan-link compatibility, shared-leg redaction, generic hidden-detail `404`, soft-delete retention, and legacy `/transactions` compatibility.
+  >
+  > Production inspection confirms the required descending total order and strict continuation predicate, exact nested `TransactionOut` serialization without lossy money conversion, exchange/adjustment mobile mapping, accepted owner/shared visibility boundaries, owner-only Plan occurrence lookup compatibility, and no Plan materialization or private period/rate exposure.
+  >
+  > Lifecycle state is consistent: task and BACKLOG are `review`, PROGRESS reports final gates passed awaiting owner acceptance, the immutable base/implementer metadata matches the exact branch claim, T-014P remains `backlog` and blocked by T-014F, and the manifest contains no unrelated implementation work.
+  >
+  > Gate evidence: supplied focused `4 passed`; reviewer rerun focused `4 passed in 1.89s`; supplied combined focused/adjacent `33 passed`; supplied full suite `333 passed in 92.73s`; reviewer rerun `git diff --check` passed with informational line-ending warnings only; supplied Node syntax gate passed. No files were edited.
+  >
+  > Verdict: **approved with no open P0–P3; ready for evidence transcription, task commit, and owner acceptance.**
+- Resolution: none required; the prior process-evidence P2 is closed.
+- Verdict: approved with no open P0–P3.
+
 ## Session log
 
 - 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
@@ -242,3 +352,10 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c`, the exact branch was absent, and
   atomically claimed `task/T-014F-financial-date-transaction-feed`. Recorded
   immutable base/implementer; implementation is next.
+- 2026-08-11 Codex: implemented the stable persisted transaction feed, strict
+  versioned cursor, exact closed projections, detail route, financial ordering,
+  accepted privacy/redaction, and compatibility coverage. Focused/adjacent
+  combined gate is `33 passed`; two P2 coverage findings were fixed within the
+  existing four tests and the fresh re-review approved with no open P0–P3.
+  Full pytest `333 passed in 92.73s`; Node syntax and `git diff --check` passed.
+  Final owner acceptance remains.
