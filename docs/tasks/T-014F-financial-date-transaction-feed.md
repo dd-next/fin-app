@@ -1,7 +1,7 @@
 ---
 id: T-014F
 title: Expose a stable financial-date feed for persisted transactions
-status: review
+status: done
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md feed ordering and adjustment/exchange rows
 blocked-by: [T-001]
@@ -335,6 +335,27 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - Resolution: none required; the prior process-evidence P2 is closed.
 - Verdict: approved with no open P0–P3.
 
+### Owner acceptance lifecycle review
+
+- Reviewer task name/vendor: `/root/t014f_final_review`, read-only Codex
+  same-vendor fallback.
+- Reviewed HEAD and manifest: `20c37c910b12b2f508c82195563696e416c0debc`
+  plus modified BACKLOG, PROGRESS, T-014F, and T-014P documentation only.
+- Findings (verbatim, P0–P3):
+
+  > Read-only lifecycle review: **APPROVED**.
+  >
+  > - P0: none.
+  > - P1: none.
+  > - P2: none.
+  > - P3: none.
+  >
+  > Verified: `20c37c910b12b2f508c82195563696e416c0debc` exists and is the reviewed T-014F implementation commit, directly descending from claim commit `908f5f2309c8948e3f912f2f75e07dc40417ffd8`. T-014F is consistently changed from `review` to `done`. T-014P is readiness-approved, consistently changed from `backlog` to `todo`, and is unblocked because its sole dependency T-014F is now `done`. T-014P retains blank `base-commit` and `implementer`, as required before its atomic branch claim. The exact T-014P branch does not yet exist, so the documented next action remains valid. BACKLOG, PROGRESS, and both task session logs agree on acceptance, promotion, and next action. No application, test, schema, migration, or unrelated files are changed. `git diff --check` passed with informational line-ending warnings only.
+  >
+  > Verdict: **approved with no open P0–P3; the owner-acceptance/promotion documentation is ready to commit before the exact T-014P branch claim.**
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Session log
 
 - 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
@@ -359,3 +380,6 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   existing four tests and the fresh re-review approved with no open P0–P3.
   Full pytest `333 passed in 92.73s`; Node syntax and `git diff --check` passed.
   Final owner acceptance remains.
+- 2026-08-11 repository owner: accepted independently approved commit
+  `20c37c9`; T-014F is `done`. Promoted readiness-approved, now-unblocked
+  T-014P from `backlog` to `todo` for an exact integration-HEAD branch claim.

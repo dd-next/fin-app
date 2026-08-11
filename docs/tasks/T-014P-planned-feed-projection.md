@@ -1,7 +1,7 @@
 ---
 id: T-014P
 title: Project open Plan occurrences through Transaction details
-status: backlog
+status: todo
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md planned ledger rows
 blocked-by: [T-014F]
@@ -261,3 +261,6 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   promotion; no application or database file changed.
 - 2026-08-11 Codex: exact commit `5b47c92` was readiness-confirmed with no open
   P0–P3. T-014F awaits owner promotion; T-014P is ready but remains blocked.
+- 2026-08-11 repository owner: accepted T-014F commit `20c37c9` and promoted
+  readiness-approved T-014P from `backlog` to `todo`. Exact branch claim from
+  the resulting accepted integration HEAD is next.
