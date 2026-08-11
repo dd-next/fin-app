@@ -8,9 +8,9 @@ blocked-by: [T-012]
 branch: task/T-013Q-transfer-quote
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t013_readiness_confirmation (Codex same-vendor fallback)
+readiness-reviewed-commit: dacb871
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -385,6 +385,43 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
   documentation-only readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 4
+
+- Reviewer task name/vendor: `/root/t013_readiness_confirmation`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: final corrective range `7c7b511..dacb871` plus the
+  cumulative T-013Q/T-013E readiness history.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > The sole Pass 3 P1 is closed:
+  >
+  > - Quote creation and execution are owner-only for both same-asset and cross-asset paths. Shared editor/contributor/viewer and unrelated-user privacy behavior is explicitly covered, while the existing direct same-asset transfer retains shipped editor behavior.
+  > - Same-asset quote creation rejects an applicable `main_to_asset_legacy` row with explicit resave-required `422`; execution treats a newly applicable legacy row as stale.
+  > - Same-asset neutrality is sufficient: Main identity, canonical multiplication, workspace-wide latest direct-exchange multiplication, and unvalued exclusion each apply uniformly to both accounts of the same asset. Since the quoted amounts are equal, their combined asset balance is unchanged. Legacy division—the only non-additive path—is excluded.
+  > - Cross-asset quotes accept only canonical `asset_to_main` dependencies. For source balance `Bₛ`, target balance `Bₜ`, amounts `a`, `b`, canonical rates `rₛ`, `rₜ`, the summary changes by `−a·rₛ + b·rₜ`. T-013Q requires exact `a·rₛ = b·rₜ` after destination quantization and before Main/presentation rounding, so the delta is exactly zero. Every unrelated valued, legacy, fallback, or unvalued balance remains unchanged; therefore the final aggregate Main quantization is unchanged.
+  > - The prior legacy counterexample can no longer enter either path: legacy rows are rejected/resave-required at quote and stale at execute.
+  >
+  > No earlier P1/P2 regressed:
+  >
+  > - Canonical-only dependency tuples have exact all-or-none presence rules, positive values, `asset_to_main` direction, identity/cross-asset consistency, and SQLite/PostgreSQL verification requirements.
+  > - Quote and execute request/response/OpenAPI contracts are frozen, including strict Decimal strings, ID bounds, nested account shape, timestamps, body defaults, status codes, and exact errors.
+  > - State, FK/delete behavior, unique execution linkage, five-minute boundary, immutable dependency snapshots, stale behavior, concurrency guard, permanent single-use lifecycle, and empty-only downgrade are coherent.
+  > - Conflict precedence remains permissions/privacy → executed → expired → stale.
+  > - Main-ID behavior, changed/deleted dependency behavior, correction/Delete/Undo behavior, router registration, Touches, Out-of-scope, and Verification remain explicit and bounded.
+- Resolution: no change required; every prior readiness finding is closed.
+- Reviewer checks: `git diff --check 7c7b511 dacb871` passed; worktree clean;
+  no application tests run for documentation-only readiness.
+- Verdict: ready for repository-owner readiness recording and backlog → todo
+  promotion.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -412,3 +449,6 @@ the review; the implementer records it verbatim following
   owner-only and reject applicable legacy rows until explicit canonical resave;
   the neutrality proof uses additive canonical multiplication. Fresh readiness
   re-review remains; no application code or database was changed.
+- 2026-08-11 Codex: readiness Pass 4 approved committed task `dacb871` with no
+  P0–P3 findings. Owner promotion and exact T-013Q branch claim are next; no
+  application code or database was changed.

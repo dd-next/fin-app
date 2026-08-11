@@ -8,9 +8,9 @@ blocked-by: [T-013Q]
 branch: task/T-013E-transfer-execution
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t013_readiness_confirmation (Codex same-vendor fallback)
+readiness-reviewed-commit: dacb871
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -221,6 +221,22 @@ BUILD_PLAN, and REVIEW_PROTOCOL.
   documentation-only readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 4
+
+- Reviewer task name/vendor: `/root/t013_readiness_confirmation`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `7c7b511..dacb871` plus cumulative split-task
+  readiness history.
+- Findings (verbatim, P0–P3): the complete confirmation is recorded under
+  [`T-013Q` Readiness Pass 4](T-013Q-transfer-quote.md#pass-4). It returned
+  `P0: None`, `P1: None`, `P2: None`, and `P3: None`, confirmed the legacy
+  counterexample cannot enter either quote path, and found no earlier
+  privacy/API/state/concurrency/migration/lifecycle regression.
+- Resolution: no change required; every prior readiness finding is closed.
+- Reviewer checks: `git diff --check 7c7b511 dacb871` passed; worktree clean;
+  no application tests run for documentation-only readiness.
+- Verdict: ready, but remains blocked by accepted T-013Q implementation.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -246,3 +262,6 @@ the review; the implementer records it verbatim following
   valuation. Quoted commands are now owner-only and reject applicable legacy
   rates until T-012 resaves them canonical; execution stales if legacy becomes
   applicable. Fresh re-review remains; no application code or database changed.
+- 2026-08-11 Codex: readiness Pass 4 approved committed split-task definitions
+  at `dacb871` with no P0–P3 findings. T-013E remains blocked by accepted
+  T-013Q; no application code or database was changed.
