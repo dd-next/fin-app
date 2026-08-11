@@ -441,6 +441,25 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
 - Resolution: none required.
 - Verdict: approved.
 
+### Blocked handoff review
+
+- Reviewer task name/vendor: `/root/t013_blocked_handoff_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: HEAD `f026d02` plus the sole uncommitted T-013Q session-log
+  block; no application or database files.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Approved.
+  >
+  > The handoff block accurately reflects HEAD `f026d02`, T-013Q’s `backlog`/unclaimed state, readiness approval, absent task branch, required owner promotion, and the lack of application, schema, migration, test, or database changes. It does not misstate the Phase 14 release status. `git diff --check` passed; no files were edited.
+- Resolution: none required.
+- Verdict: approved.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -474,3 +493,8 @@ the review; the implementer records it verbatim following
 - 2026-08-11 Codex: updated the concise release-state handoff after readiness;
   a fresh read-only reviewer approved its exact backlog/task consistency with
   no P0–P3. T-013Q remains unclaimed pending owner promotion.
+- 2026-08-11 Codex: resumed the active backend goal and rechecked integration
+  HEAD `f026d02`, task/backlog status, readiness, dependencies, branch absence,
+  and clean worktree. T-013Q is still `backlog`, so the repository-owner
+  promotion gate remains unchanged and implementation cannot be claimed or
+  started; no application, migration, test, schema, or database file changed.
