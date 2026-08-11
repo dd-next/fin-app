@@ -33,27 +33,47 @@ asks for the opposite legacy direction.
       and reciprocal values outside supported 38/18-decimal storage return
       input-derived `422` and mutate no row or account valuation.
 - [ ] Save and list responses expose exact keys `id`, `workspace_id`,
-      `from_asset`, `to_asset`, `rate`, `source`, `active`, `created_at`, and
+      `from_asset`, `to_asset`, `rate`, `source`, `created_at`, and
       `updated_at`. `from_asset` is the path asset, `to_asset` is the current
       Main currency, `source` is exactly `manual`, and `rate` is the normalized
       source-to-Main Decimal. Legacy `main_asset`, `asset`, `displayed_rate`,
-      and `effective_valuation_rate` keys are absent from the public contract
-      and OpenAPI.
+      `effective_valuation_rate`, and redundant `active` keys are absent from
+      the public contract and OpenAPI.
 - [ ] The visible sample `VND → USD`, rate `0.000038`, round-trips in the same
       direction without float conversion. A VND balance is valued by
       `balance × rate` before the existing Main-currency `ROUND_HALF_UP`
       presentation boundary; no intermediate money value is quantized.
-- [ ] The existing internal `ManualValuationRate.displayed_rate` column remains
-      an implementation-only Main-to-asset reciprocal so accepted databases
-      need no migration. PUT derives and validates the reciprocal with the
-      shared high-precision Decimal helpers, stores a supported 18-place
-      reciprocal, and output derives a supported 18-place mobile rate. Public
-      Decimal equality is stable across PUT, GET, reload, and repeated upsert.
-- [ ] Exact boundaries are regression-protected: `rate=1` for a non-Main pair,
-      the smallest supported positive direction, high-precision terminating
-      and repeating reciprocal examples, and the first rate whose reciprocal
-      falls below supported precision. Rejected boundary requests preserve the
-      previous stored rate and derived summary exactly.
+- [ ] The shipped precision regression remains exact in the new direction:
+      public `VND → USD` rate `0.000038034383082306` values
+      `15,258,400 VND` to `580.34 USD`. The shorter frozen-screen sample and
+      this mandatory valuation fixture are separate, both tested, and neither
+      is replaced with a hard-coded total.
+- [ ] New/updated rows store the submitted canonical source-to-Main `rate`
+      exactly; valuation multiplies the exact balance by it. The implementation
+      never replaces the authoritative input with a rounded reciprocal. Public
+      Decimal equality and derived valuation are stable across PUT, GET,
+      reload, repeated upsert, SQLite, and the declared PostgreSQL Numeric
+      boundary.
+- [ ] A forward-only Alembic revision renames the internal
+      `displayed_rate` column to neutral `rate_value` and adds a constrained
+      direction discriminator with exactly `asset_to_main` and
+      `main_to_asset_legacy`. Existing rows retain IDs, pair keys, numeric
+      values, timestamps, and uniqueness byte-for-value and are tagged legacy;
+      they are not inverted or rounded during migration. Fresh creates and
+      updates use `asset_to_main`; updating a legacy row preserves its ID and
+      converts that row to canonical storage.
+- [ ] Legacy rows remain readable and usable during the transition: output
+      derives a supported 18-place asset-to-Main Decimal with the shared
+      high-precision quotient/quantization helpers, and valuation divides only
+      legacy rows. Canonical rows multiply. No float, ambient Decimal context,
+      double inversion, or intermediate money quantization is allowed.
+- [ ] Exact boundaries are regression-protected: `rate=1` for a non-Main pair;
+      minimum `0.000000000000000001`; maximum modeled Numeric value
+      `99999999999999999999.999999999999999999`; one over-38-digit value; one
+      19-place value; and high-precision terminating/repeating legacy
+      conversions. The API enforces the modeled Numeric(38,18) portability
+      domain even when SQLite TEXT could store more. Rejected boundary requests
+      preserve the previous stored rate/direction and derived summary exactly.
 - [ ] Saving the Main currency as its own source remains `422 Main currency
       always values itself at exactly 1`; an unknown/inactive asset remains
       `422 Unknown asset`. A successful repeated PUT updates the same pair row,
@@ -74,10 +94,16 @@ asks for the opposite legacy direction.
       multi-hop/foreign-workspace rates remain ineligible. Ledger values,
       signed exchange legs, and Main-currency display quantization do not
       change.
+- [ ] The ledger and API share one canonical conversion helper: canonical rows
+      use `decimal_product(balance, rate_value)`, legacy rows use the one
+      explicit high-precision quotient path, and API output uses the same
+      direction logic. Focused source assertions forbid `float(` and prevent
+      the old unconditional `balance / displayed_rate` path from surviving.
 - [ ] OpenAPI has one exact mobile-direction request/response schema and no
-      opposite-direction public properties. The dormant database column and
-      historical migration assertions remain unchanged; no Alembic revision,
-      model/table change, reset, or `finapp.db` access occurs.
+      opposite-direction public properties. Migration tests prove clean install,
+      accepted `0002` upgrade, legacy-row preservation, canonical new writes,
+      constraints, application lifespan, and no schema drift beyond the one
+      reviewed manual-rate revision. No reset or `finapp.db` access occurs.
 - [ ] Focused API/source tests, valuation/ledger/privacy/migration regressions,
       full pytest, Node syntax, and diff checks pass on isolated fixtures.
 
@@ -85,9 +111,13 @@ asks for the opposite legacy direction.
 
 - `app/schemas.py`
 - `app/valuation_rates.py`
+- `app/models.py`
+- `app/ledger.py`
+- `alembic/versions/0003_manual_rate_direction.py`
 - `tests/test_valuation_rate_direction_v21.py`
 - `tests/test_valuation_v2.py` and precision/privacy tests only where their
   old public direction is mechanically superseded
+- `tests/test_migrations_v2.py`
 - `docs/tasks/T-012-mobile-valuation-rate-direction.md`
 - `docs/BACKLOG.md` and `docs/PROGRESS.md` for task lifecycle only
 
@@ -100,7 +130,7 @@ asks for the opposite legacy direction.
   exchange-rate rows.
 - Cross-workspace or multi-hop valuation, changes to valuation precedence,
   account/transaction/period/Plan behavior, new assets, or display formatting.
-- Model/table/column renames, Alembic migrations, legacy database rewrites,
+- Any legacy-row numeric inversion, database reset, unrelated schema change,
   desktop/mobile UI implementation, Phase 15, push, PR, or deployment.
 
 ## Verification
@@ -155,3 +185,7 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-11 Codex: drafted the bounded asset-to-Main manual-rate contract
   after local T-010 acceptance. Independent gap analyses and readiness review,
   owner promotion, exact branch claim, implementation, and review remain.
+- 2026-08-11 Codex: independent storage analysis found that a finite canonical
+  rate can have a non-terminating reciprocal. The task now stores new canonical
+  values exactly and migrates existing inverse rows with a direction tag and no
+  numeric rewrite; readiness review remains.
