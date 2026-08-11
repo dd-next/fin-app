@@ -124,7 +124,7 @@ async def test_natural_expiry_get_list_close_and_edit_are_persistence_neutral(cl
     period = await create_period(
         client,
         account["id"],
-        "100",
+
         today - timedelta(days=4),
         today - timedelta(days=2),
     )
@@ -143,7 +143,7 @@ async def test_natural_expiry_get_list_close_and_edit_are_persistence_neutral(cl
 
     edited = await client.patch(
         f"/api/v1/account-periods/{period['id']}",
-        json={"end_date": today.isoformat(), "confirm_ended_period": True},
+        json={"end_date": today.isoformat()},
     )
     assert edited.status_code == 409
     assert edited.json()["detail"] == "Ended account period is read-only"
@@ -159,7 +159,7 @@ async def test_manual_close_captures_exact_balance_without_mutating_ledger(
     await register(client)
     account = await create_account(client, "Exact close BTC", "BTC", "0")
     today = local_today()
-    period = await create_period(client, account["id"], "0", today, today)
+    period = await create_period(client, account["id"],  today, today)
     fixed = datetime.now(UTC).replace(tzinfo=None, microsecond=123456)
     exact = Decimal("0.123456789012345678")
     await add_test_leg(client, account["id"], str(exact), fixed)
@@ -184,7 +184,7 @@ async def test_manual_close_captures_exact_balance_without_mutating_ledger(
 async def test_closed_snapshots_survive_correction_delete_and_undo(client):
     await register(client)
     account = await create_account(client, "Closed edits USD", "USD", "100")
-    period = await create_period(client, account["id"], "100")
+    period = await create_period(client, account["id"])
     spent = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": account["id"], "amount": "10"},
@@ -228,7 +228,7 @@ async def test_same_day_closed_successor_partitions_exact_close_boundary(
     account = await create_account(client, "Same-day successor BTC", "BTC", "0")
     today = local_today()
     predecessor = await create_period(
-        client, account["id"], "0", today, today + timedelta(days=5)
+        client, account["id"],  today, today + timedelta(days=5)
     )
     fixed = datetime.now(UTC).replace(tzinfo=None, microsecond=234567)
     exact = Decimal("0.333333333333333333")
@@ -246,7 +246,7 @@ async def test_same_day_closed_successor_partitions_exact_close_boundary(
     closed = await client.post(f"/api/v1/account-periods/{predecessor['id']}/close")
     assert closed.status_code == 200, closed.text
     successor = await create_period(
-        client, account["id"], "0", today, today + timedelta(days=2)
+        client, account["id"],  today, today + timedelta(days=2)
     )
 
     async with client._finapp_test_sessions() as session:
@@ -275,14 +275,14 @@ async def test_natural_successor_uses_latest_non_utc_end_boundary(client):
     older = await create_period(
         client,
         account["id"],
-        "0",
+
         today - timedelta(days=9),
         today - timedelta(days=7),
     )
     latest = await create_period(
         client,
         account["id"],
-        "0",
+
         today - timedelta(days=6),
         today - timedelta(days=2),
     )
@@ -315,7 +315,7 @@ async def test_natural_successor_uses_latest_non_utc_end_boundary(client):
     successor = await create_period(
         client,
         account["id"],
-        "0",
+
         today - timedelta(days=3),
         today + timedelta(days=2),
     )
@@ -347,21 +347,20 @@ async def test_only_same_account_current_period_blocks_creation(client):
     first = await create_account(client, "Current guard one USD", "USD", "10")
     second = await create_account(client, "Current guard two USD", "USD", "20")
     today = local_today()
-    await create_period(client, first["id"], "10", today, today + timedelta(days=2))
+    await create_period(client, first["id"],  today, today + timedelta(days=2))
 
     blocked = await client.post(
         f"/api/v1/accounts/{first['id']}/periods",
         json={
             "start_date": (today - timedelta(days=1)).isoformat(),
             "end_date": (today + timedelta(days=1)).isoformat(),
-            "funding_amount": "10",
         },
     )
     assert blocked.status_code == 409
     assert blocked.json()["detail"] == "Account already has a current period"
 
     independent = await create_period(
-        client, second["id"], "20", today, today + timedelta(days=1)
+        client, second["id"],  today, today + timedelta(days=1)
     )
     assert independent["status"] == "current"
 
@@ -377,7 +376,6 @@ async def test_concurrent_current_period_creation_serializes_at_guard(
     body = {
         "start_date": today.isoformat(),
         "end_date": (today + timedelta(days=2)).isoformat(),
-        "funding_amount": "100",
     }
 
     first, second = await asyncio.gather(

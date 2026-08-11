@@ -66,8 +66,7 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "operations-period-history",
         "operations-period-retry",
         "operations-period-available",
-        "operations-period-remaining",
-        "operations-period-planned",
+        "operations-period-current-balance",
         "period-dialog",
         "period-form",
         "period-save",
@@ -131,10 +130,15 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert "saveOperationsTransfer" in javascript
     assert "Cross-asset exchange" in javascript
     assert "This transaction needs explicit confirmation. Continue?" in javascript
-    assert "This period needs explicit confirmation. Continue?" in javascript
+    assert "This period needs explicit confirmation. Continue?" not in javascript
     assert "This changes an ended account period" not in javascript
     assert 'canUseAccount(account, "owner")' in javascript
-    assert "period?.funding_amount ?? account.balance" in javascript
+    assert "period-funding" not in javascript
+    assert "period.funding_amount" not in javascript
+    assert "period.remaining" not in javascript
+    assert "current.remaining" not in javascript
+    assert "current.planned" not in javascript
+    assert "occurrence.planned_amount" in javascript
     assert 'period.status === "current"' in javascript
     assert "operationsPeriodRequestId" in javascript
     assert "Period data could not be loaded. Try again." in javascript

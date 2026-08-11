@@ -125,8 +125,7 @@
           </div>
           <div class="operations-period-cards summary-grid">
             <article class="metric-card"><span>Available today</span><strong id="operations-period-available">N/A</strong></article>
-            <article class="metric-card"><span>Remaining</span><strong id="operations-period-remaining">N/A</strong></article>
-            <article class="metric-card"><span>Planned</span><strong id="operations-period-planned">N/A</strong></article>
+            <article class="metric-card"><span>Current balance</span><strong id="operations-period-current-balance">N/A</strong></article>
           </div>
           <p id="operations-period-status" class="muted" role="status">Select an account to see its period.</p>
         </section>
@@ -253,9 +252,7 @@
       <div class="form-grid two-columns">
         <label>Start date<input id="period-start" type="date" required></label>
         <label>End date<input id="period-end" type="date" required></label>
-        <label class="span-two">Funding amount<input id="period-funding" inputmode="decimal" required></label>
       </div>
-      <p class="muted">Funding is a snapshot. Existing activity is not replayed into it.</p>
       <p id="period-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="period-dialog">Cancel</button><button id="period-save" type="submit">Save period</button></div>
     </form>

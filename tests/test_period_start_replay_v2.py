@@ -104,7 +104,6 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
         json={
             "start_date": (today - timedelta(days=2)).isoformat(),
             "end_date": (today + timedelta(days=2)).isoformat(),
-            "funding_amount": "999",
         },
     )
     assert past.status_code == 201, past.text
@@ -115,7 +114,6 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
         json={
             "start_date": today.isoformat(),
             "end_date": today.isoformat(),
-            "funding_amount": "999",
         },
     )
     assert today_response.status_code == 201, today_response.text
@@ -126,7 +124,6 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
         json={
             "start_date": (today + timedelta(days=1)).isoformat(),
             "end_date": (today + timedelta(days=2)).isoformat(),
-            "funding_amount": "999",
         },
     )
     assert future.status_code == 422
@@ -139,7 +136,6 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
         json={
             "start_date": today.isoformat(),
             "end_date": (today - timedelta(days=1)).isoformat(),
-            "funding_amount": "999",
         },
     )
     assert invalid.status_code == 422
@@ -152,7 +148,7 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
     await create_period(
         client,
         chronology_account["id"],
-        "999",
+
         today - timedelta(days=5),
         today - timedelta(days=3),
     )
@@ -163,7 +159,6 @@ async def test_create_explicit_start_validation_and_snapshot_chronology(client):
             json={
                 "start_date": (today - timedelta(days=5)).isoformat(),
                 "end_date": end_date.isoformat(),
-                "funding_amount": "999",
             },
         )
         assert rejected.status_code == 422
@@ -211,7 +206,7 @@ async def test_start_replay_moves_backward_and_forward_without_ledger_change(cli
     period = await create_period(
         client,
         account["id"],
-        "999",
+
         today - timedelta(days=1),
         today + timedelta(days=2),
     )
@@ -222,7 +217,7 @@ async def test_start_replay_moves_backward_and_forward_without_ledger_change(cli
         json={"start_date": (today - timedelta(days=2)).isoformat()},
     )
     assert backward.status_code == 200, backward.text
-    assert backward.json()["funding_amount"] == "5.00000000"
+    assert backward.json()["opening_balance"] == "5.00000000"
 
     reference_time = forward_boundary + timedelta(hours=1)
     async with client._finapp_test_sessions() as session:
@@ -270,7 +265,7 @@ async def test_replay_failure_rolls_back_period_and_ledger(client, monkeypatch):
     account = await create_account(client, "Replay rollback USD", "USD", "100")
     today = local_today()
     period = await create_period(
-        client, account["id"], "999", today - timedelta(days=1), today + timedelta(days=2)
+        client, account["id"],  today - timedelta(days=1), today + timedelta(days=2)
     )
     before_period = await persisted_period(client, period["id"])
     before_ledger = await ledger_rows(client, account["id"])
@@ -326,7 +321,7 @@ async def test_resulting_ended_replay_is_strict_read_only_and_allows_successor(c
     period = await create_period(
         client,
         account["id"],
-        "999",
+
         today - timedelta(days=2),
         today + timedelta(days=1),
     )
@@ -363,7 +358,7 @@ async def test_resulting_ended_replay_is_strict_read_only_and_allows_successor(c
     assert await persisted_period(client, period["id"]) == stored
 
     successor = await create_period(
-        client, account["id"], "999", today, today + timedelta(days=2)
+        client, account["id"],  today, today + timedelta(days=2)
     )
     assert successor["status"] == "current"
     async with client._finapp_test_sessions() as session:
@@ -388,7 +383,7 @@ async def test_same_day_predecessor_overlap_and_end_chronology_guards(
         today_boundary = workspace_day_boundary(workspace, today)
 
     predecessor = await create_period(
-        client, account["id"], "999", today - timedelta(days=2), today + timedelta(days=5)
+        client, account["id"],  today - timedelta(days=2), today + timedelta(days=5)
     )
 
     class BoundaryDateTime(datetime):
@@ -404,7 +399,7 @@ async def test_same_day_predecessor_overlap_and_end_chronology_guards(
     )
     assert closed.status_code == 200, closed.text
     successor = await create_period(
-        client, account["id"], "999", today, today + timedelta(days=4)
+        client, account["id"],  today, today + timedelta(days=4)
     )
     before_ledger = await ledger_rows(client, account["id"])
 
@@ -463,7 +458,7 @@ async def test_distinct_current_guard_and_other_account_patch_independence(clien
     guarded = await create_period(
         client,
         guarded_account["id"],
-        "999",
+
         today - timedelta(days=1),
         today + timedelta(days=2),
     )
@@ -473,7 +468,7 @@ async def test_distinct_current_guard_and_other_account_patch_independence(clien
     independent = await create_period(
         client,
         independent_account["id"],
-        "999",
+
         today - timedelta(days=1),
         today + timedelta(days=2),
     )
@@ -532,7 +527,7 @@ async def test_stale_patch_waits_for_accepted_successor_and_does_not_revive_targ
     account = await create_account(client, "Stale replay USD", "USD", "100")
     today = local_today()
     target = await create_period(
-        client, account["id"], "999", today - timedelta(days=1), today + timedelta(days=2)
+        client, account["id"],  today - timedelta(days=1), today + timedelta(days=2)
     )
     before_ledger = await ledger_rows(client, account["id"])
     sessions = client._finapp_test_sessions

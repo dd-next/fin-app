@@ -203,7 +203,6 @@ class AccountPeriodCreate(BaseModel):
     rollover_policy: Literal[
         "carry_next_day", "redistribute_remaining_days"
     ] | None = None
-    funding_amount: DecimalAmount | None = None
 
 
 class AccountPeriodPatch(BaseModel):
@@ -214,8 +213,6 @@ class AccountPeriodPatch(BaseModel):
     rollover_policy: Literal[
         "carry_next_day", "redistribute_remaining_days"
     ] | None = None
-    funding_amount: object | None = None
-    confirm_ended_period: bool = False
 
 
 class AccountPeriodCommonOut(BaseModel):
@@ -228,8 +225,6 @@ class AccountPeriodCommonOut(BaseModel):
     snapshot_at: datetime
     opening_balance: Decimal
     rollover_policy: Literal["carry_next_day", "redistribute_remaining_days"]
-    funding_amount: Decimal
-    planned: Decimal
     created_at: datetime
 
 
@@ -239,21 +234,18 @@ class AccountPeriodCurrentOut(AccountPeriodCommonOut):
     closing_balance: None = None
     current_balance: Decimal
     available_today: Decimal
-    remaining: Decimal
 
 
 class AccountPeriodEndedOut(AccountPeriodCommonOut):
     status: Literal["ended"]
     closed_at: None = None
     closing_balance: None = None
-    remaining: None = None
 
 
 class AccountPeriodClosedOut(AccountPeriodCommonOut):
     status: Literal["closed"]
     closed_at: datetime
     closing_balance: Decimal
-    remaining: Decimal
 
 
 AccountPeriodOut = (

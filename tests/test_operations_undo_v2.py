@@ -58,8 +58,8 @@ async def test_transfer_undo_consumes_every_root_leg_and_replays_periods(client)
     await register(client)
     source = await create_account(client, "Undo source USD", "USD", "100")
     target = await create_account(client, "Undo target USD", "USD", "0")
-    source_period = await create_period(client, source["id"], "100")
-    target_period = await create_period(client, target["id"], "0")
+    source_period = await create_period(client, source["id"])
+    target_period = await create_period(client, target["id"])
     assert (
         await client.post(
             "/api/v1/operations/spend",
@@ -95,10 +95,10 @@ async def test_transfer_undo_consumes_every_root_leg_and_replays_periods(client)
     assert await balance(client, target["id"]) == Decimal("2")
     assert (
         await client.get(f"/api/v1/account-periods/{source_period['id']}")
-    ).json()["remaining"] == "99.00"
+    ).json()["current_balance"] == "99.00"
     assert (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
-    ).json()["remaining"] == "2.00"
+    ).json()["current_balance"] == "2.00"
 
 
 async def test_undo_rejects_a_stale_candidate_confirmed_in_another_tab(client):
@@ -315,7 +315,7 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     period = await create_period(
         client,
         account["id"],
-        "100",
+
         ended_date - timedelta(days=1),
         ended_date + timedelta(days=1),
     )
@@ -350,7 +350,7 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     assert await candidate(client, account["id"]) is None
 
     closed_account = await create_account(client, "Undo closed USD", "USD", "50")
-    closed_period = await create_period(client, closed_account["id"], "50")
+    closed_period = await create_period(client, closed_account["id"])
     closed_operation = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": closed_account["id"], "amount": "3"},

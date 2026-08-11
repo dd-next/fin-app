@@ -19,14 +19,13 @@ def local_today():
     return datetime.now(UTC).astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
 
 
-async def create_period(client, account_id, funding, start=None, end=None):
+async def create_period(client, account_id, start=None, end=None):
     today = local_today()
     response = await client.post(
         f"/api/v1/accounts/{account_id}/periods",
         json={
             "start_date": (start or today - timedelta(days=2)).isoformat(),
             "end_date": (end or today + timedelta(days=2)).isoformat(),
-            "funding_amount": funding,
         },
     )
     assert response.status_code == 201, response.text
@@ -105,9 +104,9 @@ async def add_test_leg(client, account_id, amount, created_at, *, status="posted
 async def test_snapshot_boundary_replay_correction_and_void(client):
     await register(client)
     account = await create_account(client, "Period USD", "USD", "900")
-    period = await create_period(client, account["id"], "900")
+    period = await create_period(client, account["id"])
     assert period["status"] == "current"
-    assert period["remaining"] == "900.00"
+    assert period["current_balance"] == "900.00"
 
     spent = await client.post(
         "/api/v1/operations/spend",
@@ -120,7 +119,7 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert spent.status_code == 201, spent.text
     leg_created_at = spent.json()["legs"][0]["created_at"]
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "875.00"
+    assert replayed["current_balance"] == "875.00"
 
     corrected = await client.patch(
         f"/api/v1/transactions/{spent.json()['id']}", json={"amount": "40"}
@@ -128,14 +127,14 @@ async def test_snapshot_boundary_replay_correction_and_void(client):
     assert corrected.status_code == 200, corrected.text
     assert corrected.json()["legs"][0]["created_at"] == leg_created_at
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "860.00"
+    assert replayed["current_balance"] == "860.00"
 
     voided = await client.post(
         f"/api/v1/transactions/{spent.json()['id']}/delete"
     )
     assert voided.status_code == 200, voided.text
     replayed = (await client.get(f"/api/v1/account-periods/{period['id']}")).json()
-    assert replayed["remaining"] == "900.00"
+    assert replayed["current_balance"] == "900.00"
 
 
 async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
@@ -145,7 +144,7 @@ async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
     predecessor = await create_period(
         client,
         account["id"],
-        "999",
+
         today - timedelta(days=3),
         today - timedelta(days=2),
     )
@@ -187,12 +186,12 @@ async def test_runtime_snapshot_uses_non_utc_predecessor_boundary_once(client):
     successor = await create_period(
         client,
         account["id"],
-        "777",
+
         successor_start,
         today + timedelta(days=2),
     )
 
-    assert successor["funding_amount"] == "150.00"
+    assert successor["opening_balance"] == "150.00"
     async with client._finapp_test_sessions() as session:
         successor_row = await session.get(AccountPeriod, successor["id"])
         assert successor_row is not None
@@ -213,7 +212,7 @@ async def test_current_balance_reconciliation_uses_one_exact_ledger_cutoff(
     await register(client)
     account = await create_account(client, "Reconcile precision BTC", "BTC", "0")
     today = local_today()
-    period = await create_period(client, account["id"], "999", today, today)
+    period = await create_period(client, account["id"],  today, today)
     async with client._finapp_test_sessions() as session:
         period_row = await session.get(AccountPeriod, period["id"])
         assert period_row is not None
@@ -317,7 +316,7 @@ async def test_current_balance_reconciliation_uses_one_exact_ledger_cutoff(
 async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeypatch):
     await register(client)
     account = await create_account(client, "Close snapshot USD", "USD", "100")
-    period = await create_period(client, account["id"], "999")
+    period = await create_period(client, account["id"])
     spent = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": account["id"], "amount": "10"},
@@ -359,7 +358,7 @@ async def test_manual_close_captures_exact_immutable_ledger_pair(client, monkeyp
         assert closed_row.closing_balance == Decimal("95")
     closed_again = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert closed_again.status_code == 200
-    assert closed_again.json()["remaining"] == "95.00"
+    assert closed_again.json()["closing_balance"] == "95.00"
     assert "available_today" not in closed_again.json()
     assert "current_balance" not in closed_again.json()
 
@@ -371,7 +370,7 @@ async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation
     period = await create_period(
         client,
         account["id"],
-        "999",
+
         today - timedelta(days=4),
         today - timedelta(days=2),
     )
@@ -396,7 +395,7 @@ async def test_ended_period_uses_strict_end_boundary_without_live_reconciliation
     response = await client.get(f"/api/v1/account-periods/{period['id']}")
     assert response.status_code == 200
     assert response.json()["status"] == "ended"
-    assert response.json()["remaining"] is None
+    assert "remaining" not in response.json()
     assert "available_today" not in response.json()
     assert "current_balance" not in response.json()
     async with client._finapp_test_sessions() as session:
@@ -416,27 +415,26 @@ async def test_same_account_current_rejected_cross_account_current_allowed(clien
     second = await create_account(client, "Second period USD", "USD")
     today = local_today()
     start, end = today - timedelta(days=3), today + timedelta(days=3)
-    await create_period(client, first["id"], "100", start, end)
+    await create_period(client, first["id"],  start, end)
 
     overlap = await client.post(
         f"/api/v1/accounts/{first['id']}/periods",
         json={
             "start_date": today.isoformat(),
             "end_date": (end + timedelta(days=2)).isoformat(),
-            "funding_amount": "100",
         },
     )
     assert overlap.status_code == 409
     assert overlap.json()["detail"] == "Account already has a current period"
-    await create_period(client, second["id"], "50", start, end)
+    await create_period(client, second["id"],  start, end)
 
 
 async def test_transfer_replays_signed_legs_in_both_account_periods(client):
     await register(client)
     source = await create_account(client, "Period source USD", "USD", "1000")
     target = await create_account(client, "Period target USD", "USD", "100")
-    source_period = await create_period(client, source["id"], "1000")
-    target_period = await create_period(client, target["id"], "100")
+    source_period = await create_period(client, source["id"])
+    target_period = await create_period(client, target["id"])
 
     transfer = await client.post(
         "/api/v1/operations/transfer",
@@ -454,16 +452,16 @@ async def test_transfer_replays_signed_legs_in_both_account_periods(client):
     target_out = (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
     ).json()
-    assert source_out["remaining"] == "875.00"
-    assert target_out["remaining"] == "225.00"
+    assert source_out["current_balance"] == "875.00"
+    assert target_out["current_balance"] == "225.00"
 
 
 async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     await register(client)
     usd = await create_account(client, "Replay USD", "USD", "1000")
     vnd = await create_account(client, "Replay VND", "VND", "10000")
-    usd_period = await create_period(client, usd["id"], "1000")
-    vnd_period = await create_period(client, vnd["id"], "10000")
+    usd_period = await create_period(client, usd["id"])
+    vnd_period = await create_period(client, vnd["id"])
     today = local_today().isoformat()
 
     exchange = await client.post(
@@ -500,8 +498,8 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     vnd_out = (
         await client.get(f"/api/v1/account-periods/{vnd_period['id']}")
     ).json()
-    assert usd_out["remaining"] == "910.00"
-    assert vnd_out["remaining"] == "2510000"
+    assert usd_out["current_balance"] == "910.00"
+    assert vnd_out["current_balance"] == "2510000"
 
     voided = await client.post(
         f"/api/v1/transactions/{exchange.json()['id']}/delete"
@@ -513,8 +511,8 @@ async def test_income_adjustments_exchange_fee_and_root_void_replay(client):
     vnd_out = (
         await client.get(f"/api/v1/account-periods/{vnd_period['id']}")
     ).json()
-    assert usd_out["remaining"] == "1015.00"
-    assert vnd_out["remaining"] == "10000"
+    assert usd_out["current_balance"] == "1015.00"
+    assert vnd_out["current_balance"] == "10000"
 
 
 async def test_current_history_and_planned_is_informational(client):
@@ -526,12 +524,12 @@ async def test_current_history_and_planned_is_informational(client):
     past = await create_period(
         client,
         account["id"],
-        "80",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
     current = await create_period(
-        client, account["id"], "100", today - timedelta(days=2), today + timedelta(days=2)
+        client, account["id"],  today - timedelta(days=2), today + timedelta(days=2)
     )
     overdue_rule = await create_plan_rule(
         client,
@@ -614,8 +612,8 @@ async def test_current_history_and_planned_is_informational(client):
     ).json()
     assert [item["id"] for item in current_items] == [current["id"]]
     assert [item["id"] for item in history_items] == [past["id"]]
-    assert current_items[0]["planned"] == "0.00"
-    assert current_items[0]["remaining"] == "-7.00"
+    assert "planned" not in current_items[0]
+    assert current_items[0]["current_balance"] == "-7.00"
 
 
 def test_budget_replay_is_pure_and_preserves_full_decimal_precision():
@@ -652,14 +650,14 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
     account = await create_account(client, "Lifecycle USD", "USD")
     today = local_today()
     current = await create_period(
-        client, account["id"], "100", today - timedelta(days=1), today + timedelta(days=2)
+        client, account["id"],  today - timedelta(days=1), today + timedelta(days=2)
     )
     current_patch = await client.patch(
         f"/api/v1/account-periods/{current['id']}",
         json={"funding_amount": "120"},
     )
     assert current_patch.status_code == 422
-    assert current_patch.json()["detail"] == "Funding amount is not editable"
+    assert current_patch.json()["detail"][0]["type"] == "extra_forbidden"
 
     immutable = await client.patch(
         f"/api/v1/account-periods/{current['id']}",
@@ -670,7 +668,7 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
     ended = await create_period(
         client,
         account["id"],
-        "50",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
@@ -679,19 +677,20 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         json={"funding_amount": "60"},
     )
     assert rejected.status_code == 422
-    assert rejected.json()["detail"] == "Funding amount is not editable"
+    assert rejected.json()["detail"][0]["type"] == "extra_forbidden"
     confirmed = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
         json={"funding_amount": "60", "confirm_ended_period": True},
     )
     assert confirmed.status_code == 422
-    assert confirmed.json()["detail"] == "Funding amount is not editable"
+    assert {item["type"] for item in confirmed.json()["detail"]} == {
+        "extra_forbidden"
+    }
 
     overlap = await client.patch(
         f"/api/v1/account-periods/{ended['id']}",
         json={
             "end_date": today.isoformat(),
-            "confirm_ended_period": True,
         },
     )
     assert overlap.status_code == 409
@@ -701,7 +700,6 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
         json={
             "start_date": (today + timedelta(days=5)).isoformat(),
             "end_date": (today + timedelta(days=8)).isoformat(),
-            "funding_amount": "70",
         },
     )
     assert upcoming.status_code == 422
@@ -713,9 +711,9 @@ async def test_period_lifecycle_confirmation_overlap_and_closed_guards(client):
     assert (
         await client.patch(
             f"/api/v1/account-periods/{current['id']}",
-            json={"funding_amount": "130", "confirm_ended_period": True},
+            json={"end_date": (today + timedelta(days=3)).isoformat()},
         )
-    ).status_code == 422
+    ).status_code == 409
     assert (
         await client.post(f"/api/v1/account-periods/{current['id']}/close")
     ).status_code == 409
@@ -728,7 +726,7 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     ended = await create_period(
         client,
         account["id"],
-        "100",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
@@ -756,7 +754,7 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
     ended_out = (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
     ).json()
-    assert ended_out["remaining"] is None
+    assert "remaining" not in ended_out
     assert "available_today" not in ended_out
     assert "current_balance" not in ended_out
 
@@ -769,9 +767,9 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
         json={"amount": "20", "confirm_ended_period": True},
     )
     assert confirmed_patch.status_code == 200, confirmed_patch.text
-    assert (
+    assert "remaining" not in (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] is None
+    ).json()
     assert (
         await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     ).status_code == 409
@@ -780,12 +778,12 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
         json={"confirm_ended_period": True},
     )
     assert confirmed_void.status_code == 200, confirmed_void.text
-    assert (
+    assert "remaining" not in (
         await client.get(f"/api/v1/account-periods/{ended['id']}")
-    ).json()["remaining"] is None
+    ).json()
 
     current = await create_period(
-        client, account["id"], "100", today - timedelta(days=1), today + timedelta(days=1)
+        client, account["id"],  today - timedelta(days=1), today + timedelta(days=1)
     )
     current_expense = await client.post(
         "/api/v1/operations/spend",
@@ -814,7 +812,7 @@ async def test_ended_transaction_confirmation_and_closed_snapshot_edits(client):
 async def test_shared_users_cannot_discover_owner_private_periods(client):
     await register(client)
     account = await create_account(client, "Private period USD", "USD")
-    period = await create_period(client, account["id"], "100")
+    period = await create_period(client, account["id"])
     assert (
         await client.post(f"/api/v1/account-periods/{period['id']}/close")
     ).status_code == 200
@@ -834,7 +832,6 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
             json={
                 "start_date": local_today().isoformat(),
                 "end_date": local_today().isoformat(),
-                "funding_amount": "1",
             },
         )
     ).status_code == 404
@@ -844,7 +841,7 @@ async def test_shared_users_cannot_discover_owner_private_periods(client):
     assert (
         await client.patch(
             f"/api/v1/account-periods/{period['id']}",
-            json={"funding_amount": "1", "confirm_ended_period": True},
+            json={"end_date": local_today().isoformat()},
         )
     ).status_code == 404
     assert (
@@ -894,7 +891,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     state_period = await create_period(
         client,
         state_account["id"],
-        "100",
+
         today - timedelta(days=1),
         today + timedelta(days=1),
     )
@@ -915,7 +912,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     assert ended_state["closed_at"] is None
     confirmed = await client.patch(
         f"/api/v1/account-periods/{state_period['id']}",
-        json={**moved_to_ended, "confirm_ended_period": True},
+        json=moved_to_ended,
     )
     assert confirmed.status_code == 409
     assert confirmed.json()["detail"] == "Ended account period is read-only"
@@ -931,7 +928,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     assert (
         await client.patch(
             f"/api/v1/account-periods/{state_period['id']}",
-            json={**moved_to_future, "confirm_ended_period": True},
+            json=moved_to_future,
         )
     ).status_code == 409
 
@@ -940,7 +937,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     await create_period(
         client,
         ended_account["id"],
-        "100",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
@@ -981,7 +978,7 @@ async def test_resulting_period_state_and_moved_leg_membership_are_guarded(clien
     ).status_code == 200
 
     closed_account = await create_account(client, "Move closed USD", "USD")
-    closed_period = await create_period(client, closed_account["id"], "100")
+    closed_period = await create_period(client, closed_account["id"])
     inside_closed = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": closed_account["id"], "amount": "10"},
@@ -1022,7 +1019,7 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
     ended = await create_period(
         client,
         guarded["id"],
-        "100",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
@@ -1045,7 +1042,7 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
     assert confirmed_assign.status_code == 200, confirmed_assign.text
 
     current_account = await create_account(client, "Reconcile closed USD", "USD", "100")
-    current_period = await create_period(client, current_account["id"], "100")
+    current_period = await create_period(client, current_account["id"])
     assert (
         await client.post(f"/api/v1/account-periods/{current_period['id']}/close")
     ).status_code == 200
@@ -1146,7 +1143,7 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     period = await create_period(
         client,
         fee_account["id"],
-        "100",
+
         today - timedelta(days=10),
         today - timedelta(days=5),
     )
@@ -1247,7 +1244,7 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     await login(client, "alice")
     ended_close = await client.post(f"/api/v1/account-periods/{period['id']}/close")
     assert ended_close.status_code == 409
-    successor = await create_period(client, fee_account["id"], "100", today, today)
+    successor = await create_period(client, fee_account["id"],  today, today)
     assert (
         await client.post(f"/api/v1/account-periods/{successor['id']}/close")
     ).status_code == 200

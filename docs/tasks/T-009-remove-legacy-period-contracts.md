@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: Remove legacy period money contracts
-status: in-progress
+status: review
 size: S
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §9–§10
 blocked-by: [T-008]
@@ -22,7 +22,7 @@ removed.
 
 ## Acceptance
 
-- [ ] `AccountPeriodCreate` contains only optional `start_date`, required
+- [x] `AccountPeriodCreate` contains only optional `start_date`, required
       `end_date`, and optional `rollover_policy`; `AccountPeriodPatch` contains
       only those same three optional business fields. Create preserves T-008:
       omitted Start resolves to the captured workspace-local today, omitted
@@ -31,7 +31,7 @@ removed.
       preserves T-008: at least one business field is required, explicit null
       or unknown policy is `422`, and valid Start/end/policy combinations keep
       their accepted lifecycle and replay behavior.
-- [ ] Both schemas keep `extra="forbid"`. The newly forbidden create
+- [x] Both schemas keep `extra="forbid"`. The newly forbidden create
       `funding_amount` and PATCH `funding_amount`/`confirm_ended_period` are
       each tested with exactly these JSON representatives: null, false, zero,
       valid-looking string `"1"`, empty string, malformed string
@@ -39,7 +39,7 @@ removed.
       alone and combined with an otherwise valid business field; create
       persists no period or ledger mutation and PATCH leaves the complete
       period snapshot/policy/lifecycle and ledger row set unchanged.
-- [ ] Current, ended, and closed response schemas and every create/current/
+- [x] Current, ended, and closed response schemas and every create/current/
       list/detail/PATCH/close response omit `funding_amount`, `remaining`, and
       `planned`. OpenAPI asserts exact period component properties:
       `AccountPeriodCreate={start_date,end_date,rollover_policy}` with only
@@ -52,18 +52,18 @@ removed.
       confirmation member, while transaction request components retain their
       existing `confirm_ended_period` and Plan components retain
       `planned_amount`.
-- [ ] Final lifecycle shapes otherwise remain exactly as accepted in T-008:
+- [x] Final lifecycle shapes otherwise remain exactly as accepted in T-008:
       current returns `opening_balance`, `current_balance`, and
       `available_today`; ended returns the historical opening snapshot and
       null close pair without live fields; closed returns opening and closing
       snapshots without live fields. Asset-precision `ROUND_HALF_UP`, exact
       internal Decimal invariants, one route cutoff T, policy behavior, and
       current/null lookup do not change.
-- [ ] Period serialization and routes have no `PlanRule`, `PlanOccurrence`, or
+- [x] Period serialization and routes have no `PlanRule`, `PlanOccurrence`, or
       `RebaseEvent` query/import and no legacy zero/alias assignment. The Plan
       subsystem and its `planned_amount` contracts remain unchanged and no
       planned event affects balance or allowance.
-- [ ] The existing desktop SPA stops submitting or reading the removed period
+- [x] The existing desktop SPA stops submitting or reading the removed period
       members. It removes the Funding control, help/status/history copy and
       selector; removes the period Planned card and its DOM identifier while
       preserving the unrelated Plan UI; renames the Remaining card and DOM
@@ -72,10 +72,10 @@ removed.
       helper. History renders current as opening/current, ended as opening
       with no invented closing value, and closed as opening/closing. This is a
       mechanical compatibility update, not a Phase 15 visual redesign.
-- [ ] Dormant RebaseEvent storage/relationships and Alembic revision
+- [x] Dormant RebaseEvent storage/relationships and Alembic revision
       `0002_period_snapshot_model` remain unchanged. No schema migration,
       model removal, legacy-row migration, or database reset is introduced.
-- [ ] Focused tests prove the exact removed-input matrix is mutation
+- [x] Focused tests prove the exact removed-input matrix is mutation
       neutral, exact key omission for current/ended/closed and every period
       route, the exact OpenAPI component sets and preserved unrelated
       transaction/Plan members, unchanged VND/18-decimal presentation,
@@ -201,14 +201,83 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
-### Pass <N>
+### Pass 1
 
-- Reviewer task name/vendor:
-- Reviewed base/head or working-tree manifest:
+- Reviewer task name/vendor: `/root/t009_implementation_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base/HEAD `8c36f24`; all 13
+  tracked modifications and untracked
+  `tests/test_period_contract_removal_v21.py`.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Reviewer checks:
-- Verdict:
+
+  > Read-only implementation review of working tree at `8c36f24414860a18c07d3c74a528b9a9e93433d2`, including all 13 tracked modifications and untracked `tests/test_period_contract_removal_v21.py`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3 — Legacy test terminology remains in the shared period helper and two assertions.
+  >
+  > - `tests/test_periods_v2.py:22` still accepts an unused `funding` argument, and 72 test call sites continue passing funding-looking values. This no longer affects requests, but makes fixtures appear to exercise a removed contract.
+  > - `tests/test_periods_v2.py:772,783` use `.get("remaining") is None`; that expression accepts both the intended absent key and the removed legacy `remaining: null` shape. Exact omission is independently covered by the new removal suite, so this is a clarity/maintainability issue rather than a meaningful coverage gap. Prefer `"remaining" not in payload`.
+  >
+  > All required runtime behavior is otherwise coherent:
+  >
+  > - `app/schemas.py:198-248` has exact create/PATCH and lifecycle response fields with `extra="forbid"`; transaction confirmation and Plan `planned_amount` schemas remain intact.
+  > - `app/periods.py:450-505` emits only opening/current/closing lifecycle facts and retains ledger-derived Decimal quantization. No Plan/Rebase imports or queries were introduced.
+  > - `app/static/app.js:547-625,676-693` and `app/static/index.html:126-130,246-257` remove Funding/Remaining/period-Planned consumption, submit only Start/end, and render current/ended/closed history correctly.
+  > - The forbidden-input matrix is complete and mutation-neutral; OpenAPI and all period routes receive exact-key assertions.
+  > - No model, migration, Alembic, or dormant `RebaseEvent` storage change is present.
+  >
+  > Reviewer checks:
+  >
+  > - Full suite with UTF-8 mode: `224 passed, 246 warnings in 48.41s`.
+  > - The initial run without `PYTHONUTF8=1` produced three pre-existing Windows locale decoding failures; this was environmental, not a T-009 behavior failure.
+  > - `git diff --check`: passed.
+  > - Existing reported targeted suites, JS syntax check, and full-suite result are consistent with the inspected manifest.
+  >
+  > Verdict: **APPROVED with one non-blocking P3 finding; no P0–P2 findings.**
+- Resolution: removed the obsolete helper funding parameter and all 71
+  funding-looking call arguments, and strengthened both ended-response checks
+  to require exact key omission. Fresh limited re-review follows.
+- Reviewer checks: full suite `224 passed`; `git diff --check` passed.
+- Verdict: approved with one P3; P3 resolved and re-reviewed below.
+
+### Pass 2 — P3 resolution
+
+- Reviewer task name/vendor: `/root/t009_p3_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: limited post-Pass-1 helper,
+  call-site, and exact-assertion diff over base/HEAD `8c36f24`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only limited re-review of the post-P3 cleanup.
+  >
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Verified:
+  >
+  > - `create_period(client, account_id, start=None, end=None)` no longer accepts or submits funding.
+  > - AST comparison matched all 71 call sites against `HEAD`: each change is exactly the removal of the former funding argument; all original start/end expressions and keywords remain unchanged.
+  > - Current arities are `{2: 21, 4: 50}` with only `start`/`end` keywords. No legacy funding-looking argument remains.
+  > - The two post-mutation ended-response checks now require `"remaining"` to be absent, strengthening rather than weakening coverage.
+  > - Dedicated forbidden-input matrix coverage remains in `test_period_contract_removal_v21.py`.
+  > - All 12 modified Python files parse successfully.
+  > - Focused removal/period suites: `93 passed in 25.57s`.
+  > - `git diff --check`: passed.
+  > - Supplied post-cleanup full gate: `224 passed`; Node syntax passed.
+  > - No files edited, no branch switched, no commits created.
+  >
+  > Verdict: **APPROVED — prior P3 is fully resolved; no P0–P3 findings.**
+- Resolution: no further changes required; all findings are closed.
+- Reviewer checks: focused `93 passed`; full suite `224 passed`; Node syntax
+  and diff-check passed.
+- Verdict: approved; no P0–P3 findings.
 
 ## Session log
 
@@ -233,3 +302,10 @@ ends. Date · agent · what landed · what is left · open questions.
   started. Next session should read this task and implement the one mechanical
   producer/consumer removal block, then run the listed gates and obtain a
   fresh read-only implementation review; no open question.
+- 2026-08-11 Codex: removed all transitional period request/response aliases,
+  synchronized the existing desktop consumer, and added the exact forbidden
+  input/OpenAPI/route/UI regression matrix. Independent Pass 1 found one P3
+  test-terminology issue; it was fully resolved and Pass 2 approved with no
+  P0–P3 findings. Focused suites passed `51`, `42`, `22`, and `13` tests;
+  final full suite passed `224`, Node syntax and diff-check passed. Task is
+  ready for owner acceptance; no open question.

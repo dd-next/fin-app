@@ -459,7 +459,6 @@ async def account_period_out(
     status = period_status(period, today)
     quantum = Decimal(1).scaleb(-period.asset.decimals)
     opening_balance = round_to_quantum(period.opening_balance, quantum)
-    planned = round_to_quantum(Decimal(0), quantum)
     common = {
         "id": period.id,
         "account_id": period.account_id,
@@ -470,8 +469,6 @@ async def account_period_out(
         "snapshot_at": period.snapshot_at,
         "opening_balance": opening_balance,
         "rollover_policy": period.rollover_policy,
-        "funding_amount": opening_balance,
-        "planned": planned,
         "created_at": period.created_at,
     }
     if status == "current":
@@ -490,7 +487,6 @@ async def account_period_out(
             status="current",
             current_balance=current_balance,
             available_today=projection.allowance.available_today,
-            remaining=current_balance,
         )
     if status == "ended":
         return AccountPeriodEndedOut(
@@ -507,7 +503,6 @@ async def account_period_out(
         status="closed",
         closed_at=period.closed_at,
         closing_balance=closing_balance,
-        remaining=closing_balance,
     )
 
 
@@ -535,8 +530,6 @@ async def create_account_period(
         raise HTTPException(status_code=422, detail="Period fields cannot be null")
     if "rollover_policy" in body.model_fields_set and body.rollover_policy is None:
         raise HTTPException(status_code=422, detail="Period fields cannot be null")
-    if "funding_amount" in body.model_fields_set and body.funding_amount is None:
-        raise HTTPException(status_code=422, detail="Funding amount cannot be null")
     start_date = body.start_date or today
     rollover_policy = body.rollover_policy or "redistribute_remaining_days"
     if body.end_date < start_date:
@@ -709,8 +702,6 @@ async def patch_account_period(
     assert workspace is not None
     reference_time = utc_reference_time()
     today = workspace_day_at(workspace, reference_time)
-    if "funding_amount" in body.model_fields_set:
-        raise HTTPException(status_code=422, detail="Funding amount is not editable")
     changed_fields = body.model_fields_set & PERIOD_BUSINESS_FIELDS
     if not changed_fields:
         raise HTTPException(

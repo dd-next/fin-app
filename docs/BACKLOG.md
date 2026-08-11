@@ -37,7 +37,7 @@ backend gap remains open.
 | [T-006](tasks/T-006-redistribute-policy.md) | `redistribute_remaining_days` policy in pure `app/budget.py` | done | M | periods §7.2, §7.3 | T-003, T-005 |
 | [T-007](tasks/T-007-period-start-replay.md) | Period create/edit Start date semantics and snapshot replay | done | M | periods §8 + audit | T-002, T-003, T-004 |
 | [T-008](tasks/T-008-period-api-lifecycle-surface.md) | Period API and lifecycle surface | done | M | periods §9 | T-004, T-005, T-006, T-007 |
-| [T-009](tasks/T-009-remove-legacy-period-contracts.md) | Remove `funding_amount` / `remaining` / `planned` contracts | in-progress | S | periods §3, §10 | T-008 |
+| [T-009](tasks/T-009-remove-legacy-period-contracts.md) | Remove `funding_amount` / `remaining` / `planned` contracts | review | S | periods §3, §10 | T-008 |
 | T-010 | Owner-private period permissions for shared accounts | backlog | M | periods §11 | T-008 |
 | T-012 | Manual valuation-rate mobile pair direction | backlog | M | audit: rates | T-001 |
 | T-013 | One-amount same/cross-asset Transfer quote and execution | backlog | L | audit: transfer | T-012 |

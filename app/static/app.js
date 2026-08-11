@@ -552,8 +552,14 @@ function renderOperationsPeriodHistory() {
   const nodes = state.operationsPeriods.map((period) => {
     const row = document.createElement("article");
     row.className = "period-history-row";
+    const facts = [`Opening ${formatMoney(period.opening_balance, period.asset.code)}`];
+    if (period.status === "current") {
+      facts.push(`Current ${formatMoney(period.current_balance, period.asset.code)}`);
+    } else if (period.status === "closed") {
+      facts.push(`Closing ${formatMoney(period.closing_balance, period.asset.code)}`);
+    }
     row.innerHTML = `
-      <div><strong>${localDate(period.start_date)} – ${localDate(period.end_date)}</strong><span>${escapeHtml(period.status)} · Funding ${escapeHtml(formatMoney(period.funding_amount, period.asset.code))} · Remaining ${escapeHtml(formatMoney(period.remaining, period.asset.code))}</span></div>
+      <div><strong>${localDate(period.start_date)} – ${localDate(period.end_date)}</strong><span>${escapeHtml(period.status)} · ${escapeHtml(facts.join(" · "))}</span></div>
       <div class="period-actions"></div>`;
     const actions = row.querySelector(".period-actions");
     if (period.status !== "closed") {
@@ -593,12 +599,9 @@ function renderOperationsPeriod() {
   $("operations-period-available").textContent = unavailable
     ? "N/A"
     : formatMoney(current.available_today, current.asset.code);
-  $("operations-period-remaining").textContent = unavailable
+  $("operations-period-current-balance").textContent = unavailable
     ? "N/A"
-    : formatMoney(current.remaining, current.asset.code);
-  $("operations-period-planned").textContent = unavailable
-    ? "N/A"
-    : formatMoney(current.planned, current.asset.code);
+    : formatMoney(current.current_balance, current.asset.code);
   $("operations-add-period").classList.toggle("hidden", !ready || Boolean(current));
   $("operations-edit-period").classList.toggle("hidden", !ready || !current);
   $("operations-close-period").classList.toggle("hidden", !ready || !current);
@@ -613,7 +616,7 @@ function renderOperationsPeriod() {
   } else if (state.operationsPeriodError) {
     $("operations-period-status").textContent = "Period data could not be loaded. Try again.";
   } else if (current) {
-    $("operations-period-status").textContent = `${localDate(current.start_date)} – ${localDate(current.end_date)} · Funding ${formatMoney(current.funding_amount, current.asset.code)}`;
+    $("operations-period-status").textContent = `${localDate(current.start_date)} – ${localDate(current.end_date)}`;
   } else {
     const upcoming = state.operationsPeriods.filter((period) => period.status === "upcoming").length;
     $("operations-period-status").textContent = upcoming
@@ -666,7 +669,6 @@ function openPeriodDialog(period = null) {
   $("period-account-name").textContent = `${account.name} · ${account.asset.code}`;
   $("period-start").value = period?.start_date || todayValue();
   $("period-end").value = period?.end_date || dateValueAfter(todayValue(), 29);
-  $("period-funding").value = period?.funding_amount ?? account.balance;
   $("period-error").textContent = "";
   $("period-dialog").showModal();
 }
@@ -682,16 +684,10 @@ async function saveOperationsPeriod(event) {
     const body = {
       start_date: requiredValue("period-start", "Start date"),
       end_date: requiredValue("period-end", "End date"),
-      funding_amount: requiredValue("period-funding", "Funding amount"),
     };
     setPeriodCommandLoading(true);
     if (periodId) {
-      await apiWithEndedPeriodConfirmation(
-        `/api/v1/account-periods/${periodId}`,
-        "PATCH",
-        body,
-        "This period needs explicit confirmation. Continue?",
-      );
+      await apiCommand(`/api/v1/account-periods/${periodId}`, "PATCH", body);
     } else {
       await apiCommand(`/api/v1/accounts/${accountId}/periods`, "POST", body);
     }

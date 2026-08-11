@@ -24,7 +24,6 @@ async def test_period_filter_uses_canonical_window_for_all_financial_types(clien
     period = await create_period(
         client,
         usd["id"],
-        "1000",
         start=today - timedelta(days=1),
         end=today + timedelta(days=1),
     )
@@ -125,7 +124,7 @@ async def test_current_period_filter_matches_allowance_window_and_clamped_days(
     today = local_today()
     start = today - timedelta(days=1)
     end = today + timedelta(days=1)
-    period = await create_period(client, account["id"], "999", start, end)
+    period = await create_period(client, account["id"],  start, end)
     async with client._finapp_test_sessions() as session:
         workspace = await session.get(Workspace, account["workspace_id"])
         row = await session.get(AccountPeriod, period["id"])
@@ -213,7 +212,7 @@ async def test_closed_and_ended_period_filters_use_exact_lifecycle_cutoffs(
     ended_period = await create_period(
         client,
         ended_account["id"],
-        "999",
+
         today - timedelta(days=4),
         today - timedelta(days=2),
     )
@@ -267,7 +266,7 @@ async def test_closed_and_ended_period_filters_use_exact_lifecycle_cutoffs(
     closed_period = await create_period(
         client,
         closed_account["id"],
-        "999",
+
         today - timedelta(days=1),
         today + timedelta(days=1),
     )
@@ -320,7 +319,6 @@ async def test_delete_is_soft_history_action_and_legacy_routes_are_absent(client
     period = await create_period(
         client,
         account["id"],
-        "100",
         start=today - timedelta(days=1),
         end=today + timedelta(days=1),
     )
@@ -331,14 +329,14 @@ async def test_delete_is_soft_history_action_and_legacy_routes_are_absent(client
     assert created.status_code == 201, created.text
     transaction_id = created.json()["id"]
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("75")
-    assert Decimal((await client.get(f"/api/v1/account-periods/{period['id']}")).json()["remaining"]) == Decimal("75")
+    assert Decimal((await client.get(f"/api/v1/account-periods/{period['id']}")).json()["current_balance"]) == Decimal("75")
 
     deleted = await client.post(f"/api/v1/transactions/{transaction_id}/delete")
     assert deleted.status_code == 200, deleted.text
     assert deleted.json()["status"] == "deleted"
     assert deleted.json()["deleted_at"] is not None
     assert Decimal((await client.get(f"/api/v1/accounts/{account['id']}")).json()["balance"]) == Decimal("100")
-    assert Decimal((await client.get(f"/api/v1/account-periods/{period['id']}")).json()["remaining"]) == Decimal("100")
+    assert Decimal((await client.get(f"/api/v1/account-periods/{period['id']}")).json()["current_balance"]) == Decimal("100")
 
     period_history = await client.get(
         f"/api/v1/transactions?period_id={period['id']}&status=deleted"
@@ -366,7 +364,7 @@ async def test_delete_is_soft_history_action_and_legacy_routes_are_absent(client
 async def test_period_filter_is_owner_private_even_for_shared_account_access(client):
     await register(client)
     owner_account = await create_account(client, "Private period USD", "USD", "100")
-    owner_period = await create_period(client, owner_account["id"], "100")
+    owner_period = await create_period(client, owner_account["id"])
     token = await invitation(client, owner_account["id"], "viewer")
 
     await register(client, "bob")
@@ -378,7 +376,7 @@ async def test_period_filter_is_owner_private_even_for_shared_account_access(cli
     assert shared_lookup.json()["detail"] == "Account period not found"
 
     bob_account = await create_account(client, "Bob period USD", "USD", "50")
-    bob_period = await create_period(client, bob_account["id"], "50")
+    bob_period = await create_period(client, bob_account["id"])
     await login(client, "alice")
     foreign_lookup = await client.get(
         f"/api/v1/transactions?period_id={bob_period['id']}"
