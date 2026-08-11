@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
-| Last full suite | **224 passed** (2026-08-11, T-009 acceptance) |
-| Active work | T-002–T-009 accepted; T-010 owner-private shared-account period permissions is next for specification/readiness |
+| Last full suite | **229 passed** (2026-08-11, T-010 implementation review) |
+| Active work | T-002–T-009 accepted; T-010 independently approved and awaiting local owner acceptance |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-009 accepted; T-010 is next for specification/readiness.**
+Status: **T-002–T-009 accepted; T-010 independently approved and awaiting local owner acceptance.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -77,6 +77,13 @@ Status: **T-002–T-009 accepted; T-010 is next for specification/readiness.**
   shapes are independently approved; full pytest `224 passed`, Node syntax
   and diff-check passed. Detailed evidence:
   [`tasks/T-009-remove-legacy-period-contracts.md`](tasks/T-009-remove-legacy-period-contracts.md).
+- T-010 makes owner-private period state non-authorizing for shared users while
+  preserving owner ended-period confirmation, generic shared correction
+  confirmation, every role/leg permission boundary, and closed snapshots.
+  Focused privacy matrices, scratch FastAPI+SPA E2E, Node/diff checks, and full
+  pytest `229 passed`; implementation review approved with no open P0–P3.
+  Detailed evidence:
+  [`tasks/T-010-owner-private-period-permissions.md`](tasks/T-010-owner-private-period-permissions.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

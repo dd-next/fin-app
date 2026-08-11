@@ -1132,7 +1132,7 @@ async def test_assign_reconcile_and_fee_only_exchange_guards_roll_back(client):
     ) < balance_before_closed_create
 
 
-async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
+async def test_shared_ended_periods_do_not_authorize_financial_actions(client):
     await register(client)
     today = local_today()
     fee_account = await create_account(client, "Shared fee USD", "USD", "100")
@@ -1159,14 +1159,28 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
     await register(client, "bob")
     for token in tokens:
         await accept(client, token)
-    generic = "Transaction change requires explicit confirmation"
-    rejected_create = await client.post(
+    generic = "Shared transaction correction requires explicit confirmation"
+    shared_transaction = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": fee_account["id"], "amount": "5", "local_date": historical},
     )
-    assert rejected_create.status_code == 409
-    assert rejected_create.json()["detail"] == generic
-    shared_transaction = await client.post(
+    assert shared_transaction.status_code == 201, shared_transaction.text
+    shared_add_funds = await client.post(
+        "/api/v1/operations/add-funds",
+        json={"account_id": fee_account["id"], "amount": "1", "local_date": historical},
+    )
+    assert shared_add_funds.status_code == 201, shared_add_funds.text
+    shared_transfer = await client.post(
+        "/api/v1/operations/transfer",
+        json={
+            "from_account_id": fee_account["id"],
+            "to_account_id": source["id"],
+            "amount": "1",
+            "local_date": historical,
+        },
+    )
+    assert shared_transfer.status_code == 201, shared_transfer.text
+    explicitly_confirmed = await client.post(
         "/api/v1/operations/spend",
         json={
             "account_id": fee_account["id"],
@@ -1175,7 +1189,7 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
             "confirm_ended_period": True,
         },
     )
-    assert shared_transaction.status_code == 201, shared_transaction.text
+    assert explicitly_confirmed.status_code == 201, explicitly_confirmed.text
     transaction_id = shared_transaction.json()["id"]
     rejected_patch = await client.patch(
         f"/api/v1/transactions/{transaction_id}", json={"amount": "6"}
@@ -1212,11 +1226,10 @@ async def test_shared_ended_and_hidden_fee_guards_are_generic(client):
         "local_date": historical,
         "fee": {"account_id": fee_account["id"], "amount": "2"},
     }
-    rejected_exchange = await client.post(
+    shared_exchange = await client.post(
         "/api/v1/operations/exchange", json=exchange_body
     )
-    assert rejected_exchange.status_code == 409
-    assert rejected_exchange.json()["detail"] == generic
+    assert shared_exchange.status_code == 201, shared_exchange.text
     assert (
         await client.post(
             "/api/v1/operations/transfer",

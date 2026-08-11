@@ -252,13 +252,11 @@ def enforce_transaction_period_impact(
     confirmed: bool,
     workspace_owner: bool,
 ) -> None:
-    if impact.ended and not confirmed:
-        detail = (
-            "Ended account period change requires explicit confirmation"
-            if workspace_owner
-            else "Transaction change requires explicit confirmation"
+    if impact.ended and workspace_owner and not confirmed:
+        raise HTTPException(
+            status_code=409,
+            detail="Ended account period change requires explicit confirmation",
         )
-        raise HTTPException(status_code=409, detail=detail)
 
 
 async def require_private_period(

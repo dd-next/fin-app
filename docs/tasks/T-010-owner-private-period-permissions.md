@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: Keep owner-private periods non-authorizing for shared users
-status: in-progress
+status: review
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §11
 blocked-by: [T-008, T-009]
@@ -21,7 +21,7 @@ permission/confirmation result that user receives.
 
 ## Acceptance
 
-- [ ] For each `editor`, `contributor`, and `viewer`, valid collection requests
+- [x] For each `editor`, `contributor`, and `viewer`, valid collection requests
       to `POST /accounts/{account_id}/periods`, default and explicit
       `scope=all|current|history` variants of
       `GET /accounts/{account_id}/periods`, and
@@ -31,12 +31,12 @@ permission/confirmation result that user receives.
       `404 Account period not found` as an unknown ID. Responses never contain
       lifecycle, date, balance, policy, allowance, or creator facts, and every
       rejected write is mutation-neutral.
-- [ ] `GET /transactions?period_id=...` is owner-private for every shared role
+- [x] `GET /transactions?period_id=...` is owner-private for every shared role
       and foreign user. A known period ID, an unknown period ID, and a known ID
       combined with matching or mismatching `account_id` all return the same
       `404 Account period not found` before account-filter validation, without
       returning transaction rows or period facts.
-- [ ] A shared `editor` can Spend, Add funds, Transfer, and Exchange on the
+- [x] A shared `editor` can Spend, Add funds, Transfer, and Exchange on the
       same participating accounts permitted by the existing role matrix, and a
       shared `contributor` can Spend. Each allowed create has the same HTTP
       status and public transaction shape when the account owner's relevant
@@ -44,7 +44,7 @@ permission/confirmation result that user receives.
       Hidden ended periods require no period confirmation from a shared user;
       current balances remain ledger-derived and closed snapshots remain
       immutable.
-- [ ] `POST /transactions/{transaction_id}/assign-account` has the same hidden
+- [x] `POST /transactions/{transaction_id}/assign-account` has the same hidden
       period invariance. A shared contributor may assign their own unassigned
       expense to an expense-permitted shared account; an editor may assign
       their own expense or income to a role-permitted shared account. With an
@@ -53,7 +53,7 @@ permission/confirmation result that user receives.
       workspace, asset, role, hidden-account, and foreign-account failures keep
       their accepted exact `403`/`404`/`409`/`422` result and leave the
       transaction, legs, rates, Undo state, periods, and snapshots unchanged.
-- [ ] Shared transaction correction, Delete, and Operations Undo retain their
+- [x] Shared transaction correction, Delete, and Operations Undo retain their
       existing generic shared confirmation contract regardless of absent,
       current, ended, or closed hidden period state: an unconfirmed permitted
       mutation returns exactly `409 Shared transaction correction requires
@@ -62,7 +62,7 @@ permission/confirmation result that user receives.
       of one. No shared response returns the owner-only `Ended account period
       change requires explicit confirmation` or the transitional hidden-state
       string `Transaction change requires explicit confirmation`.
-- [ ] The generic shared-mutation matrix remains exact. An editor may
+- [x] The generic shared-mutation matrix remains exact. An editor may
       correction/Delete only when every root and fee-child leg is editable,
       and may Undo only their own eligible Operations candidate with all
       required account permissions. A contributor may Undo their own Spend
@@ -72,30 +72,30 @@ permission/confirmation result that user receives.
       confirmation or hidden-period evaluation for absent/current/ended/closed
       states. Existing one-leg visibility and `has_hidden_legs` redaction do
       not change.
-- [ ] Existing role and participating-account authorization remains the first
+- [x] Existing role and participating-account authorization remains the first
       effective boundary: contributor Add funds/Transfer/Exchange/edit/Delete,
       all viewer writes, and any Transfer/Exchange with a forbidden or foreign
       source, target, or fee account retain their accepted `403`/`404` result
       with or without a hidden period and do not mutate any transaction, leg,
       rate, Undo, period, or snapshot row.
-- [ ] Account owners retain the accepted T-008 behavior. A financial change
+- [x] Account owners retain the accepted T-008 behavior. A financial change
       inside their naturally ended period returns `409 Ended account period
       change requires explicit confirmation` until the retained transaction
       `confirm_ended_period` member is true; current/closed/no-period behavior,
       period route access, exact Decimal ledger effects, and closed snapshot
       immutability do not change.
-- [ ] Owner-only `POST /accounts/{account_id}/reconcile` retains its accepted
+- [x] Owner-only `POST /accounts/{account_id}/reconcile` retains its accepted
       exact Decimal adjustment and no-period/current/closed behavior under the
       centralized guard change. Editor/contributor/viewer and foreign attempts
       retain the same `403`/`404` permission result before period evaluation,
       including with an ended hidden period, and rejected requests are
       mutation-neutral.
-- [ ] The shared-user privacy decision is centralized in the period-impact
+- [x] The shared-user privacy decision is centralized in the period-impact
       guard rather than duplicated per command. Period read/write routes still
       use owner-only account lookup; no public schema, model, migration,
       rollover formula, lifecycle boundary, transaction visibility/redaction,
       sharing-role definition, or desktop UI contract changes.
-- [ ] Focused tests cover all period routes and Transactions period filtering,
+- [x] Focused tests cover all period routes and Transactions period filtering,
       the create/correction/Delete/Undo matrix, every shared role, multi-account
       source/target/fee permissions, owner regression, mutation neutrality, and
       exact error text. Existing period, operations, transactions, sharing,
@@ -239,14 +239,105 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
-### Pass <N>
+### Pass 1
 
-- Reviewer task name/vendor:
-- Reviewed base/head or working-tree manifest:
+- Reviewer task name/vendor: `/root/t010_readiness_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed base/head or working-tree manifest: base `a3a1658` plus modified
+  `app/periods.py`, `tests/test_operations_v2.py`, `tests/test_periods_v2.py`,
+  `tests/test_sharing_v2.py`, and untracked
+  `tests/test_period_permissions_v21.py`.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Reviewer checks:
-- Verdict:
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — The shared assign-account and reconcile acceptance matrix is only partially implemented.
+  >
+  > - `tests/test_period_permissions_v21.py:350-472` proves the allowed same-workspace persisted assign path for editor expense/income and contributor expense across absent/current/ended/closed states. It proves only two rejected assign cells: cross-workspace `422` and contributor-income `403`.
+  > - T-010 explicitly requires creator, transaction-state, workspace, asset, role, hidden-account, and foreign-account failures with exact `403`/`404`/`409`/`422` results and mutation neutrality. Creator mismatch, already-posted/invalid transaction state, asset mismatch, viewer role, hidden transaction/account, and foreign target account are not exercised. The rejected cases do not snapshot the transaction, leg, rate, or Undo rows before and after the request.
+  > - The same test proves only editor `403` for reconcile against one ended hidden-period account. It does not cover contributor/viewer `403`, foreign `404`, or assert rejected reconcile mutation neutrality. Owner no-period/current/closed reconcile behavior exists in older tests, but the focused T-010 suite does not tie those regressions to this centralized guard change as the acceptance item requires.
+  > - Add the omitted exact failure cells and compare persisted transaction/leg/rate/Undo/period state before and after every rejected assign/reconcile request.
+  >
+  > P2 — The exact generic shared correction/Delete/Undo matrix and hidden multi-account precedence are not fully covered.
+  >
+  > - `tests/test_period_permissions_v21.py:189-347` covers editor correction/Delete/Undo only for one-leg Spend transactions across the four lifecycle states, contributor own-Spend Undo only for ended state, and a single viewer Spend denial.
+  > - It does not prove editor correction/Delete/Undo for transfer/exchange roots and fee children, contributor denial for income/transfer/exchange Undo, viewer correction/Delete/Undo denial, or creator-scoped editor Undo failure.
+  > - `tests/test_sharing_v2.py:222-284` preserves `404 Account not found` for patch/Delete of a transfer with one hidden root leg under an ended period, but there is no equivalent hidden fee-child case and no Undo case. No test proves that a role-insufficient but visible source/target/fee account returns `403` before generic confirmation and hidden-period evaluation.
+  > - These are explicit T-010 acceptance cells, not optional exhaustive combinations. Add representative root, hidden fee-child, Undo, contributor-type, viewer, and creator-scope cases with exact error text and persisted mutation-neutral assertions.
+  >
+  > P2 — The allowed Operations create matrix is incomplete across lifecycle states.
+  >
+  > - Spend is compared across absent/current/ended/closed states in `tests/test_period_permissions_v21.py:242-300`.
+  > - Add funds, Transfer, and Exchange are tested only against an ended hidden period in `tests/test_periods_v2.py:1135-1272`; their absent/current/closed status and public-shape invariance is not asserted. Contributor Spend is likewise checked only for ended state in the focused suite.
+  > - T-010 says each allowed create retains the same status and public transaction shape in all four period states. Parameterize editor Spend/Add funds/Transfer/Exchange and contributor Spend across those states, including source/target/fee participation and closed-snapshot immutability.
+  >
+  > P2 — Rejected-write mutation neutrality is materially under-evidenced.
+  >
+  > - The focused suite snapshots period rows and one closed snapshot, but not the transaction, leg, exchange-rate, or Operations Undo row sets named by the task.
+  > - An unconfirmed patch is immediately retried with the same target values, so a leaked first mutation could be masked; contributor/role denials and cross-workspace assign failures are asserted only by status/detail. Rejected multi-account create, hidden-leg patch/Delete/Undo, and reconcile paths lack before/after row manifests.
+  > - Add a reusable persisted-state snapshot covering transactions, legs, rates, Undo state, periods, and snapshots around representative rejected writes. For patch, fetch the transaction after the rejected request before issuing the confirmed retry.
+  >
+  > P3: None.
+- Resolution: added exact assign/reconcile failures and owner regression, all
+  lifecycle create shapes, transfer/exchange/fee/role/creator Undo precedence,
+  and a reusable persisted financial fingerprint around rejected writes.
+- Reviewer checks: focused `3 passed`; modified suites `24 passed`; full suite
+  `227 passed`; `git diff --check` passed.
+- Verdict: not approved; fresh re-review required.
+
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t010_readiness_review`, Codex same-vendor
+  fallback.
+- Reviewed base/head or working-tree manifest: base `a3a1658` plus the complete
+  current working-tree manifest after Pass 1 resolution.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — The persisted Undo-state fingerprint still omits the field that rejected Undo attempts actually write.
+  >
+  > - `financial_fingerprint()` records `OperationsUndoState.id`, `user_id`, `account_id`, `cursor_transaction_id`, and `consumed_at` at `tests/test_period_permissions_v21.py:115-123`, but omits `updated_at`.
+  > - Every eligible Undo request first executes `claim_undo_candidate()`, which updates exactly `OperationsUndoState.updated_at` before later permission, confirmation, or period rejection (`app/operations.py:184-203`). Therefore the before/after comparisons at `tests/test_period_permissions_v21.py:418-428,835-839,869-888,969-973` would still pass if a rejected request accidentally committed the claim timestamp while leaving cursor and consumed state unchanged.
+  > - T-010 explicitly requires rejected Undo writes to leave the complete Undo row mutation-neutral, and the previous review specifically required a persisted Undo-row fingerprint. Include at least `created_at` and `updated_at` in the Undo tuple; `updated_at` is the behaviorally essential field. Re-run the focused suite and limited re-review.
+  >
+  > P2 — The exact multi-account creation permission matrix still lacks a role-insufficient or foreign source-account case.
+  >
+  > - The new coverage closes target and fee ordering: foreign/private target and fee produce mutation-neutral `404` at `tests/test_period_permissions_v21.py:807-818`, legacy coverage retains a visible role-insufficient target, and the new downgraded fee-child cases produce `403` before confirmation at `:848-888`.
+  > - No focused or legacy test submits Transfer or Exchange with a contributor/viewer source or a foreign source while the target/fee are otherwise permitted. T-010 explicitly names forbidden or foreign source, target, and fee accounts, and the prior finding required source/target/fee permission precedence.
+  > - Add representative mutation-neutral source cases—visible-but-insufficient `403` and foreign `404`—with an ended hidden period on another participating account so the test proves source authorization wins over period evaluation.
+  >
+  > P3: None.
+- Resolution: added `created_at`/`updated_at` to the Undo fingerprint and exact
+  mutation-neutral contributor-source `403` plus private-source `404` cases
+  with an ended hidden fee period.
+- Reviewer checks: focused `5 passed`; full suite `229 passed`; bundled Node
+  syntax and `git diff --check` passed.
+- Verdict: not approved; limited final re-review required.
+
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t010_readiness_review`, Codex same-vendor
+  fallback.
+- Reviewed base/head or working-tree manifest: base `a3a1658` plus the complete
+  current working-tree manifest after Pass 2 resolution.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+- Resolution: both Pass 2 findings are closed; no further change required.
+- Reviewer checks: focused `5 passed in 11.02s`; `git diff --check` passed;
+  production remained the single centralized guard change with no scope drift.
+- Verdict: approved; all prior P0–P3 findings are closed.
 
 ## Session log
 
@@ -267,3 +358,9 @@ ends. Date · agent · what landed · what is left · open questions.
   Exact integration-base branch claim is next; no open question.
 - 2026-08-11 Codex: claimed `task/T-010-owner-private-period-permissions`
   exactly from accepted integration commit `7fe318f`; implementation is next.
+- 2026-08-11 Codex: centralized owner-only ended-period enforcement, added the
+  complete private-route/role/lifecycle/assign/reconcile/multi-leg matrix, and
+  closed three implementation-review passes. Focused `5 passed`, task
+  regressions `108 passed`, migrations `9 passed`, full suite `229 passed`,
+  Node/diff checks and scratch FastAPI+SPA E2E passed. Owner acceptance remains;
+  no open question.

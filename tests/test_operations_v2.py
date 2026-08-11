@@ -224,7 +224,7 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
         )
     ).status_code == 403
 
-    guarded = await client.post(
+    hidden_period_create = await client.post(
         "/api/v1/operations/spend",
         json={
             "account_id": editor_source["id"],
@@ -232,8 +232,8 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
             "local_date": ended_date.isoformat(),
         },
     )
-    assert guarded.status_code == 409
-    assert guarded.json()["detail"] == "Transaction change requires explicit confirmation"
+    assert hidden_period_create.status_code == 201, hidden_period_create.text
+    assert hidden_period_create.json()["has_hidden_legs"] is False
 
     await login(client, "alice")
     assert await account_balance(client, private_target["id"]) == Decimal("0")
