@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: Remove legacy period money contracts
-status: review
+status: done
 size: S
 spec: specs/ACCOUNT_PERIODS-v2.1.md §3, §9–§10
 blocked-by: [T-008]
@@ -309,3 +309,7 @@ ends. Date · agent · what landed · what is left · open questions.
   P0–P3 findings. Focused suites passed `51`, `42`, `22`, and `13` tests;
   final full suite passed `224`, Node syntax and diff-check passed. Task is
   ready for owner acceptance; no open question.
+- 2026-08-11 repository owner: accepted T-009 by fast-forwarding verified
+  commit `cb5a853` into local `finapp-v2-develop` after both implementation
+  reviews closed all P0–P3 findings and the final `224 passed` gate. T-010 is
+  next for specification/readiness; no open question.
