@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: Expose manual valuation rates in mobile asset-to-Main direction
-status: in-progress
+status: review
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md rate direction
 blocked-by: [T-001]
@@ -22,12 +22,12 @@ asks for the opposite legacy direction.
 
 ## Acceptance
 
-- [ ] Existing owner-only routes remain
+- [x] Existing owner-only routes remain
       `GET /api/v1/workspaces/{workspace_id}/valuation-rates`,
       `PUT /api/v1/workspaces/{workspace_id}/valuation-rates/{asset_code}`,
       and `DELETE` on the same item route. The path `asset_code` is the source
       asset; the workspace's current Main currency is the target asset.
-- [ ] PUT accepts exactly `{"rate": "<positive plain Decimal string>"}` in
+- [x] PUT accepts exactly `{"rate": "<positive plain Decimal string>"}` in
       source-to-target direction. JSON numbers are rejected so Starlette cannot
       materialize a binary float before Decimal validation. `displayed_rate`,
       `effective_valuation_rate`, unknown members, null, booleans, exponent/
@@ -35,14 +35,14 @@ asks for the opposite legacy direction.
       over-18-place, and canonical values outside Numeric(38,18) return
       input-derived `422` and mutate no row or account valuation. Canonical PUT
       never validates or stores a reciprocal.
-- [ ] Save and list responses expose exact keys `id`, `workspace_id`,
+- [x] Save and list responses expose exact keys `id`, `workspace_id`,
       `from_asset`, `to_asset`, `rate`, `source`, `created_at`, and
       `updated_at`. `from_asset` is the path asset, `to_asset` is the current
       Main currency, `source` is exactly `manual`, and `rate` is the normalized
       source-to-Main Decimal. Legacy `main_asset`, `asset`, `displayed_rate`,
       `effective_valuation_rate`, and redundant `active` keys are absent from
       the public contract and OpenAPI.
-- [ ] `from_asset` and `to_asset` are full `AssetOut` objects; `id` and
+- [x] `from_asset` and `to_asset` are full `AssetOut` objects; `id` and
       `workspace_id` are integers; `source` is the single literal `manual`;
       `created_at`/`updated_at` are ISO datetime strings; and response `rate` is
       always an exact Decimal JSON string. Request `rate` is OpenAPI type
@@ -50,7 +50,7 @@ asks for the opposite legacy direction.
       max-38-digit/max-18-place domain applied after exact Decimal parsing.
       Response `rate` is also OpenAPI type `string`; both are required and the
       components freeze their exact property/required/type sets.
-- [ ] Exact save/list JSON includes, modulo generated IDs/timestamps:
+- [x] Exact save/list JSON includes, modulo generated IDs/timestamps:
 
       ```json
       {
@@ -64,22 +64,22 @@ asks for the opposite legacy direction.
         "updated_at": "2026-08-11T00:00:00"
       }
       ```
-- [ ] The visible sample `VND → USD`, rate `0.000038`, round-trips in the same
+- [x] The visible sample `VND → USD`, rate `0.000038`, round-trips in the same
       direction without float conversion. A VND balance is valued by
       `balance × rate` before the existing Main-currency `ROUND_HALF_UP`
       presentation boundary; no intermediate money value is quantized.
-- [ ] The shipped precision regression remains exact in the new direction:
+- [x] The shipped precision regression remains exact in the new direction:
       public `VND → USD` rate `0.000038034383082306` values
       `15,258,400 VND` to `580.34 USD`. The shorter frozen-screen sample and
       this mandatory valuation fixture are separate, both tested, and neither
       is replaced with a hard-coded total.
-- [ ] New/updated rows store the submitted canonical source-to-Main `rate`
+- [x] New/updated rows store the submitted canonical source-to-Main `rate`
       exactly; valuation multiplies the exact balance by it. The implementation
       never replaces the authoritative input with a rounded reciprocal. Public
       Decimal equality and derived valuation are stable across PUT, GET,
       reload, repeated upsert, SQLite, and the declared PostgreSQL Numeric
       boundary.
-- [ ] A new Alembic revision renames the internal
+- [x] A new Alembic revision renames the internal
       `displayed_rate` column to neutral `rate_value` and adds a constrained
       direction discriminator with exactly `asset_to_main` and
       `main_to_asset_legacy`. Existing rows retain IDs, pair keys, numeric
@@ -87,64 +87,64 @@ asks for the opposite legacy direction.
       they are not inverted or rounded during migration. Fresh creates and
       updates use `asset_to_main`; updating a legacy row preserves its ID and
       converts that row to canonical storage.
-- [ ] Before any rename, constraint, Alembic-version update, or row mutation,
+- [x] Before any rename, constraint, Alembic-version update, or row mutation,
       migration preflight validates every legacy row is positive/finite and
       that `ROUND_HALF_UP_18(1 / rate_value)` is a nonzero supported canonical
       response. It reports the incompatible row ID deterministically and aborts
       with schema, data, indexes, timestamps, and version unchanged. Tests cover
       an underflowing old maximum, invalid stored values, repeating/terminating
       successful legacy values, and atomic failure.
-- [ ] `direction` is non-null with named check constraint
+- [x] `direction` is non-null with named check constraint
       `ck_manual_valuation_rate_direction` permitting only the two specified
       literals. Legacy backfill is atomic; any temporary server default is
       removed afterward so future omitted directions cannot be mis-tagged.
       The unique `(workspace_id, main_asset_id, asset_id)` constraint and all
       accepted indexes survive SQLite table-copy/alter behavior and PostgreSQL
       DDL unchanged.
-- [ ] Legacy rows remain readable and usable during the transition: output
+- [x] Legacy rows remain readable and usable during the transition: output
       derives a supported 18-place asset-to-Main Decimal with the shared
       high-precision quotient/quantization helpers, and valuation divides only
       legacy rows. Canonical rows multiply. No float, ambient Decimal context,
       double inversion, or intermediate money quantization is allowed.
-- [ ] Downgrade is safe and explicit. Empty or legacy-only tables downgrade to
+- [x] Downgrade is safe and explicit. Empty or legacy-only tables downgrade to
       `0002` by removing the tag and renaming `rate_value` back to
       `displayed_rate`, preserving every value/ID/pair/timestamp exactly. If any
       `asset_to_main` row exists, downgrade preflight aborts before DDL/data/
       version mutation; it never silently reinterprets or inverts canonical
       values. Migration tests prove all three states.
-- [ ] Exact boundaries are regression-protected: `rate=1` for a non-Main pair;
+- [x] Exact boundaries are regression-protected: `rate=1` for a non-Main pair;
       minimum `0.000000000000000001`; maximum modeled Numeric value
       `99999999999999999999.999999999999999999`; one over-38-digit value; one
       19-place value; and high-precision terminating/repeating legacy
       conversions. The API enforces the modeled Numeric(38,18) portability
       domain even when SQLite TEXT could store more. Rejected boundary requests
       preserve the previous stored rate/direction and derived summary exactly.
-- [ ] Saving the Main currency as its own source remains `422 Main currency
+- [x] Saving the Main currency as its own source remains `422 Main currency
       always values itself at exactly 1`; an unknown/inactive asset remains
       `422 Unknown asset`. A successful repeated PUT updates the same pair row,
       and DELETE removes only that current Main/source pair before the accepted
       direct-exchange fallback or `Unvalued` behavior applies.
-- [ ] Main-currency switching retains pair isolation. Rates saved for
+- [x] Main-currency switching retains pair isolation. Rates saved for
       `VND → USD` disappear while EUR is Main, a separately saved `VND → EUR`
       row uses that direction, and switching back to USD returns the original
       row/rate unchanged. No old pair is converted, copied, or used under the
       new Main currency.
-- [ ] Workspace ownership and privacy remain exact. Shared editor/contributor/
+- [x] Workspace ownership and privacy remain exact. Shared editor/contributor/
       viewer and foreign users receive the accepted owner-private `404
       Workspace not found` for list/save/delete against the owner's workspace,
       cannot infer its pair or rate, and cannot mutate stored rows or summaries.
       Each owner sees and uses only their own workspace pairs.
-- [ ] Manual rates remain first in accepted valuation precedence; latest posted
+- [x] Manual rates remain first in accepted valuation precedence; latest posted
       direct exchange remains fallback after delete; voided exchange rates and
       multi-hop/foreign-workspace rates remain ineligible. Ledger values,
       signed exchange legs, and Main-currency display quantization do not
       change.
-- [ ] The ledger and API share one canonical conversion helper: canonical rows
+- [x] The ledger and API share one canonical conversion helper: canonical rows
       use `decimal_product(balance, rate_value)`, legacy rows use the one
       explicit high-precision quotient path, and API output uses the same
       direction logic. Focused source assertions forbid `float(` and prevent
       the old unconditional `balance / displayed_rate` path from surviving.
-- [ ] OpenAPI has one exact mobile-direction request/response schema and no
+- [x] OpenAPI has one exact mobile-direction request/response schema and no
       opposite-direction public properties. Migration tests prove clean install,
       accepted `0002` upgrade, legacy-row preservation, canonical new writes,
       constraints, application lifespan, and no schema drift beyond the one
@@ -152,10 +152,10 @@ asks for the opposite legacy direction.
       and compile/bind the Numeric(38,18) and constraint DDL for PostgreSQL (or
       an equivalent explicit dialect portability check). No reset or
       `finapp.db` access occurs.
-- [ ] ADR-0008 records the canonical asset-to-Main storage direction, legacy
+- [x] ADR-0008 records the canonical asset-to-Main storage direction, legacy
       discriminator/preflight, conditional downgrade, Decimal-string public
       boundary, and the explicit T-013 handoff; `docs/DECISIONS.md` indexes it.
-- [ ] Focused API/source tests, valuation/ledger/privacy/migration regressions,
+- [x] Focused API/source tests, valuation/ledger/privacy/migration regressions,
       full pytest, Node syntax, and diff checks pass on isolated fixtures.
 
 ## Touches
@@ -411,6 +411,71 @@ the review; the implementer records it verbatim following
   passed; actual PostgreSQL migration operations compiled read-only.
 - Verdict: not approved; P1/P2 fixes implemented, re-review pending.
 
+### Pass 2
+
+- Reviewer task name/vendor: `/root/t012_implementation_rereview` (Codex
+  same-vendor fallback; cross-vendor reviewer unavailable).
+- Reviewed base/head or working-tree manifest:
+  `b592bfacaf868d522159b8602e2df2467aaab20c..81d6afaf5492d8be76aeb26a9cc27962df06adcb`
+  on `task/T-012-mobile-valuation-rate-direction`; worktree clean at dispatch.
+- Findings (verbatim, P0–P3):
+
+  > Reviewer: `/root/t012_implementation_rereview` — Codex same-vendor fallback; cross-vendor reviewer unavailable.
+  >
+  > Reviewed range: `b592bfacaf868d522159b8602e2df2467aaab20c..81d6afaf5492d8be76aeb26a9cc27962df06adcb` on `task/T-012-mobile-valuation-rate-direction`.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Missing tests: None for the bounded T-012 implementation.
+  >
+  > Pass 1 closure verified:
+  >
+  > - `app/ledger.py:130-157` centralizes direction dispatch in `manual_rate_semantics()`, consumed by both API projection and ledger valuation. Canonical rows multiply exactly; legacy rows divide, with quantization only for legacy public output.
+  > - `app/schemas.py:85-106` and `app/valuation_rates.py:28-113` enforce the exact Decimal-string contract, canonical storage, normalized string output, and no reciprocal validation for canonical PUT.
+  > - `alembic/versions/0003_manual_rate_direction.py:50-138` runs deterministic upgrade/downgrade preflights before DDL, preserves legacy values, removes the temporary default, and refuses canonical downgrade before mutation.
+  > - `tests/test_migrations_v2.py:500-774` covers repeating and terminating legacy values, empty downgrade, canonical refusal, failed-upgrade neutrality, SQLite constraint/index preservation and invalid-direction rejection, plus actual PostgreSQL upgrade/downgrade operation compilation.
+  > - `tests/test_valuation_rate_direction_v21.py:27-265` freezes OpenAPI/property types and patterns, rejected-request row/summary neutrality, canonical boundaries, legacy conversion, editor/contributor/viewer/foreign privacy, and unknown/inactive assets.
+  > - ADR-0008 records the canonical direction, legacy policy, conditional downgrade, Decimal-string boundary, and T-013 handoff; `docs/DECISIONS.md` indexes it.
+  > - The bounded diff contains no unrelated implementation and no `finapp.db` access.
+  >
+  > Independent checks:
+  >
+  > - `$env:PYTHONUTF8='1'; .\.venv\Scripts\python.exe -m pytest tests\test_valuation_rate_direction_v21.py tests\test_valuation_v2.py tests\test_phase9_ledger_integrity_v2.py tests\test_ledger_v2.py tests\test_migrations_v2.py -q` — `68 passed`.
+  > - `git diff --check b592bfacaf868d522159b8602e2df2467aaab20c..81d6afaf5492d8be76aeb26a9cc27962df06adcb` — passed.
+  > - Worktree remained clean at reviewed HEAD `81d6afaf5492d8be76aeb26a9cc27962df06adcb`.
+  >
+  > Non-finding environment note: the first test invocation without `PYTHONUTF8=1` produced `67 passed, 1 failed` only at the pre-existing locale-sensitive `Path.read_text()` assertion in `tests/test_migrations_v2.py:830-833`. Both that test and `docs/history/PROGRESS-phases-8-13.md` are unchanged from the reviewed base; the UTF-8 run passed.
+  >
+  > Verdict: **APPROVED**. All Pass 1 P1/P2 findings are closed; no open P0–P3 findings remain in the reviewed range.
+- Resolution: every Pass 1 finding is closed; no further behavior or coverage
+  change was required.
+- Reviewer checks: focused API/ledger/migration `68 passed`; reviewed-range
+  `git diff --check` passed; no `finapp.db` access.
+- Verdict: approved; no open P0–P3 findings.
+
+## Final gate evidence
+
+- Scratch migration and E2E used only a temporary absolute `DATABASE_URL` and
+  upgraded cleanly through `0003_manual_rate_direction`; `finapp.db` was not
+  opened, replaced, or removed. The scratch server and directory were removed
+  after verification.
+- Scratch API round-trip saved `VND → USD` rate
+  `0.000038034383082306`, listed the same canonical pair/rate, and valued
+  `15,258,400 VND` as `580.34 USD`.
+- Scratch SPA loaded as `FinApp v2`; browser login displayed the same
+  `580.34 USD` total and account value with no console warnings/errors.
+- `$env:PYTHONUTF8='1'; .\.venv\Scripts\python.exe -m pytest -q` —
+  `268 passed, 246 warnings in 63.45s`.
+- bundled `node.exe --check app/static/app.js` — passed.
+- `git diff --check b592bfacaf868d522159b8602e2df2467aaab20c..81d6afa`
+  and `git diff --check` — passed.
+
 ## Session log
 
 Append-only. Every session that touches this task adds one entry before it
@@ -447,3 +512,10 @@ ends. Date · agent · what landed · what is left · open questions.
   itself threw; scratch was cleaned), then full pytest/Node/diff, complete task
   evidence/status, and create the final T-012 task commit. No open product
   question; no push/PR/deploy is authorized.
+- 2026-08-11 Codex: fresh implementation Pass 2 approved the exact committed
+  range with no P0–P3 findings; independent focused checks passed `68` tests.
+  Scratch migration/API/SPA E2E passed on a temporary database, including the
+  exact `580.34 USD` browser value; full pytest passed `268`, Node syntax and
+  diff checks passed. The task is in review and awaits local owner acceptance;
+  no open question, and nothing was pushed, deployed, or run against
+  `finapp.db`.

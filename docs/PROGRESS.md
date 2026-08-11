@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `task/T-012-mobile-valuation-rate-direction` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0002_period_snapshot_model`; T-012 proposes reviewed `0003_manual_rate_direction` |
-| Last full suite | **260 passed** (2026-08-11, T-012 pre-review implementation); post-fix focused API/migration **48 passed** |
-| Active work | T-002–T-010 accepted; T-012 review findings fixed, fresh re-review pending |
+| Last full suite | **268 passed** (2026-08-11, T-012 final implementation gate) |
+| Active work | T-002–T-010 accepted; T-012 independently approved and awaiting local owner acceptance |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-010 accepted; T-012 is in progress on its exact task branch.**
+Status: **T-002–T-010 accepted; T-012 independently approved and awaiting local owner acceptance.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -84,11 +84,11 @@ Status: **T-002–T-010 accepted; T-012 is in progress on its exact task branch.
   pytest `229 passed`; implementation review approved with no open P0–P3.
   Detailed evidence:
   [`tasks/T-010-owner-private-period-permissions.md`](tasks/T-010-owner-private-period-permissions.md).
-- T-012 now implements exact Decimal-string `Asset → Main` manual rates,
+- T-012 implements exact Decimal-string `Asset → Main` manual rates,
   canonical/legacy direction-tagged storage, and guarded migration/downgrade.
-  Pre-review full pytest passed `260`; Pass 1 findings are implemented and its
-  focused API/migration suite passes `48`. Fresh read-only re-review, scratch
-  E2E retry, and final task gates remain. Detailed evidence:
+  Fresh implementation re-review approved the complete committed range with no
+  open P0–P3; scratch FastAPI+SPA E2E, full pytest `268`, Node syntax, and diff
+  checks passed. Local owner acceptance remains. Detailed evidence:
   [`tasks/T-012-mobile-valuation-rate-direction.md`](tasks/T-012-mobile-valuation-rate-direction.md).
 
 Requirements live in
