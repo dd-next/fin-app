@@ -1,7 +1,7 @@
 ---
 id: T-013E
 title: Execute a bound Transfer quote atomically
-status: in-progress
+status: review
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-013Q]
@@ -116,7 +116,7 @@ dependencies are still unchanged.
       existing `POST /api/v1/operations/exchange` remains explicit two-amount
       with optional fee for the preserved desktop. Their OpenAPI and regression
       behavior do not change.
-- [ ] Focused execution/replay/concurrency/permissions/period/Undo/OpenAPI
+- [x] Focused execution/replay/concurrency/permissions/period/Undo/OpenAPI
       tests, full pytest, Node syntax, and diff/status checks pass on isolated
       fixtures. No migration or production/local database command is needed in
       this task after accepted T-013Q schema installation.
@@ -339,6 +339,49 @@ the review; the implementer records it verbatim following
 - Resolution: none required; all prior findings are closed.
 - Verdict: approved with no open P0–P3 findings.
 
+### Final cumulative implementation review
+
+- Reviewer task name/vendor: `/root/t013q_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed range/manifest: committed range
+  `f7b0d12ec12cec58fc7801a1af56b552ec809821..54f3b36f6888661d0b91cd09724e3961c1ad1136`
+  plus the complete three-file docs-only uncommitted manifest.
+- Findings (verbatim, P0–P3):
+
+  > Final cumulative T-013E read-only review.
+  >
+  > Reviewed committed range: `f7b0d12ec12cec58fc7801a1af56b552ec809821..54f3b36f6888661d0b91cd09724e3961c1ad1136`.
+  > Committed manifest: `app/main.py`, `app/schemas.py`, `app/transfer_quotes.py`, `docs/BACKLOG.md`, `docs/PROGRESS.md`, `docs/tasks/T-013E-transfer-execution.md`, `tests/test_transfer_quote_execution_v21.py`.
+  > Current uncommitted manifest: `M docs/BACKLOG.md`, `M docs/PROGRESS.md`, `M docs/tasks/T-013E-transfer-execution.md`; no untracked files.
+  >
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > APPROVED.
+  >
+  > Every acceptance checkbox is complete and evidence-backed. The route reserves SQLite with `BEGIN IMMEDIATE` before mutable quote/workspace/account/rate reads; row-locking databases lock quote, workspace, accounts, and dependencies; the conditional `open`/null-link update is the final single-winner guard. Transaction creation, signed legs, captured exchange rates, period enforcement, Undo cursors, quote transition/link, and commit share one session transaction, with rollback on all exceptions. Conflict precedence, stale dependency matching, immutable captured amounts, owner-private visibility, expiry neighbors, retry after rollback, and real SQLite concurrency are covered. Prior OpenAPI/privacy/TTL findings are closed. The `app.openapi` wrapper is bounded to the `TransferQuoteExecute` component and only restores four explicit null defaults; runtime validation and unrelated schemas are untouched. I relied on supplied gates: focused `7 passed`, combined quote `15 passed`, full `329 passed`; Node/diff/status clean, and did not rerun a broad suite. Lifecycle is consistent: task and BACKLOG are `review`; PROGRESS records T-013Q accepted and T-013E independently approved pending owner acceptance. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3 findings.
+
+## Final gate evidence
+
+- Focused execution contract after final corrections: `7 passed in 3.26s`.
+- Combined quote/OpenAPI contract after final corrections: `15 passed in
+  6.05s`.
+- Required adjacent execution/operations/Undo/period regression set before the
+  final contract-only corrections: `50 passed in 24.77s`; the subsequent full
+  suite covers the corrected manifest.
+- Full automated suite: `329 passed, 246 warnings in 91.32s`.
+- Bundled `node.exe --check app/static/app.js`, `git diff --check`, and clean
+  `git status --short` passed.
+- All database-backed checks used isolated in-memory or temporary file-backed
+  fixtures. No migration or command opened, replaced, or removed `finapp.db`.
+
 ## Session log
 
 - 2026-08-11 Codex: drafted the bounded execution half of T-013. It remains
@@ -377,3 +420,10 @@ the review; the implementer records it verbatim following
   Implementation Pass 1 found one OpenAPI P1 and two coverage P2 gaps; all
   were corrected, and fresh Pass 2 approved with no open P0–P3. Full task gate
   and final status remain.
+- 2026-08-11 Codex: completed the exact final task gates: focused quote
+  contracts `15 passed`, full pytest `329 passed`, Node syntax, diff, and clean
+  status passed. T-013E is in review and awaits final cumulative review/local
+  repository-owner acceptance; no open product question remains.
+- 2026-08-11 Codex: fresh final cumulative review approved the full committed
+  range plus docs-only lifecycle manifest with no P0–P3 findings. T-013E now
+  awaits only local repository-owner acceptance.
