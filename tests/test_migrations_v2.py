@@ -33,6 +33,7 @@ RELEASE_TABLES = {
     "plan_rule",
     "rebase_event",
     "transaction_leg",
+    "transfer_quote",
     "user",
     "workspace",
 }
@@ -71,6 +72,116 @@ def _seed_manual_rate(connection, value: str) -> int:
     return int(result.lastrowid)
 
 
+def _seed_transfer_quote_context(connection):
+    connection.execute(
+        text(
+            "INSERT INTO user "
+            "(username, normalized_username, display_name, password_hash, timezone, "
+            "is_active, created_at, updated_at) "
+            "VALUES ('quote-owner', 'quote-owner', 'Quote owner', 'hash', 'UTC', 1, "
+            "'2026-08-11 12:00:00', '2026-08-11 12:00:00')"
+        )
+    )
+    user_id = connection.execute(
+        text("SELECT id FROM user WHERE normalized_username = 'quote-owner'")
+    ).scalar_one()
+    assets = {
+        row.code: row.id
+        for row in connection.execute(
+            text("SELECT id, code FROM asset WHERE code IN ('USD', 'VND')")
+        )
+    }
+    workspace_id = connection.execute(
+        text(
+            "INSERT INTO workspace "
+            "(owner_user_id, name, base_asset_id, timezone, created_at) "
+            "VALUES (:owner, 'Quote workspace', :main, 'UTC', "
+            "'2026-08-11 12:00:00')"
+        ),
+        {"owner": user_id, "main": assets["USD"]},
+    ).lastrowid
+
+    accounts = {}
+    for key, name, asset_code in (
+        ("usd_from", "USD cash", "USD"),
+        ("usd_to", "USD card", "USD"),
+        ("vnd", "VND cash", "VND"),
+    ):
+        accounts[key] = connection.execute(
+            text(
+                "INSERT INTO account "
+                "(workspace_id, owner_user_id, name, normalized_name, storage_type, "
+                "purpose, asset_id, include_in_available, created_at, updated_at) "
+                "VALUES (:workspace, :owner, :name, :normalized, 'cash', 'daily', "
+                ":asset, 1, '2026-08-11 12:00:00', '2026-08-11 12:00:00')"
+            ),
+            {
+                "workspace": workspace_id,
+                "owner": user_id,
+                "name": name,
+                "normalized": name.casefold(),
+                "asset": assets[asset_code],
+            },
+        ).lastrowid
+    return {
+        "user": user_id,
+        "workspace": workspace_id,
+        "usd": assets["USD"],
+        "vnd": assets["VND"],
+        **accounts,
+    }
+
+
+def _insert_transfer_quote(connection, context, **overrides):
+    values = {
+        "workspace_id": context["workspace"],
+        "created_by_user_id": context["user"],
+        "from_account_id": context["usd_from"],
+        "to_account_id": context["usd_to"],
+        "from_asset_id": context["usd"],
+        "to_asset_id": context["usd"],
+        "main_asset_id": context["usd"],
+        "from_amount": "10",
+        "to_amount": "10",
+        "rate": "1",
+        "rate_source": "manual",
+        "source_manual_rate_id": None,
+        "source_manual_rate_value": None,
+        "source_manual_rate_direction": None,
+        "source_manual_rate_updated_at": None,
+        "target_manual_rate_id": None,
+        "target_manual_rate_value": None,
+        "target_manual_rate_direction": None,
+        "target_manual_rate_updated_at": None,
+        "status": "open",
+        "created_at": "2026-08-11 12:00:00",
+        "expires_at": "2026-08-11 12:05:00",
+        "executed_at": None,
+        "executed_transaction_id": None,
+    }
+    values.update(overrides)
+    return connection.execute(
+        text(
+            "INSERT INTO transfer_quote ("
+            "workspace_id, created_by_user_id, from_account_id, to_account_id, "
+            "from_asset_id, to_asset_id, main_asset_id, from_amount, to_amount, rate, "
+            "rate_source, source_manual_rate_id, source_manual_rate_value, "
+            "source_manual_rate_direction, source_manual_rate_updated_at, "
+            "target_manual_rate_id, target_manual_rate_value, "
+            "target_manual_rate_direction, target_manual_rate_updated_at, status, "
+            "created_at, expires_at, executed_at, executed_transaction_id) VALUES ("
+            ":workspace_id, :created_by_user_id, :from_account_id, :to_account_id, "
+            ":from_asset_id, :to_asset_id, :main_asset_id, :from_amount, :to_amount, "
+            ":rate, :rate_source, :source_manual_rate_id, :source_manual_rate_value, "
+            ":source_manual_rate_direction, :source_manual_rate_updated_at, "
+            ":target_manual_rate_id, :target_manual_rate_value, "
+            ":target_manual_rate_direction, :target_manual_rate_updated_at, :status, "
+            ":created_at, :expires_at, :executed_at, :executed_transaction_id)"
+        ),
+        values,
+    )
+
+
 def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
     tmp_path: Path, monkeypatch
 ):
@@ -85,7 +196,7 @@ def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version"))
             .scalar_one()
-            == "0003_manual_rate_direction"
+            == "0004_transfer_quotes"
         )
         assert connection.execute(text("SELECT count(*) FROM asset")).scalar_one() == 8
         assert connection.execute(
@@ -491,7 +602,7 @@ def test_period_snapshot_populated_downgrade_and_reupgrade(
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0003_manual_rate_direction"
+        ).scalar_one() == "0004_transfer_quotes"
         assert connection.execute(text("SELECT count(*) FROM account_period")).scalar_one() == 5
         assert connection.execute(text("SELECT count(*) FROM rebase_event")).scalar_one() == 1
     engine.dispose()
@@ -520,7 +631,7 @@ def test_manual_rate_migration_preserves_legacy_row_and_downgrades_losslessly(
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0003_manual_rate_direction"
+        ).scalar_one() == "0004_transfer_quotes"
         row = connection.execute(
             text("SELECT * FROM manual_valuation_rate WHERE id = :id"),
             {"id": row_id},
@@ -774,6 +885,319 @@ def test_manual_rate_migration_operations_compile_for_postgresql():
     assert "RENAME rate_value TO displayed_rate" in downgrade
 
 
+def test_transfer_quote_model_compiles_portable_postgresql_contract():
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateIndex, CreateTable
+
+    from app.models import TransferQuote
+
+    ddl = str(
+        CreateTable(TransferQuote.__table__).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    assert ddl.count("NUMERIC(38, 18)") == 5
+    for name in (
+        "ck_transfer_quote_accounts_distinct",
+        "ck_transfer_quote_positive_values",
+        "ck_transfer_quote_rate_source",
+        "ck_transfer_quote_status",
+        "ck_transfer_quote_expiry",
+        "ck_transfer_quote_execution_state",
+        "ck_transfer_quote_source_dependency",
+        "ck_transfer_quote_target_dependency",
+        "ck_transfer_quote_conversion_shape",
+        "uq_transfer_quote_executed_transaction",
+    ):
+        assert f"CONSTRAINT {name}" in ddl
+    assert "ON DELETE CASCADE" in ddl
+    assert ddl.count("ON DELETE RESTRICT") == 7
+    assert ddl.count("::text NOT IN ('NaN', 'Infinity', '-Infinity')") == 5
+    assert "source_manual_rate_direction IS NOT NULL" in ddl
+    assert "target_manual_rate_direction IS NOT NULL" in ddl
+
+    indexes = "\n".join(
+        str(CreateIndex(index).compile(dialect=postgresql.dialect()))
+        for index in TransferQuote.__table__.indexes
+    )
+    assert "ix_transfer_quote_workspace_creator_status_expiry" in indexes
+    assert "workspace_id, created_by_user_id, status, expires_at" in indexes
+
+
+def test_transfer_quote_migration_operations_compile_for_postgresql():
+    import importlib
+    from io import StringIO
+    from unittest.mock import patch
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration_path = Path("alembic/versions/0004_transfer_quotes.py")
+    spec = importlib.util.spec_from_file_location(
+        "finapp_transfer_quote_migration",
+        migration_path,
+    )
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    def compile_operation(name: str) -> str:
+        output = StringIO()
+        context = MigrationContext.configure(
+            url="postgresql://",
+            opts={"as_sql": True, "output_buffer": output},
+        )
+        operations = Operations(context)
+        with patch.object(migration, "op", operations):
+            if name == "downgrade":
+                with patch.object(
+                    migration, "_preflight_downgrade", lambda connection: None
+                ):
+                    migration.downgrade()
+            else:
+                migration.upgrade()
+        return output.getvalue()
+
+    upgrade = compile_operation("upgrade")
+    assert "CREATE TABLE transfer_quote" in upgrade
+    assert upgrade.count("NUMERIC(38, 18)") == 5
+    assert "ck_transfer_quote_conversion_shape" in upgrade
+    assert "ix_transfer_quote_workspace_creator_status_expiry" in upgrade
+    assert upgrade.count("::text NOT IN ('NaN', 'Infinity', '-Infinity')") == 5
+    assert "source_manual_rate_direction IS NOT NULL" in upgrade
+    assert "target_manual_rate_direction IS NOT NULL" in upgrade
+
+    downgrade = compile_operation("downgrade")
+    assert "DROP INDEX ix_transfer_quote_workspace_creator_status_expiry" in downgrade
+    assert "DROP TABLE transfer_quote" in downgrade
+
+
+def test_transfer_quote_sqlite_schema_contract(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "transfer-quote-schema.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "head")
+
+    engine = create_engine(f"sqlite:///{database}")
+    inspector = inspect(engine)
+    columns = {item["name"]: item for item in inspector.get_columns("transfer_quote")}
+    assert {
+        "id",
+        "workspace_id",
+        "created_by_user_id",
+        "from_account_id",
+        "to_account_id",
+        "from_asset_id",
+        "to_asset_id",
+        "main_asset_id",
+        "from_amount",
+        "to_amount",
+        "rate",
+        "rate_source",
+        "source_manual_rate_id",
+        "source_manual_rate_value",
+        "source_manual_rate_direction",
+        "source_manual_rate_updated_at",
+        "target_manual_rate_id",
+        "target_manual_rate_value",
+        "target_manual_rate_direction",
+        "target_manual_rate_updated_at",
+        "status",
+        "created_at",
+        "expires_at",
+        "executed_at",
+        "executed_transaction_id",
+    } == set(columns)
+    assert columns["from_amount"]["type"].length == 80
+    assert columns["to_amount"]["type"].length == 80
+    assert columns["rate"]["type"].length == 80
+    assert columns["source_manual_rate_value"]["type"].length == 80
+    assert columns["target_manual_rate_value"]["type"].length == 80
+
+    checks = {item["name"] for item in inspector.get_check_constraints("transfer_quote")}
+    assert checks == {
+        "ck_transfer_quote_accounts_distinct",
+        "ck_transfer_quote_positive_values",
+        "ck_transfer_quote_rate_source",
+        "ck_transfer_quote_status",
+        "ck_transfer_quote_expiry",
+        "ck_transfer_quote_execution_state",
+        "ck_transfer_quote_source_dependency",
+        "ck_transfer_quote_target_dependency",
+        "ck_transfer_quote_conversion_shape",
+    }
+    assert any(
+        item["name"] == "ix_transfer_quote_workspace_creator_status_expiry"
+        and item["column_names"]
+        == ["workspace_id", "created_by_user_id", "status", "expires_at"]
+        for item in inspector.get_indexes("transfer_quote")
+    )
+    assert any(
+        item["name"] == "uq_transfer_quote_executed_transaction"
+        and item["column_names"] == ["executed_transaction_id"]
+        for item in inspector.get_unique_constraints("transfer_quote")
+    )
+    foreign_keys = {
+        tuple(item["constrained_columns"]): (
+            item["referred_table"], item["options"].get("ondelete")
+        )
+        for item in inspector.get_foreign_keys("transfer_quote")
+    }
+    assert foreign_keys[("workspace_id",)] == ("workspace", "CASCADE")
+    for column, table in (
+        ("created_by_user_id", "user"),
+        ("from_account_id", "account"),
+        ("to_account_id", "account"),
+        ("from_asset_id", "asset"),
+        ("to_asset_id", "asset"),
+        ("main_asset_id", "asset"),
+        ("executed_transaction_id", "financial_transaction"),
+    ):
+        assert foreign_keys[(column,)] == (table, "RESTRICT")
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("shape", "overrides"),
+    [
+        ("identity", {"to_account_id": "same"}),
+        ("identity", {"from_amount": "0"}),
+        ("identity", {"to_amount": "-1"}),
+        ("identity", {"rate": "0"}),
+        ("identity", {"rate_source": "external"}),
+        ("identity", {"status": "cancelled"}),
+        ("identity", {"expires_at": "2026-08-11 12:00:00"}),
+        ("identity", {"executed_at": "2026-08-11 12:01:00"}),
+        ("identity", {"source_manual_rate_id": 7}),
+        ("identity", {"source_manual_rate_value": "1"}),
+        ("identity", {"target_manual_rate_id": 8}),
+        ("identity", {"from_amount": "10", "to_amount": "11"}),
+        ("identity", {"rate": "1.1"}),
+        (
+            "identity",
+            {
+                "from_amount": "10000000000000000000.000000000000000001",
+                "to_amount": "10000000000000000000.000000000000000002",
+            },
+        ),
+        ("identity", {"rate": "1.000000000000000001"}),
+        ("identity", {"from_amount": "10abc", "to_amount": "10abc"}),
+        ("identity", {"rate": "1xyz"}),
+        ("identity", {"from_amount": "1e2", "to_amount": "1e2"}),
+        ("identity", {"rate": "1e0"}),
+        ("identity", {"from_amount": "NaN", "to_amount": "NaN"}),
+        ("identity", {"from_amount": "Infinity", "to_amount": "Infinity"}),
+        ("cross_target", {"target_manual_rate_id": None}),
+        ("cross_target", {"target_manual_rate_value": None}),
+        ("cross_target", {"target_manual_rate_direction": None}),
+        ("cross_target", {"target_manual_rate_updated_at": None}),
+        ("cross_target", {"target_manual_rate_id": 0}),
+        ("cross_target", {"target_manual_rate_value": "0"}),
+        ("cross_target", {"target_manual_rate_value": "0.00004e0"}),
+        ("cross_target", {"target_manual_rate_value": "0.00004xyz"}),
+        ("cross_target", {"target_manual_rate_direction": "main_to_asset_legacy"}),
+        ("cross_target", {"source_manual_rate_id": 7}),
+        ("cross_source", {"source_manual_rate_id": None}),
+        ("cross_source", {"source_manual_rate_value": None}),
+        ("cross_source", {"source_manual_rate_direction": None}),
+        ("cross_source", {"source_manual_rate_updated_at": None}),
+        ("cross_source", {"source_manual_rate_id": 0}),
+        ("cross_source", {"source_manual_rate_value": "0"}),
+        ("cross_source", {"source_manual_rate_value": "0.00004e0"}),
+        ("cross_source", {"source_manual_rate_value": "0.00004xyz"}),
+        ("cross_source", {"source_manual_rate_direction": "main_to_asset_legacy"}),
+        ("cross_source", {"target_manual_rate_id": 8}),
+    ],
+)
+def test_transfer_quote_sqlite_constraints_reject_invalid_shapes(
+    tmp_path: Path, monkeypatch, shape, overrides
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / f"transfer-quote-invalid-{shape}.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite:///{database}")
+
+    with engine.begin() as connection:
+        context = _seed_transfer_quote_context(connection)
+        if shape == "cross_target":
+            base = {
+                "to_account_id": context["vnd"],
+                "to_asset_id": context["vnd"],
+                "to_amount": "250000",
+                "rate": "25000",
+                "target_manual_rate_id": 8,
+                "target_manual_rate_value": "0.00004",
+                "target_manual_rate_direction": "asset_to_main",
+                "target_manual_rate_updated_at": "2026-08-11 11:00:00",
+            }
+        elif shape == "cross_source":
+            base = {
+                "from_account_id": context["vnd"],
+                "to_account_id": context["usd_to"],
+                "from_asset_id": context["vnd"],
+                "to_asset_id": context["usd"],
+                "from_amount": "250000",
+                "to_amount": "10",
+                "rate": "0.00004",
+                "source_manual_rate_id": 7,
+                "source_manual_rate_value": "0.00004",
+                "source_manual_rate_direction": "asset_to_main",
+                "source_manual_rate_updated_at": "2026-08-11 11:00:00",
+            }
+        else:
+            base = {}
+        if overrides.get("to_account_id") == "same":
+            overrides = {**overrides, "to_account_id": context["usd_from"]}
+        base.update(overrides)
+        with pytest.raises(IntegrityError):
+            _insert_transfer_quote(connection, context, **base)
+    engine.dispose()
+
+
+def test_transfer_quote_downgrade_requires_empty_table(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "transfer-quote-downgrade.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        context = _seed_transfer_quote_context(connection)
+        quote_id = _insert_transfer_quote(connection, context).lastrowid
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match=rf"row {quote_id} prevents downgrade"):
+        command.downgrade(config, "0003_manual_rate_direction")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0004_transfer_quotes"
+        assert connection.execute(text("SELECT count(*) FROM transfer_quote")).scalar_one() == 1
+    engine.dispose()
+
+
+def test_transfer_quote_empty_table_downgrades_to_0003(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "transfer-quote-empty-downgrade.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "head")
+    command.downgrade(config, "0003_manual_rate_direction")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0003_manual_rate_direction"
+        assert "transfer_quote" not in inspect(connection).get_table_names()
+    engine.dispose()
+
+
 def test_transaction_origin_constraint_accepts_only_release_values(
     tmp_path: Path, monkeypatch
 ):
@@ -953,7 +1377,7 @@ def test_migrated_scratch_database_runs_real_application_lifespan(
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version"))
             .scalar_one()
-            == "0003_manual_rate_direction"
+            == "0004_transfer_quotes"
         )
         assert connection.execute(text("SELECT count(*) FROM asset")).scalar_one() == 8
         assert connection.execute(text("SELECT count(*) FROM user")).scalar_one() == 0

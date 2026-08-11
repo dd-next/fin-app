@@ -611,6 +611,92 @@ the review; the implementer records it verbatim following
   PROGRESS consistency, complete manifest, and `git diff --check` (passed).
 - Verdict: approved for the first T-013Q task commit.
 
+### Schema/migration review Pass 1
+
+- Reviewer task name/vendor: `/root/t013q_schema_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: task branch HEAD `7263c06` plus modified
+  `app/models.py`, modified `tests/test_migrations_v2.py`, and untracked
+  `alembic/versions/0004_transfer_quotes.py`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — SQLite `CAST(... AS NUMERIC)` breaks the required exact Decimal constraints.
+  >
+  > - Affected: `app/models.py:458-461,508-512` and `alembic/versions/0004_transfer_quotes.py:115-118,165-169`.
+  > - Fresh SQLite verification accepted:
+  >   - unequal 38-digit identity amounts differing in the last decimal;
+  >   - rate `1.0000000000000000001` as equal to `1`;
+  >   - malformed values such as `10abc` and `1xyz`;
+  >   - exponent-form values such as `1e2`.
+  > - This violates the task’s exact identity/value checks and creates SQLite/PostgreSQL behavior drift.
+  > - Existing tests omit precision-collision and malformed/exponent cases.
+  >
+  > P2: None beyond the missing coverage tied to P1.
+  > P3: None.
+  >
+  > No separate findings for dependency tuple null semantics, FK/delete declarations, uniqueness/indexes, downgrade preflight, metadata shape, or PostgreSQL operation compilation.
+- Resolution: replaced SQLite NUMERIC casts with canonical positive Decimal
+  TEXT grammar and exact TEXT identity equality; retained PostgreSQL Numeric
+  arithmetic through dialect-scoped ORM/migration checks; added raw-SQL
+  precision-collision, fractional-near-one, junk, exponent, non-finite, and
+  dependency-value regressions.
+- Tests: targeted migration gate after the fix — `49 passed, 15 deselected`.
+- Verdict: not approved; P1 fixed and submitted for fresh re-review.
+
+### Schema/migration review Pass 2
+
+- Reviewer task name/vendor: `/root/t013q_schema_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: the complete corrected schema/migration manifest at task
+  branch HEAD `7263c06`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — PostgreSQL ORM metadata still permits partial dependency tuples and differs from the migration.
+  >
+  > - `app/models.py:531-541` and `app/models.py:557-567` omit `source/target_manual_rate_direction IS NOT NULL` in the complete branch. PostgreSQL CHECK treats a NULL result as satisfied, so id/value/updated_at present with direction NULL passes the model-generated constraint, while `alembic/versions/0004_transfer_quotes.py:185-190` and `:198-203` explicitly reject it. Add IS NOT NULL to both model branches and strengthen PostgreSQL compile tests to assert the expressions, not just constraint names.
+  >
+  > P2 — PostgreSQL `numeric` supports NaN and orders NaN greater than finite values, so current `> 0` checks in model/migration accept NaN for amounts/rate/dependency values, contrary to positive finite Decimal contract. Explicitly exclude non-finite special numeric values in PostgreSQL constraints and assert compiled DDL.
+  >
+  > P3: None.
+  >
+  > The prior SQLite exactness P1 is closed. SQLite now uses `String(80)`, canonical positive-Decimal grammar, and exact TEXT identity equality; adversarial exponent, junk, precision, and identity cases are covered.
+- Resolution: added explicit non-null directions to both PostgreSQL dependency
+  branches and excluded `NaN`, `Infinity`, and `-Infinity` from every Numeric
+  amount/rate check in ORM and migration DDL; PostgreSQL compilation tests now
+  assert the full expressions.
+- Tests: targeted migration gate after the fix — `49 passed, 15 deselected`.
+- Verdict: not approved; P1/P2 fixed and submitted for final re-review.
+
+### Schema/migration review Pass 3
+
+- Reviewer task name/vendor: `/root/t013q_schema_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: complete final schema/migration manifest at task branch
+  HEAD `7263c06`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Approved.
+  >
+  > Both prior findings are closed. (1) SQLite quote amounts/rates and dependency values use TEXT storage with canonical positive-decimal checks; identity equality is exact text equality and rate `'1'`, with no NUMERIC cast or binary-float comparison path. The canonical grammar makes one stored representation per accepted positive value, so equality cannot collapse distinct high-precision values. (2) PostgreSQL dependency checks explicitly require non-null ID/value/direction/timestamp, positive ID/value, exact `asset_to_main` direction, and reject `NaN`, `Infinity`, and `-Infinity`; the same finite-value exclusion applies to all five Numeric quote fields. ORM dialect-scoped DDL and migration DDL match on types, named checks, conversion shape, FK/delete actions, unique executed link, and composite index.
+  >
+  > The additive revision is based on `0003_manual_rate_direction`; empty-only downgrade preflight runs before index/table DDL, and the tests verify a populated downgrade leaves both the row and Alembic version unchanged. SQLite coverage exercises canonical-text edge cases, tuple partials, direction/value failures, identity/cross shape failures, FKs/index/uniqueness metadata, empty and blocked downgrade; PostgreSQL compilation covers both ORM and actual migration operations. I relied on the reported targeted result `49 passed, 15 deselected in 19.05s` and did not run a broad suite. `git diff --check` passed (line-ending warnings only). No files edited.
+- Resolution: none required; both earlier findings are closed.
+- Reviewer checks: complete tracked/untracked manifest, targeted result
+  `49 passed, 15 deselected in 19.05s`, and `git diff --check`.
+- Verdict: approved with no open P0–P3 findings.
+
 ## Session log
 
 - 2026-08-11 Codex: split the ordered L-sized T-013 into bounded quote and
@@ -655,3 +741,8 @@ the review; the implementer records it verbatim following
   claimed `task/T-013Q-transfer-quote` from promoted integration
   `fc1ce24088941667e1e473adce8fe49385ba63a1`. Recorded base/implementer and
   task+BACKLOG `in-progress`; schema/domain/API implementation is next.
+- 2026-08-11 Codex: resumed the claimed task and completed the additive
+  TransferQuote ORM/Alembic schema block. Three read-only review passes exposed
+  and closed SQLite precision/coercion and PostgreSQL NULL/non-finite CHECK
+  gaps; the final reviewer approved with no P0–P3. Targeted migration gate is
+  `49 passed, 15 deselected`; domain/API implementation remains.
