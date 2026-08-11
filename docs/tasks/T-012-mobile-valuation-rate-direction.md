@@ -27,12 +27,14 @@ asks for the opposite legacy direction.
       `PUT /api/v1/workspaces/{workspace_id}/valuation-rates/{asset_code}`,
       and `DELETE` on the same item route. The path `asset_code` is the source
       asset; the workspace's current Main currency is the target asset.
-- [ ] PUT accepts exactly `{"rate": <positive Decimal>}` in source-to-target
-      direction. `displayed_rate`, `effective_valuation_rate`, unknown members,
-      null, booleans, zero, negative, non-finite, over-38-digit, over-18-place,
-      and canonical values outside Numeric(38,18) return input-derived `422`
-      and mutate no row or account valuation. Canonical PUT never validates or
-      stores a reciprocal.
+- [ ] PUT accepts exactly `{"rate": "<positive plain Decimal string>"}` in
+      source-to-target direction. JSON numbers are rejected so Starlette cannot
+      materialize a binary float before Decimal validation. `displayed_rate`,
+      `effective_valuation_rate`, unknown members, null, booleans, exponent/
+      signed/non-plain strings, zero, negative, non-finite, over-38-digit,
+      over-18-place, and canonical values outside Numeric(38,18) return
+      input-derived `422` and mutate no row or account valuation. Canonical PUT
+      never validates or stores a reciprocal.
 - [ ] Save and list responses expose exact keys `id`, `workspace_id`,
       `from_asset`, `to_asset`, `rate`, `source`, `created_at`, and
       `updated_at`. `from_asset` is the path asset, `to_asset` is the current
@@ -43,18 +45,19 @@ asks for the opposite legacy direction.
 - [ ] `from_asset` and `to_asset` are full `AssetOut` objects; `id` and
       `workspace_id` are integers; `source` is the single literal `manual`;
       `created_at`/`updated_at` are ISO datetime strings; and response `rate` is
-      always an exact Decimal JSON string. The request `rate` uses the existing
-      positive Decimal input domain (JSON string is canonical; a JSON number is
-      parsed without application `float`). Both fields are required and the
-      OpenAPI components freeze their exact property/required/type sets.
+      always an exact Decimal JSON string. Request `rate` is OpenAPI type
+      `string` with the frozen plain-decimal pattern and the existing positive
+      max-38-digit/max-18-place domain applied after exact Decimal parsing.
+      Response `rate` is also OpenAPI type `string`; both are required and the
+      components freeze their exact property/required/type sets.
 - [ ] Exact save/list JSON includes, modulo generated IDs/timestamps:
 
       ```json
       {
         "id": 1,
         "workspace_id": 1,
-        "from_asset": {"id": 3, "code": "VND", "name": "Vietnamese dong", "decimals": 0},
-        "to_asset": {"id": 1, "code": "USD", "name": "US Dollar", "decimals": 2},
+        "from_asset": {"id": 3, "code": "VND", "name": "Vietnamese dong", "kind": "fiat", "decimals": 0, "is_active": true},
+        "to_asset": {"id": 1, "code": "USD", "name": "US dollar", "kind": "fiat", "decimals": 2, "is_active": true},
         "rate": "0.000038",
         "source": "manual",
         "created_at": "2026-08-11T00:00:00",
@@ -76,7 +79,7 @@ asks for the opposite legacy direction.
       Decimal equality and derived valuation are stable across PUT, GET,
       reload, repeated upsert, SQLite, and the declared PostgreSQL Numeric
       boundary.
-- [ ] A forward-only Alembic revision renames the internal
+- [ ] A new Alembic revision renames the internal
       `displayed_rate` column to neutral `rate_value` and adds a constrained
       direction discriminator with exactly `asset_to_main` and
       `main_to_asset_legacy`. Existing rows retain IDs, pair keys, numeric
@@ -149,6 +152,9 @@ asks for the opposite legacy direction.
       and compile/bind the Numeric(38,18) and constraint DDL for PostgreSQL (or
       an equivalent explicit dialect portability check). No reset or
       `finapp.db` access occurs.
+- [ ] ADR-0008 records the canonical asset-to-Main storage direction, legacy
+      discriminator/preflight, conditional downgrade, Decimal-string public
+      boundary, and the explicit T-013 handoff; `docs/DECISIONS.md` indexes it.
 - [ ] Focused API/source tests, valuation/ledger/privacy/migration regressions,
       full pytest, Node syntax, and diff checks pass on isolated fixtures.
 
@@ -163,6 +169,8 @@ asks for the opposite legacy direction.
 - `tests/test_valuation_v2.py` and precision/privacy tests only where their
   old public direction is mechanically superseded
 - `tests/test_migrations_v2.py`
+- `docs/decisions/ADR-0008-canonical-manual-rate-direction.md`
+- `docs/DECISIONS.md`
 - `docs/tasks/T-012-mobile-valuation-rate-direction.md`
 - `docs/BACKLOG.md` and `docs/PROGRESS.md` for task lifecycle only
 
@@ -247,7 +255,76 @@ BACKLOG, and REVIEW_PROTOCOL.
   discriminator/default/constraint/index checks are explicit.
 - Verdict: not ready; fresh readiness re-review required.
 
-### Pass 2
+### Pass 2A
+
+- Reviewer task name/vendor: `/root/t010_readiness_review`, Codex same-vendor
+  fallback.
+- Reviewed task-file commit: `595e8c8`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — The exact response example is incompatible with the required `AssetOut` type, so the Pass 1 public-schema finding is not fully closed.
+  >
+  > - `docs/tasks/T-012-mobile-valuation-rate-direction.md:43-49` requires `from_asset` and `to_asset` to be full `AssetOut` objects and freezes exact property/required/type sets.
+  > - At commit `595e8c8`, `app/schemas.py:55-63` defines `AssetOut` with required `id`, `code`, `name`, `kind`, `decimals`, and `is_active`.
+  > - The task’s supposedly exact JSON at `:56-57` omits `kind` and `is_active` from both assets. An implementation returning the documented example therefore cannot also return full `AssetOut`.
+  > - Add `"kind": "fiat"` and `"is_active": true` to both nested objects and require the focused schema/example test to assert those exact nested keys, or explicitly introduce and name a narrower public asset schema and freeze that instead.
+  >
+  > P3 — “Forward-only Alembic revision” conflicts editorially with the explicit supported downgrade.
+  >
+  > - `docs/tasks/T-012-mobile-valuation-rate-direction.md:79` calls revision `0003` forward-only, while `:106-111` requires successful downgrade for empty and legacy-only tables.
+  > - The downgrade policy itself is sufficiently exact and safe; replace “forward-only” with “new” or “forward upgrade” to avoid contradictory implementation guidance.
+- Resolution: exact nested `AssetOut` keys/spelling and conditional-downgrade
+  wording are corrected; concurrent Pass 2B found the stricter Decimal-input
+  and ADR gaps below.
+- Verdict: not ready; fresh review required.
+
+### Pass 2B
+
+- Reviewer task name/vendor: `/root/t010_readiness_rereview`, Codex same-vendor
+  fallback.
+- Reviewed task-file commit: `595e8c8`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — Exact canonical Decimal input is incompatible with the allowed JSON-number path.
+  >
+  > - `docs/tasks/T-012-mobile-valuation-rate-direction.md:43-49` says a JSON number is accepted and parsed without application `float`, while `:73-78` requires the submitted canonical Decimal to be stored exactly.
+  > - Default FastAPI/Starlette JSON decoding materializes fractional JSON numbers as Python `float` before Pydantic constructs the `Decimal`. A high-precision value such as `0.123456789012345678` can therefore arrive as a changed value, and large 38-digit boundaries can also be rounded or rejected based on the altered number.
+  > - This contradicts the hard rule that rates are always Decimal and the task’s exact PUT/reload/repeated-upsert equality.
+  > - Require rate inputs to be JSON strings only, rejecting JSON numbers, or explicitly authorize and test a custom Decimal-preserving request parser. “JSON string is canonical” does not make the simultaneously accepted numeric path exact.
+  >
+  > P2 — The claimed exact response example is not a valid full-`AssetOut` response.
+  >
+  > - `docs/tasks/T-012-mobile-valuation-rate-direction.md:43-49` requires `from_asset` and `to_asset` to be full `AssetOut` objects.
+  > - The exact example at `:50-63` omits required `AssetOut.kind` and `AssetOut.is_active` from both objects. `AssetOut` requires `id`, `code`, `name`, `kind`, `decimals`, and `is_active` (`app/schemas.py:55-63`).
+  > - The example also uses `"US Dollar"`, while the accepted seed value is `"US dollar"` (`alembic/versions/0001_release_v2.py:71-74`).
+  > - Add the missing properties and exact accepted seed spelling so the example, JSON assertions, and OpenAPI reference cannot disagree.
+  >
+  > P2 — “Forward-only” still contradicts the required safe downgrade.
+  >
+  > - `docs/tasks/T-012-mobile-valuation-rate-direction.md:79` calls `0003` a “forward-only Alembic revision”.
+  > - `:106-111` requires successful downgrade for empty and legacy-only tables and refusal only when canonical rows exist.
+  > - The later policy is technically safe and closes the original downgrade gap, but the earlier label still permits an implementer to make every downgrade fail. Remove “forward-only” or replace it with the exact conditional-downgrade wording.
+  >
+  > P2 — The costly storage/downgrade decision has no ADR in scope.
+  >
+  > - Direction-tagged dual semantics, legacy preflight refusal, and conditional downgrade materially change the persistent schema and would cost real work to reverse.
+  > - AGENTS requires such a decision to live in `docs/decisions/` and be indexed in `docs/DECISIONS.md`.
+  > - ADR-0002 establishes workspace isolation, Decimal arithmetic, and presentation-only quantization, but does not record canonical asset-to-Main storage, the legacy direction discriminator, or downgrade policy.
+  > - Touches should include a new ADR plus `docs/DECISIONS.md`, or an explicitly justified amendment to ADR-0002.
+  >
+  > P3: None.
+- Resolution: request rate is now a plain Decimal JSON string only with exact
+  string OpenAPI; the exact `AssetOut` example and wording are corrected; a new
+  indexed ADR is required.
+- Verdict: not ready; fresh readiness re-review required.
+
+### Pass 3
 
 - Reviewer task name/vendor:
 - Reviewed task-file commit:
@@ -286,3 +363,7 @@ ends. Date · agent · what landed · what is left · open questions.
   type gaps. Canonical validation, legacy preflight, downgrade refusal,
   response/OpenAPI types, and portable DDL mechanics are now exact. Fresh
   readiness re-review remains.
+- 2026-08-11 Codex: concurrent readiness Pass 2 reviews found exact JSON,
+  JSON-number precision, downgrade wording, and ADR gaps. The task now requires
+  Decimal strings only, a valid full-AssetOut example, conditional wording, and
+  ADR-0008. Fresh readiness re-review remains.
