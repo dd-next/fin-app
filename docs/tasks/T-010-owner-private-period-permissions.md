@@ -8,9 +8,9 @@ blocked-by: [T-008, T-009]
 branch: task/T-010-owner-private-period-permissions
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t010_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: 23825eb
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -200,11 +200,38 @@ existing generic shared correction confirmation remain intact.
 
 ### Pass 2
 
-- Reviewer task name/vendor:
-- Reviewed task-file commit:
+- Reviewer task name/vendor: `/root/t010_readiness_rereview`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `23825eb`.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Verdict:
+
+  > Read-only readiness re-review of commit `23825eb`.
+  >
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > All Pass 1 findings are closed:
+  >
+  > - `assign-account` now covers absent/current/ended/closed lifecycle invariance, contributor-own-expense and editor-own-expense/income success cells, creator/state/workspace/asset/role/privacy failures, exact accepted response preservation, and mutation neutrality.
+  > - Reconcile preserves owner Decimal/no-period/current/closed behavior and shared-role `403` versus foreign `404` precedence before hidden-period evaluation.
+  > - Correction/Delete/Undo explicitly preserves editor permissions, creator-scoped editor Undo, contributor own-Spend Undo, contributor/viewer denials, generic confirmation text, and confirmed/unconfirmed behavior.
+  > - Hidden or foreign root/child/fee legs remain `404`; visible but role-insufficient accounts remain `403`; both precede confirmation and period evaluation. Existing one-leg visibility and `has_hidden_legs` redaction are frozen.
+  > - Period-route privacy includes default plus explicit `scope=all|current|history`, current lookup, create, detail, PATCH, and close across shared roles and foreign users.
+  > - Transactions filtering requires the same private `404` for known/unknown period IDs and matching/mismatching account filters before account-filter validation.
+  > - T-009 is recorded in both task front matter and BACKLOG and is an accepted ancestor.
+  > - Every direct period-impact path is represented: create operations through the shared helpers, correction, assign-account, Delete/Undo, and reconcile.
+  > - The PowerShell verification paths exist; every named existing test module and `app/static/app.js` exists. The focused T-010 test file is correctly implementation-created.
+  > - The centralized `app/periods.py` change, bounded test updates, Touches, and Out-of-scope sections are coherent. No schema, model, migration, role, redaction, formula, or UI change is authorized.
+  > - Size M is plausible with parameterized role/lifecycle matrices.
+  > - `git diff --check 23825eb^ 23825eb` passed.
+  > - Worktree remained clean on `finapp-v2-develop`; no files were edited and no branch was switched.
+  > - No implementation tests were run for this documentation-only review.
+  >
+  > Verdict: **READY**.
+- Resolution: all P0–P2 findings are closed; no further changes required.
+- Verdict: ready.
 
 ## Review
 
@@ -233,3 +260,6 @@ ends. Date · agent · what landed · what is left · open questions.
   The task now freezes assign/reconcile, every role/type Undo cell, hidden-leg
   precedence, list scopes, durable dependencies, and runnable Windows gates.
   Fresh readiness re-review remains; no open question.
+- 2026-08-11 Codex: readiness Pass 2 approved the corrected task with no
+  P0–P3 findings. Owner promotion and exact branch claim are next; no open
+  question.
