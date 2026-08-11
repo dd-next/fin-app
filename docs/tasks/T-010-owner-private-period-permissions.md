@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: Keep owner-private periods non-authorizing for shared users
-status: backlog
+status: todo
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §11
 blocked-by: [T-008, T-009]
@@ -263,3 +263,5 @@ ends. Date · agent · what landed · what is left · open questions.
 - 2026-08-11 Codex: readiness Pass 2 approved the corrected task with no
   P0–P3 findings. Owner promotion and exact branch claim are next; no open
   question.
+- 2026-08-11 Owner: promoted the readiness-approved task from backlog to todo.
+  Exact integration-base branch claim is next; no open question.
