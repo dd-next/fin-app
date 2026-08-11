@@ -1,7 +1,7 @@
 ---
 id: T-013Q
 title: Persist exact one-amount same/cross-asset Transfer quotes
-status: in-progress
+status: review
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-012]
@@ -22,7 +22,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
 
 ## Acceptance
 
-- [ ] `POST /api/v1/operations/transfer/quotes` accepts exactly
+- [x] `POST /api/v1/operations/transfer/quotes` accepts exactly
       `from_account_id`, `to_account_id`, `from_amount`, and `rate_source`.
       Both account IDs are required positive JSON integers. `from_amount` is a
       required positive plain Decimal JSON string with the accepted modeled
@@ -32,7 +32,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       booleans, nulls, zero/negative/non-finite values, unknown members, and
       unsupported scale/precision return input-derived `422` before a quote row
       is written. Auto/external sources remain unavailable.
-- [ ] The source and destination are distinct, active accounts in one
+- [x] The source and destination are distinct, active accounts in one
       workspace, and the quote API is owner-only for both identity and
       cross-asset requests. This prevents the new quote surface from leaking
       owner-private workspace/Main/rate state; existing direct same-asset
@@ -42,7 +42,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       rate, or legacy row exists. A failed quote writes nothing. Focused tests
       cover owner/editor/contributor/viewer/unrelated users for both paths plus
       failure mutation neutrality.
-- [ ] A same-asset quote uses exact identity conversion: destination amount
+- [x] A same-asset quote uses exact identity conversion: destination amount
       equals source amount after the one shared asset-precision validation,
       rate is `1`, and no rate is required. Main, canonical manual multiplication,
       latest-exchange multiplication fallback, and unvalued exclusion are
@@ -50,7 +50,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       owner-workspace manual row is tagged legacy, quote creation returns the
       same explicit resave `422` as cross-asset quoting; finite-precision legacy
       division is not accepted even for identity quotes.
-- [ ] A cross-asset quote uses only the workspace's current manual
+- [x] A cross-asset quote uses only the workspace's current manual
       canonical `asset_to_main` rows accepted by T-012. A Main source is valued
       unchanged; every non-Main source multiplies by its exact stored canonical
       rate. A Main target receives that exact value; every non-Main target is
@@ -60,15 +60,15 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       per-account division is not additive. No public reciprocal, latest
       transaction exchange, multi-hop pair, foreign rate, external provider,
       or binary `float` participates.
-- [ ] Missing manual components return deterministic `422` naming each
+- [x] Missing manual components return deterministic `422` naming each
       unvalued Asset-to-Main pair. The failure does not create a quote or alter
       accounts, rates, ledger rows, periods, or Undo candidates.
-- [ ] A required tagged legacy row returns deterministic `422 Manual valuation
+- [x] A required tagged legacy row returns deterministic `422 Manual valuation
       rate must be resaved before transfer quoting: <Asset> → <Main>` and writes
       nothing. The existing owner-only T-012 PUT of the displayed Asset-to-Main
       Decimal converts only that row to canonical storage; quoting never
       silently inverts, rewrites, or upgrades a legacy row.
-- [ ] Intermediate multiplication/division uses the repository's explicit
+- [x] Intermediate multiplication/division uses the repository's explicit
       high-precision Decimal helpers and never ambient 28-digit context.
       The source amount is validated once at source precision. The unrounded
       target result from the exact canonical path is rounded once with
@@ -81,7 +81,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       writes nothing. Tests cover canonical/canonical, Main on either side,
       repeating quotients, 18-place underflow, maximum integer digits, explicit
       legacy rejection/resave success, and a poisoned ambient Decimal context.
-- [ ] A quote is accepted only when exact outgoing Main value equals exact
+- [x] A quote is accepted only when exact outgoing Main value equals exact
       incoming Main value before any Main/presentation rounding. This remains
       neutral for every unrelated balance because Account summary sums exact
       valued balances before one final Main quantization. An amount that
@@ -90,7 +90,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       writes nothing. Tests include adversarial unrelated balances where
       independently rounded legs look equal but aggregate rounding would change
       Total capital.
-- [ ] The `201` response contains exactly `id`, `workspace_id`,
+- [x] The `201` response contains exactly `id`, `workspace_id`,
       `created_by_user_id`, `from_account`, `to_account`, `from_amount`,
       `to_amount`, `rate`, `rate_source`, `created_at`, and `expires_at`; all are
       required and no owner-private Main/rate-row metadata is exposed.
@@ -102,7 +102,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       with OpenAPI `date-time` format and represent naive UTC consistently with
       existing persisted timestamps. OpenAPI freezes exact component property,
       required, type, additional-property, literal, pattern, and bound sets.
-- [ ] Exact response JSON is, modulo IDs/timestamps:
+- [x] Exact response JSON is, modulo IDs/timestamps:
 
       ```json
       {
@@ -119,14 +119,14 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
         "expires_at": "2026-08-11T12:05:00"
       }
       ```
-- [ ] Quotes expire exactly five minutes after server creation time, use UTC
+- [x] Quotes expire exactly five minutes after server creation time, use UTC
       timestamps, and are immutable. One captured server clock sets
       `created_at`; `expires_at = created_at + 5 minutes`; T-013E treats
       `now >= expires_at` as expired. Exact-boundary, just-before, and
       just-after cases are clock-controlled. Expired rows are retained for
       audit and lazy rejection; no queue, worker, scheduled cleanup, Redis, or
       external dependency is added.
-- [ ] A new additive Alembic revision after
+- [x] A new additive Alembic revision after
       `0003_manual_rate_direction` creates a `transfer_quote` table with exact
       Decimal storage for both amounts and the effective rate. Required columns
       are positive integer `id`; `workspace_id`; `created_by_user_id`;
@@ -136,7 +136,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       stored value, direction, and updated-at snapshot fields; `status`;
       `created_at`; `expires_at`; nullable `executed_at`; and nullable unique
       `executed_transaction_id`.
-- [ ] Each dependency tuple is exactly nullable positive integer rate-row ID,
+- [x] Each dependency tuple is exactly nullable positive integer rate-row ID,
       nullable Numeric(38,18) stored value, nullable `String(24)` direction, and
       nullable UTC `DateTime` updated-at. Named checks enforce all-or-none tuple
       nullability, positive stored value, and direction exactly
@@ -147,7 +147,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       Named checks also require distinct account IDs. SQLite tests exercise
       every invalid partial/direction/value/identity/cross combination and the
       actual PostgreSQL migration operations compile with the same constraints.
-- [ ] Status is exactly `open | executed`. Named checks enforce positive
+- [x] Status is exactly `open | executed`. Named checks enforce positive
       amounts/rate, `rate_source = 'manual'`, `expires_at > created_at`, and
       `(status = 'open' AND executed_at IS NULL AND executed_transaction_id IS NULL)
       OR (status = 'executed' AND executed_at IS NOT NULL AND executed_transaction_id IS NOT NULL)`.
@@ -157,21 +157,21 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       not FKs, so rate deletion can make a quote stale without deleting,
       mutating, or blocking the quote. One composite index covers
       `(workspace_id, created_by_user_id, status, expires_at)`.
-- [ ] Quote persistence snapshots every execution-relevant value, including
+- [x] Quote persistence snapshots every execution-relevant value, including
       account/asset/Main identities, both exact amounts, and the IDs, exact
       stored values, directions, and update timestamps of every manual-rate row
       used. Later rate update/delete cannot mutate the quote; T-013E compares
       current dependencies to this snapshot and rejects a changed/missing row
       as stale without consuming it. T-013E may not recalculate destination
       amount.
-- [ ] Migration verification covers clean upgrade from `0003`, SQLite
+- [x] Migration verification covers clean upgrade from `0003`, SQLite
       constraints/indexes/FKs, PostgreSQL-compatible Numeric/check/index DDL,
       actual upgrade/downgrade operation compilation, and one Alembic head.
       Downgrade to `0003` succeeds only with an empty quote table; any row makes
       downgrade abort before DDL/version mutation so audit evidence is not
       silently discarded. The upgrade is additive and does not read, rewrite,
       or require `finapp.db` or legacy v1 rows.
-- [ ] ADR-0009 records persisted five-minute single-use quotes, manual
+- [x] ADR-0009 records persisted five-minute single-use quotes, manual
       Asset-to-Main cross-rate derivation, explicit legacy-row rejection with
       owner resave through T-012, destination quantization, exact
       pre-rounding Main-value equality under additive canonical multiplication
@@ -179,7 +179,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       owner-only cross-asset privacy, stale-on-rate/Main-change execution,
       immutable rate dependency snapshots, empty-only downgrade, and the
       decision not to add background cleanup; `docs/DECISIONS.md` indexes it.
-- [ ] Focused quote/domain/OpenAPI/permission/migration tests, full pytest,
+- [x] Focused quote/domain/OpenAPI/permission/migration tests, full pytest,
       Node syntax, and diff/status checks pass using isolated fixtures or an
       explicit scratch `DATABASE_URL` only.
 
@@ -755,6 +755,48 @@ the review; the implementer records it verbatim following
   `8 passed in 3.30s`; no broad suite repeated.
 - Verdict: approved with no open P0–P3 findings.
 
+### Final cumulative implementation review
+
+- Reviewer task name/vendor: `/root/t013q_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed range/manifest: committed range
+  `fc1ce24088941667e1e473adce8fe49385ba63a1..1c87338` plus the complete
+  uncommitted manifest, including untracked
+  `docs/decisions/ADR-0009-bound-transfer-quotes.md`.
+- Findings (verbatim, P0–P3):
+
+  > Final cumulative T-013Q review verdict: APPROVED. P0: None. P1: None. P2: None. P3: None. Reviewed committed range fc1ce24088941667e1e473adce8fe49385ba63a1..1c87338 plus full uncommitted manifest, including direct inspection of untracked docs/decisions/ADR-0009-bound-transfer-quotes.md. All T-013Q acceptance items are supported by implementation/review/gate evidence; clauses that explicitly assign expiry/stale/single-use execution behavior to T-013E are recorded as the bound contract and remain correctly out of T-013Q implementation scope. Prior SQLite exactness and PostgreSQL partial-NULL/nonfinite findings are closed in app/models.py:509-623 and alembic/versions/0004_transfer_quotes.py:167-230 with matching migration coverage. Prior nested OpenAPI/privacy gaps are closed in app/schemas.py:55-63,149-170 and tests/test_transfer_quotes_v21.py:63-182,437-488. ADR-0009 contains every required decision at lines 21-52 and is correctly indexed in docs/DECISIONS.md:23. The read_text(encoding='utf-8') edits in tests/test_frontend_v2.py and tests/test_migrations_v2.py are gate-portability-only fixes for Windows default encoding; they do not change product behavior or assertions and are acceptable scope. I relied on supplied gates (8 quote, 43 adjacent, 64 migration, 7 frontend, full 322 passed, Node and diff-check passed) and did not rerun a broad suite. ETH→BTC clarification: cross-asset Transfer explicitly derives the destination via ETH→Main and BTC→Main; it does not fetch or persist an independent market ETH/BTC rate. That derivation is required by MOBILE-BACKEND-GAP-AUDIT.md:37 and T-013Q:53-62. If the product should prohibit crypto-to-crypto transfers, that is a spec change, not a defect in this implementation.
+- Resolution: none required; every prior schema, portability, nested-contract,
+  and privacy finding is closed.
+- Verdict: approved with no open P0–P3 findings.
+
+### Final lifecycle/evidence review
+
+- Reviewer task name/vendor: `/root/t013q_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed HEAD/manifest: `1c87338a0605a45692199968446f0e0748f890b3`
+  and the complete current tracked/untracked manifest.
+- Findings (verbatim, P0–P3):
+
+  > Fresh final lifecycle/evidence re-review: APPROVED. Reviewed HEAD `1c87338a0605a45692199968446f0e0748f890b3` and complete current manifest: `M docs/BACKLOG.md`, `M docs/DECISIONS.md`, `M docs/PROGRESS.md`, `M docs/tasks/T-013Q-transfer-quote.md`, `M tests/test_frontend_v2.py`, `M tests/test_migrations_v2.py`, `?? docs/decisions/ADR-0009-bound-transfer-quotes.md`. P0: None. P1: None. P2: None. P3: None. Task front matter is correctly `status: review`; BACKLOG mirrors `review`; PROGRESS consistently says independently approved/awaiting local owner acceptance and keeps T-013E blocked. The prior final review text is transcribed verbatim under `Final cumulative implementation review`, including exact range/manifest, findings, resolution, and verdict. Final gate evidence and session handoff are present. ADR-0009 is directly inspected and indexed in DECISIONS. `git diff --check` passed with line-ending warnings only. No files edited and no tests rerun.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3 findings.
+
+## Final gate evidence
+
+- Focused quote contract: `8 passed in 3.45s`; independent reviewer rerun:
+  `8 passed in 3.30s`.
+- Adjacent valuation and operation regression set: `43 passed in 18.50s`.
+- Complete migration file after explicit UTF-8 portability correction:
+  `64 passed, 246 warnings in 23.34s`.
+- Focused frontend static-contract checks after the same portability
+  correction: `7 passed in 0.16s`.
+- Full automated suite: `322 passed, 246 warnings in 94.20s`.
+- Bundled `node.exe --check app/static/app.js` and `git diff --check` passed.
+- All database-backed checks used isolated fixtures; `finapp.db` was not
+  opened, replaced, or removed. No browser check was required because T-013Q
+  adds no SPA surface and its task verification contract is API/schema-only.
+
 ## Session log
 
 - 2026-08-11 Codex: split the ordered L-sized T-013 into bounded quote and
@@ -811,3 +853,9 @@ the review; the implementer records it verbatim following
   Domain/API re-review approved with no P0–P3; focused quote `8 passed`,
   adjacent valuation/operations `43 passed`, and migration/metadata `47 passed`.
   ADR and final T-013Q gates remain.
+- 2026-08-11 Codex: recorded ADR-0009 and completed the exact task gates:
+  migration `64 passed`, frontend portability `7 passed`, full pytest
+  `322 passed`, Node syntax and diff checks passed. A fresh cumulative reviewer
+  approved the full committed and uncommitted manifest with no P0–P3 findings.
+  T-013Q is now in review and awaits local repository-owner acceptance; no
+  open product question remains.

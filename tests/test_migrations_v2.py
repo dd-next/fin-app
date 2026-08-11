@@ -1251,7 +1251,9 @@ def test_transaction_origin_constraint_accepts_only_release_values(
 
 
 def test_phase9_progress_records_recoverable_backup_evidence():
-    progress = Path("docs/history/PROGRESS-phases-8-13.md").read_text()
+    progress = Path("docs/history/PROGRESS-phases-8-13.md").read_text(
+        encoding="utf-8"
+    )
     assert ".backups/finapp-pre-v2-" in progress
     assert "/private/tmp/finapp-phase9-restore-" in progress
     assert "`PRAGMA integrity_check` — `ok`" in progress

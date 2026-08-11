@@ -17,9 +17,9 @@ the one task file you are working on. Nothing else by default.
 |---|---|
 | Branch | `task/T-013Q-transfer-quote` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
-| Schema head | accepted integration `0003_manual_rate_direction` |
-| Last full suite | **268 passed** (2026-08-11, T-012 final implementation gate) |
-| Active work | T-002–T-012 accepted; T-013Q is claimed and implementing exact Transfer quote persistence/API |
+| Schema head | accepted integration `0003_manual_rate_direction`; T-013Q proposes reviewed `0004_transfer_quotes` |
+| Last full suite | **322 passed** (2026-08-11, T-013Q final implementation gate) |
+| Active work | T-002–T-012 accepted; T-013Q independently approved and awaiting local owner acceptance |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-012 accepted; T-013Q is `in-progress` on its exact task
-branch; T-013E remains blocked by T-013Q.**
+Status: **T-002–T-012 accepted; T-013Q is independently approved on its exact
+task branch and awaits local owner acceptance; T-013E remains blocked.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -93,11 +93,11 @@ branch; T-013E remains blocked by T-013Q.**
   fast-forward. Detailed evidence:
   [`tasks/T-012-mobile-valuation-rate-direction.md`](tasks/T-012-mobile-valuation-rate-direction.md).
 - The L-sized transfer row is split into bounded quote and execution tasks.
-  Four independent readiness passes closed privacy, exact Decimal/rate,
-  aggregate-neutrality, state/FK, concurrency, expiry, migration, and lifecycle
-  findings; final Pass 4 approved both definitions with no P0–P3. The owner
-  promoted T-013Q to `todo`, and Codex claimed its exact task branch from
-  integration `fc1ce24`; T-013E remains blocked by T-013Q.
+  T-013Q now persists exact owner-private same/cross-asset quotes, derives
+  cross-asset amounts only through canonical manual Asset-to-Main rates, and
+  records immutable dependencies for T-013E. Fresh cumulative review approved
+  the full manifest with no open P0–P3; full pytest `322`, Node syntax, and
+  diff checks passed. Local owner acceptance remains; T-013E is still blocked.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 
