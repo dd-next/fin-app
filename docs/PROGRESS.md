@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `task/T-013E-transfer-execution` |
+| Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **329 passed** (2026-08-11, T-013E final implementation gate) |
-| Active work | T-002–T-013Q accepted; T-013E independently approved and awaiting local owner acceptance |
+| Active work | T-002–T-013E accepted; T-014 financial-date feed is next for bounded specification/readiness |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-013Q accepted; T-013E is independently approved on its exact
-task branch and awaits local owner acceptance.**
+Status: **T-002–T-013E accepted; T-014 is next for bounded
+specification/readiness.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -102,7 +102,8 @@ task branch and awaits local owner acceptance.**
   existing transfer/exchange, period, captured-rate, and Undo paths; exact
   concurrency, stale/expiry, rollback, privacy, and OpenAPI coverage passed.
   Fresh implementation re-review approved with no open P0–P3; full pytest
-  `329`, Node syntax, and diff checks passed. Local owner acceptance remains.
+  `329`, Node syntax, and diff checks passed. Reviewed commit `119504f` was
+  accepted locally by fast-forward.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 

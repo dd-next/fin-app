@@ -1,7 +1,7 @@
 ---
 id: T-013E
 title: Execute a bound Transfer quote atomically
-status: review
+status: done
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-013Q]
@@ -427,3 +427,6 @@ the review; the implementer records it verbatim following
 - 2026-08-11 Codex: fresh final cumulative review approved the full committed
   range plus docs-only lifecycle manifest with no P0–P3 findings. T-013E now
   awaits only local repository-owner acceptance.
+- 2026-08-11 repository owner: accepted reviewed task commit `119504f` by
+  fast-forward into local `finapp-v2-develop`. T-013E is done; T-014 is next;
+  nothing was pushed, deployed, or run against `finapp.db`.
