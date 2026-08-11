@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `finapp-v2-develop` |
+| Branch | `task/T-013Q-transfer-quote` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0003_manual_rate_direction` |
 | Last full suite | **268 passed** (2026-08-11, T-012 final implementation gate) |
-| Active work | T-002–T-012 accepted; T-013Q is readiness-approved and promoted to `todo` for exact branch claim |
+| Active work | T-002–T-012 accepted; T-013Q is claimed and implementing exact Transfer quote persistence/API |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-012 accepted; T-013Q is readiness-approved and promoted to
-`todo` for exact branch claim; T-013E remains blocked by T-013Q.**
+Status: **T-002–T-012 accepted; T-013Q is `in-progress` on its exact task
+branch; T-013E remains blocked by T-013Q.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -96,8 +96,8 @@ Status: **T-002–T-012 accepted; T-013Q is readiness-approved and promoted to
   Four independent readiness passes closed privacy, exact Decimal/rate,
   aggregate-neutrality, state/FK, concurrency, expiry, migration, and lifecycle
   findings; final Pass 4 approved both definitions with no P0–P3. The owner
-  promoted T-013Q to `todo` for exact branch claim; T-013E remains blocked by
-  T-013Q.
+  promoted T-013Q to `todo`, and Codex claimed its exact task branch from
+  integration `fc1ce24`; T-013E remains blocked by T-013Q.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 

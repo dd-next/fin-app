@@ -1,13 +1,13 @@
 ---
 id: T-013Q
 title: Persist exact one-amount same/cross-asset Transfer quotes
-status: todo
+status: in-progress
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-012]
 branch: task/T-013Q-transfer-quote
-base-commit:
-implementer:
+base-commit: fc1ce24088941667e1e473adce8fe49385ba63a1
+implementer: Codex
 readiness-reviewed-by: /root/t013_readiness_confirmation (Codex same-vendor fallback)
 readiness-reviewed-commit: dacb871
 readiness-verdict: ready
@@ -575,6 +575,42 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
+### Initial claim review
+
+- Reviewer task name/vendor: `/root/t013q_claim_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: branch `task/T-013Q-transfer-quote`, HEAD
+  `fc1ce24088941667e1e473adce8fe49385ba63a1`, and the complete tracked
+  claim diff in `docs/BACKLOG.md`, `docs/PROGRESS.md`, and this task file;
+  no untracked files.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Approved.
+  >
+  > The claim satisfies the AGENTS initial-claim protocol. Integration commit
+  > `fc1ce24088941667e1e473adce8fe49385ba63a1` is the reviewed
+  > readiness-approved owner promotion with T-013Q at `todo`; `dacb871` is
+  > its ancestor, and T-012 is accepted as `done`. The reflog shows the exact
+  > branch was created from `fc1ce24`, and current HEAD remains that base. The
+  > task records the full base commit and `Codex` implementer, while both task
+  > and matching BACKLOG row are consistently `in-progress`.
+  > `docs/PROGRESS.md` names the exact branch, current claimed work, and no
+  > blocker without claiming implementation or new test evidence. The
+  > append-only session log accurately records the branch claim and next work.
+  > No files were edited by the reviewer.
+- Resolution: none required.
+- Reviewer checks: lifecycle/dependency/ancestry, branch reflog, task/BACKLOG/
+  PROGRESS consistency, complete manifest, and `git diff --check` (passed).
+- Verdict: approved for the first T-013Q task commit.
+
 ## Session log
 
 - 2026-08-11 Codex: split the ordered L-sized T-013 into bounded quote and
@@ -615,3 +651,7 @@ the review; the implementer records it verbatim following
   and owner lifecycle transitions without further approval waits. Promoted
   readiness-approved T-013Q task/BACKLOG from `backlog` to `todo`; exact branch
   claim from this committed integration HEAD is next.
+- 2026-08-11 Codex: confirmed the exact task branch was absent and atomically
+  claimed `task/T-013Q-transfer-quote` from promoted integration
+  `fc1ce24088941667e1e473adce8fe49385ba63a1`. Recorded base/implementer and
+  task+BACKLOG `in-progress`; schema/domain/API implementation is next.
