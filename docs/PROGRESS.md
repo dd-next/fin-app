@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `task/T-014F-financial-date-transaction-feed` (owner acceptance; next branch claim is T-014P) |
+| Branch | `task/T-014P-planned-feed-projection` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **333 passed** (2026-08-11, T-014F final implementation gate) |
-| Active work | T-002–T-014F accepted; readiness-approved T-014P is promoted to `todo` and next for exact branch claim |
+| Active work | T-002–T-014F accepted; T-014P is claimed and implementing planned feed projections |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-014F accepted; readiness-approved T-014P is unblocked,
-promoted to `todo`, and next for exact integration-HEAD branch claim.**
+Status: **T-002–T-014F accepted; T-014P is `in-progress` on its exact task
+branch, implementing planned feed projections and details.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -112,7 +112,7 @@ promoted to `todo`, and next for exact integration-HEAD branch claim.**
   coverage findings were closed in the existing four focused tests; fresh
   re-review approved with no open P0–P3. Focused/adjacent `33 passed`, full
   pytest `333 passed`, Node syntax, and diff checks passed. Commit `20c37c9`
-  was accepted locally; T-014P is now promoted and unblocked. Detailed evidence:
+  was accepted locally; T-014P is now claimed and in progress. Detailed evidence:
   [`tasks/T-014F-financial-date-transaction-feed.md`](tasks/T-014F-financial-date-transaction-feed.md).
 
 Requirements live in

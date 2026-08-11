@@ -1,13 +1,13 @@
 ---
 id: T-014P
 title: Project open Plan occurrences through Transaction details
-status: todo
+status: in-progress
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md planned ledger rows
 blocked-by: [T-014F]
 branch: task/T-014P-planned-feed-projection
-base-commit:
-implementer:
+base-commit: b5984f59123904e1b7899e5b632b3b3b32415548
+implementer: Codex
 readiness-reviewed-by: /root/t014_split_final_review (Codex same-vendor fallback)
 readiness-reviewed-commit: 5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b
 readiness-verdict: ready
@@ -242,6 +242,17 @@ BUILD_PLAN, and REVIEW_PROTOCOL.
 Append-only implementation review passes. The implementer records each fresh
 read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 
+### Initial claim review
+
+- Reviewer task name/vendor: `/root/t014p_claim_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: modified BACKLOG, PROGRESS, and T-014P task documentation.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014P initial-claim review verdict: APPROVED. Exact manifest: `M docs/BACKLOG.md`; `M docs/PROGRESS.md`; `M docs/tasks/T-014P-planned-feed-projection.md`. P0: none. P1: none. P2: none. P3: none. Verified current branch is exactly `task/T-014P-planned-feed-projection`; current HEAD is accepted integration `b5984f59123904e1b7899e5b632b3b3b32415548`; branch reflog records `branch: Created from HEAD` at that exact commit, after the accepted T-014F fast-forward. The base commit has T-014F `done`, T-014P `todo`, readiness reviewer `/root/t014_split_final_review (Codex same-vendor fallback)`, reviewed commit `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, verdict `ready`, and dependency `[T-014F]` satisfied. The bounded uncommitted claim manifest only changes lifecycle docs: task/backlog to `in-progress`, immutable `base-commit` to the exact accepted HEAD, implementer `Codex`, current branch/release-state text, and an append-only claim session entry. No app/test/schema/database files are changed; `git diff --check` passes. This is a valid first-commit claim manifest and implementation may proceed after committing it. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Session log
 
 - 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
@@ -264,3 +275,7 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - 2026-08-11 repository owner: accepted T-014F commit `20c37c9` and promoted
   readiness-approved T-014P from `backlog` to `todo`. Exact branch claim from
   the resulting accepted integration HEAD is next.
+- 2026-08-11 Codex: confirmed accepted integration HEAD
+  `b5984f59123904e1b7899e5b632b3b3b32415548`, verified the exact task branch
+  was absent, and atomically claimed `task/T-014P-planned-feed-projection`.
+  Recorded the immutable base and implementer; implementation is next.
