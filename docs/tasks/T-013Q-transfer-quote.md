@@ -460,6 +460,73 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
 - Resolution: none required.
 - Verdict: approved.
 
+### Blocker record review Pass 1
+
+- Reviewer task name/vendor: `/root/t013_blocker_record_review`, Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `092b168` plus the uncommitted task/
+  PROGRESS blocker record; no application or database files.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — Unblock sequence is incomplete.
+  >
+  > - `T-013Q-transfer-quote.md` correctly requires owner promotion and branching from the promoted integration HEAD, but omits two mandatory `AGENTS.md` safeguards:
+  >   - stop if `task/T-013Q-transfer-quote` already exists when claiming;
+  >   - in the first task commit, set both task and BACKLOG statuses to `in-progress` and record the implementer, alongside `base-commit`.
+  > - Add these steps so the handoff cannot bypass the atomic-claim protocol.
+  >
+  > P3: None.
+- Resolution: the unblock sequence now requires the branch-absence stop and
+  the first-commit base/implementer/task+BACKLOG `in-progress` transition.
+- Reviewer checks: direct AGENTS/task/BACKLOG/PROGRESS/branch/worktree review;
+  `git diff --check` passed; no files edited by reviewer.
+- Verdict: not approved; corrected and submitted for fresh re-review.
+
+### Blocker record review Pass 2
+
+- Reviewer task name/vendor: `/root/t013_blocker_record_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `092b168` plus corrected uncommitted
+  task/PROGRESS blocker record.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Approved.
+- Resolution: none required; Pass 1 P2 is closed.
+- Reviewer checks: task/BACKLOG/readiness/local+remote branch refs, three-turn
+  history, exact AGENTS claim sequence, PROGRESS, session log, and
+  `git diff --check`; no files edited by reviewer.
+- Verdict: approved.
+
+## Blocker
+
+- Cause: repository-owner promotion of T-013Q from `backlog` to `todo` has not
+  occurred. AGENTS requires that committed owner transition before the exact
+  task branch can be created; an implementer cannot perform or bypass it.
+- Repeated audit: the same gate was confirmed on three consecutive goal turns.
+  Current accepted integration HEAD is `092b168`; task/backlog both remain
+  `backlog`; readiness verdict is `ready` at reviewed commit `dacb871`; T-012 is
+  accepted; `task/T-013Q-transfer-quote` does not exist; the worktree was clean.
+- Attempts: split the L task; completed four independent readiness passes and
+  a clean final confirmation; recorded readiness and PROGRESS handoffs; twice
+  rechecked external task/branch state; requested explicit owner promotion.
+  No safe implementation, later-task, migration, or branch action is permitted
+  while the gate remains unchanged.
+- Resolution required: repository owner commits the T-013Q task front matter
+  and matching BACKLOG row as `todo`. A later resumed implementer must then
+  stop if exact branch `task/T-013Q-transfer-quote` already exists; otherwise
+  create it atomically from that promoted integration HEAD. In the first task
+  commit, record that HEAD as `base-commit`, record the implementer, and set
+  both task front matter and the matching BACKLOG row to `in-progress`.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -498,3 +565,7 @@ the review; the implementer records it verbatim following
   and clean worktree. T-013Q is still `backlog`, so the repository-owner
   promotion gate remains unchanged and implementation cannot be claimed or
   started; no application, migration, test, schema, or database file changed.
+- 2026-08-11 Codex: third consecutive goal audit at integration HEAD `092b168`
+  found the identical owner-only promotion gate. Recorded the blocker, prior
+  attempts, and exact unblock condition in task/PROGRESS; no implementation,
+  branch, schema, migration, test, or database change was authorized.

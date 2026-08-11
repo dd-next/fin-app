@@ -20,7 +20,7 @@ the one task file you are working on. Nothing else by default.
 | Schema head | accepted integration `0003_manual_rate_direction` |
 | Last full suite | **268 passed** (2026-08-11, T-012 final implementation gate) |
 | Active work | T-002–T-012 accepted; split T-013Q/T-013E readiness is approved, T-013Q awaits owner promotion |
-| Blocker | None |
+| Blocker | Repository-owner promotion of readiness-approved T-013Q from `backlog` to `todo` is required before branch claim |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
 
