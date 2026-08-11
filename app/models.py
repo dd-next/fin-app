@@ -46,6 +46,23 @@ class ExactDecimal(TypeDecorator):
         return None if value is None else Decimal(str(value))
 
 
+class CanonicalExactDecimal(ExactDecimal):
+    """Quote Decimal storage with one plain-text representation on SQLite."""
+
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        decimal = Decimal(value)
+        if dialect.name != "sqlite":
+            return decimal
+        rendered = format(decimal, "f")
+        if "." in rendered:
+            rendered = rendered.rstrip("0").rstrip(".")
+        return rendered
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -628,13 +645,13 @@ class TransferQuote(Base):
     main_asset_id: Mapped[int] = mapped_column(
         ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
     )
-    from_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
-    to_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
-    rate: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    from_amount: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
+    to_amount: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
+    rate: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
     rate_source: Mapped[str] = mapped_column(String(16), nullable=False)
     source_manual_rate_id: Mapped[int | None] = mapped_column(nullable=True)
     source_manual_rate_value: Mapped[Decimal | None] = mapped_column(
-        ExactDecimal, nullable=True
+        CanonicalExactDecimal, nullable=True
     )
     source_manual_rate_direction: Mapped[str | None] = mapped_column(
         String(24), nullable=True
@@ -644,7 +661,7 @@ class TransferQuote(Base):
     )
     target_manual_rate_id: Mapped[int | None] = mapped_column(nullable=True)
     target_manual_rate_value: Mapped[Decimal | None] = mapped_column(
-        ExactDecimal, nullable=True
+        CanonicalExactDecimal, nullable=True
     )
     target_manual_rate_direction: Mapped[str | None] = mapped_column(
         String(24), nullable=True

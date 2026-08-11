@@ -18,6 +18,7 @@ from app.sharing import router as sharing_router
 from app.plan import router as plan_router
 from app.periods import router as periods_router
 from app.operations import router as operations_router
+from app.transfer_quotes import router as transfer_quotes_router
 
 
 @asynccontextmanager
@@ -40,6 +41,7 @@ app.include_router(sharing_router, prefix="/api/v1")
 app.include_router(plan_router, prefix="/api/v1")
 app.include_router(periods_router, prefix="/api/v1")
 app.include_router(operations_router, prefix="/api/v1")
+app.include_router(transfer_quotes_router, prefix="/api/v1")
 
 
 @app.get("/health")

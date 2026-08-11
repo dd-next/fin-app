@@ -53,7 +53,7 @@ class AssetCreate(BaseModel):
 
 
 class AssetOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: int
     code: str
@@ -115,6 +115,59 @@ class ManualValuationRateOut(BaseModel):
     source: Literal["manual"]
     created_at: datetime
     updated_at: datetime
+
+
+class TransferQuoteCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_account_id: int = Field(strict=True, gt=0)
+    to_account_id: int = Field(strict=True, gt=0)
+    from_amount: str = Field(
+        strict=True,
+        pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$",
+    )
+    rate_source: Literal["manual"]
+
+    @field_validator("from_amount")
+    @classmethod
+    def validate_from_amount(cls, value: str) -> str:
+        integer, separator, fraction = value.partition(".")
+        decimal = Decimal(value)
+        if not decimal.is_finite() or decimal <= 0:
+            raise ValueError("Transfer amount must be positive and finite")
+        integer_digits = len(integer.lstrip("0"))
+        if integer_digits > 20 or len(fraction) > 18:
+            raise ValueError("Transfer amount exceeds Numeric(38,18)")
+        normalized_fraction = fraction.rstrip("0") if separator else ""
+        return (
+            f"{integer}.{normalized_fraction}"
+            if normalized_fraction
+            else integer
+        )
+
+
+class TransferQuoteAccountOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(gt=0)
+    name: str
+    asset: AssetOut
+
+
+class TransferQuoteOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(gt=0)
+    workspace_id: int = Field(gt=0)
+    created_by_user_id: int = Field(gt=0)
+    from_account: TransferQuoteAccountOut
+    to_account: TransferQuoteAccountOut
+    from_amount: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    to_amount: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    rate: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    rate_source: Literal["manual"]
+    created_at: datetime
+    expires_at: datetime
 
 
 class AuthContextOut(BaseModel):

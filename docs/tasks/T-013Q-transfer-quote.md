@@ -697,6 +697,64 @@ the review; the implementer records it verbatim following
   `49 passed, 15 deselected in 19.05s`, and `git diff --check`.
 - Verdict: approved with no open P0–P3 findings.
 
+### Domain/API review Pass 1
+
+- Reviewer task name/vendor: `/root/t013q_domain_api_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: task branch base HEAD `7e59e88`, modified `app/main.py`,
+  `app/models.py`, and `app/schemas.py`, plus untracked
+  `app/transfer_quotes.py` and `tests/test_transfer_quotes_v21.py`.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2 — The frozen nested response/OpenAPI contract is not fully asserted. `tests/test_transfer_quotes_v21.py:96-112` checks only the top-level `TransferQuoteOut`; it never resolves/asserts `TransferQuoteAccountOut` or reused `AssetOut`, despite T-013Q acceptance requiring exact nested property/required/type/additional-property/bound sets. `app/schemas.py:149-154` has the intended compact account shape, but regression coverage would not catch it becoming permissive or gaining private fields.
+  >
+  > P2 — The required owner-private permission matrix is incomplete for unrelated users. `tests/test_transfer_quotes_v21.py:419-435` covers owner same/cross and shared editor/contributor/viewer same/cross, but `:437` exercises the unrelated user only against the same-asset pair. T-013Q explicitly requires unrelated users on both identity and cross-asset paths, so an unrelated cross-asset request could regress to a rate/pair-sensitive response without this test detecting it.
+  >
+  > P3: None.
+  >
+  > Verdict: Not approved until both P2 coverage gaps are closed and the focused quote test is rerun. I found no domain arithmetic, persistence, privacy-implementation, TTL-clock, or direct-operation regression defect in the inspected manifest.
+- Resolution: closed the nested output contracts with `extra="forbid"` and
+  exact account/Asset OpenAPI property, required, primitive, enum, bound, and
+  additional-property assertions; added unrelated-user cross-asset privacy and
+  mutation-neutrality coverage alongside the existing identity case.
+- Tests: focused quote file after corrections — `8 passed in 3.45s`.
+- Verdict: not approved; both P2 findings fixed and submitted for fresh review.
+
+### Domain/API review Pass 2
+
+- Reviewer task name/vendor: `/root/t013q_domain_api_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: complete corrected domain/API manifest from base HEAD
+  `7e59e88`, including the quote-only canonical SQLite bind type.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1: None.
+  >
+  > P2: None.
+  >
+  > P3: None.
+  >
+  > Approved.
+  >
+  > The two prior coverage findings are closed:
+  >
+  > - `TransferQuoteAccountOut` and nested `AssetOut` now have exact property and required sets, `additionalProperties: false`, expected primitive/enum types, and the positive account-ID bound asserted in OpenAPI.
+  > - Privacy coverage now rejects an unrelated user with the generic `404 Workspace not found` for both same-asset and cross-asset pairs, while confirming no quote-row mutation.
+  >
+  > Adding `extra="forbid"` to shared `AssetOut` causes no response-contract defect: it remains an output model validated from ORM attributes, preserves its existing fields/types, and supplies the required closed nested OpenAPI shape.
+  >
+  > No regression found in Decimal-only arithmetic, destination quantization/effective-rate handling, immutable dependency snapshots, write neutrality, persistence, or the single-clock five-minute TTL. Focused verification rerun: `8 passed in 3.30s`. No files edited.
+- Resolution: none required; both P2 findings are closed.
+- Reviewer checks: full tracked/untracked manifest and focused quote rerun
+  `8 passed in 3.30s`; no broad suite repeated.
+- Verdict: approved with no open P0–P3 findings.
+
 ## Session log
 
 - 2026-08-11 Codex: split the ordered L-sized T-013 into bounded quote and
@@ -746,3 +804,10 @@ the review; the implementer records it verbatim following
   and closed SQLite precision/coercion and PostgreSQL NULL/non-finite CHECK
   gaps; the final reviewer approved with no P0–P3. Targeted migration gate is
   `49 passed, 15 deselected`; domain/API implementation remains.
+- 2026-08-11 Codex: implemented strict owner-private quote creation, exact
+  same/cross-asset Decimal calculation through canonical Asset-to-Main rates,
+  capital-neutral destination quantization, immutable dependency snapshots,
+  normalized private response shapes, and a single-clock five-minute TTL.
+  Domain/API re-review approved with no P0–P3; focused quote `8 passed`,
+  adjacent valuation/operations `43 passed`, and migration/metadata `47 passed`.
+  ADR and final T-013Q gates remain.
