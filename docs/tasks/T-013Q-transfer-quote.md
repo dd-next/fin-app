@@ -1,7 +1,7 @@
 ---
 id: T-013Q
 title: Persist exact one-amount same/cross-asset Transfer quotes
-status: review
+status: done
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-012]
@@ -859,3 +859,6 @@ the review; the implementer records it verbatim following
   approved the full committed and uncommitted manifest with no P0–P3 findings.
   T-013Q is now in review and awaits local repository-owner acceptance; no
   open product question remains.
+- 2026-08-11 repository owner: accepted reviewed task commit `9f02bf1` by
+  fast-forward into local `finapp-v2-develop`. T-013Q is done and T-013E is
+  unblocked; nothing was pushed, deployed, or run against `finapp.db`.

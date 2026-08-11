@@ -1,7 +1,7 @@
 ---
 id: T-013E
 title: Execute a bound Transfer quote atomically
-status: backlog
+status: todo
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-013Q]
@@ -265,3 +265,6 @@ the review; the implementer records it verbatim following
 - 2026-08-11 Codex: readiness Pass 4 approved committed split-task definitions
   at `dacb871` with no P0–P3 findings. T-013E remains blocked by accepted
   T-013Q; no application code or database was changed.
+- 2026-08-11 repository owner: accepted T-013Q and promoted the already
+  readiness-approved, now-unblocked T-013E from `backlog` to `todo`. Exact
+  branch claim from the resulting integration commit is next.

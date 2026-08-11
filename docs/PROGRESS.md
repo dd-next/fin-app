@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `task/T-013Q-transfer-quote` |
+| Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
-| Schema head | accepted integration `0003_manual_rate_direction`; T-013Q proposes reviewed `0004_transfer_quotes` |
+| Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **322 passed** (2026-08-11, T-013Q final implementation gate) |
-| Active work | T-002–T-012 accepted; T-013Q independently approved and awaiting local owner acceptance |
+| Active work | T-002–T-013Q accepted; readiness-approved T-013E is `todo` and next for exact branch claim |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-012 accepted; T-013Q is independently approved on its exact
-task branch and awaits local owner acceptance; T-013E remains blocked.**
+Status: **T-002–T-013Q accepted; readiness-approved T-013E is unblocked,
+promoted to `todo`, and next for exact branch claim.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -97,7 +97,8 @@ task branch and awaits local owner acceptance; T-013E remains blocked.**
   cross-asset amounts only through canonical manual Asset-to-Main rates, and
   records immutable dependencies for T-013E. Fresh cumulative review approved
   the full manifest with no open P0–P3; full pytest `322`, Node syntax, and
-  diff checks passed. Local owner acceptance remains; T-013E is still blocked.
+  diff checks passed. Reviewed commit `9f02bf1` was accepted locally by
+  fast-forward; T-013E is now unblocked and promoted to `todo`.
   Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
   and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 
