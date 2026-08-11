@@ -1,13 +1,13 @@
 ---
 id: T-012
 title: Expose manual valuation rates in mobile asset-to-Main direction
-status: todo
+status: in-progress
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md rate direction
 blocked-by: [T-001]
 branch: task/T-012-mobile-valuation-rate-direction
-base-commit:
-implementer:
+base-commit: b592bfacaf868d522159b8602e2df2467aaab20c
+implementer: Codex
 readiness-reviewed-by: /root/t010_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: e0f7e27
 readiness-verdict: ready
@@ -378,3 +378,5 @@ ends. Date · agent · what landed · what is left · open questions.
   P0–P3 findings. Owner promotion and exact branch claim are next.
 - 2026-08-11 Owner: promoted readiness-approved T-012 from backlog to todo.
   Exact accepted-integration branch claim is next.
+- 2026-08-11 Codex: claimed the task from exact accepted integration
+  `b592bfacaf868d522159b8602e2df2467aaab20c`; implementation is in progress.
