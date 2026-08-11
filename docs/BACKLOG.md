@@ -42,7 +42,7 @@ backend gap remains open.
 | [T-012](tasks/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | done | M | audit: rates | T-001 |
 | [T-013Q](tasks/T-013Q-transfer-quote.md) | Exact one-amount same/cross-asset Transfer quote | done | M | audit: transfer | T-012 |
 | [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | done | M | audit: transfer | T-013Q |
-| [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | todo | M | audit: feed order/mapping | T-001 |
+| [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | in-progress | M | audit: feed order/mapping | T-001 |
 | [T-014P](tasks/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | backlog | M | audit: planned rows | T-014F |
 | T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014P |
 | T-016 | Category merge/delete for transactions and Plan rules | backlog | M | audit: categories | T-001 |

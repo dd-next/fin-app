@@ -1,13 +1,13 @@
 ---
 id: T-014F
 title: Expose a stable financial-date feed for persisted transactions
-status: todo
+status: in-progress
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md feed ordering and adjustment/exchange rows
 blocked-by: [T-001]
 branch: task/T-014F-financial-date-transaction-feed
-base-commit:
-implementer:
+base-commit: a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c
+implementer: Codex
 readiness-reviewed-by: /root/t014_split_final_review (Codex same-vendor fallback)
 readiness-reviewed-commit: 5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b
 readiness-verdict: ready
@@ -195,6 +195,36 @@ and REVIEW_PROTOCOL.
 Append-only implementation review passes. The implementer records each fresh
 read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 
+### Initial claim review
+
+- Reviewer task name/vendor: `/root/t014f_claim_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: branch/base
+  `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c` plus three documentation changes.
+- Findings (verbatim, P0–P3):
+
+  > Read-only initial claim review for T-014F: **APPROVED**.
+  >
+  > - P0: none.
+  > - P1: none.
+  > - P2: none.
+  > - P3: none.
+  >
+  > Evidence:
+  >
+  > - Accepted integration/base is `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c`; `finapp-v2-develop` and the task branch both point to it.
+  > - At that integration commit, T-014F is readiness-approved and `todo`; exact reviewed task commit is `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, verdict `ready`.
+  > - Dependency T-001 is accepted with `status: done`.
+  > - Reflog records the exact branch being created from integration HEAD at `a6ffca9`; the claim manifest records the same immutable full base hash and implementer `Codex`.
+  > - Task file, BACKLOG, and PROGRESS consistently move only T-014F from `todo` to `in-progress`.
+  > - T-014P remains `backlog`, retains `blocked-by: [T-014F]`, and PROGRESS still describes it as blocked.
+  > - Manifest is bounded to the expected three documentation files; no application, test, schema, migration, or untracked changes exist.
+  > - `git diff --check` passed; only informational LF→CRLF warnings were emitted.
+  >
+  > No files were edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Session log
 
 - 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
@@ -208,3 +238,7 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - 2026-08-11 repository owner: promoted readiness-approved T-014F from
   `backlog` to `todo`. Exact branch claim from the committed integration HEAD
   is next; T-014P remains blocked.
+- 2026-08-11 Codex: confirmed clean promoted integration HEAD
+  `a6ffca9a209147e857a2aa625ecf9f0f62a1fb3c`, the exact branch was absent, and
+  atomically claimed `task/T-014F-financial-date-transaction-feed`. Recorded
+  immutable base/implementer; implementation is next.
