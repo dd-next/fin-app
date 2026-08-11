@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: Expose manual valuation rates in mobile asset-to-Main direction
-status: review
+status: done
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md rate direction
 blocked-by: [T-001]
@@ -519,3 +519,6 @@ ends. Date · agent · what landed · what is left · open questions.
   diff checks passed. The task is in review and awaits local owner acceptance;
   no open question, and nothing was pushed, deployed, or run against
   `finapp.db`.
+- 2026-08-11 Owner: accepted reviewed task commit `437b5fa` by fast-forward
+  into local `finapp-v2-develop`. T-012 is done; T-013 is next; nothing was
+  pushed, deployed, or run against `finapp.db`.
