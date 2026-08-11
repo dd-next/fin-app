@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: Keep owner-private periods non-authorizing for shared users
-status: review
+status: done
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §11
 blocked-by: [T-008, T-009]
@@ -364,3 +364,5 @@ ends. Date · agent · what landed · what is left · open questions.
   regressions `108 passed`, migrations `9 passed`, full suite `229 passed`,
   Node/diff checks and scratch FastAPI+SPA E2E passed. Owner acceptance remains;
   no open question.
+- 2026-08-11 Owner: accepted reviewed task commit `1e0d524` by fast-forward
+  into local `finapp-v2-develop`. T-010 is done; T-012 is next; nothing pushed.

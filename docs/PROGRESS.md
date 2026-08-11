@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | `0002_period_snapshot_model` |
 | Last full suite | **229 passed** (2026-08-11, T-010 implementation review) |
-| Active work | T-002–T-009 accepted; T-010 independently approved and awaiting local owner acceptance |
+| Active work | T-002–T-010 accepted; T-012 manual valuation-rate pair direction is next for specification/readiness |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-009 accepted; T-010 independently approved and awaiting local owner acceptance.**
+Status: **T-002–T-010 accepted; T-012 is next for specification/readiness.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
