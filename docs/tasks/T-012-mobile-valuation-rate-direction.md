@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: Expose manual valuation rates in mobile asset-to-Main direction
-status: backlog
+status: todo
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md rate direction
 blocked-by: [T-001]
@@ -376,3 +376,5 @@ ends. Date · agent · what landed · what is left · open questions.
   ADR-0008. Fresh readiness re-review remains.
 - 2026-08-11 Codex: readiness Pass 3 approved committed task `e0f7e27` with no
   P0–P3 findings. Owner promotion and exact branch claim are next.
+- 2026-08-11 Owner: promoted readiness-approved T-012 from backlog to todo.
+  Exact accepted-integration branch claim is next.
