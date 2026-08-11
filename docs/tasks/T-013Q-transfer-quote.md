@@ -1,7 +1,7 @@
 ---
 id: T-013Q
 title: Persist exact one-amount same/cross-asset Transfer quotes
-status: backlog
+status: todo
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md cross-asset Transfer
 blocked-by: [T-012]
@@ -506,7 +506,45 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
   `git diff --check`; no files edited by reviewer.
 - Verdict: approved.
 
-## Blocker
+### Promotion review Pass 1
+
+- Reviewer task name/vendor: `/root/t013_promotion_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `424c441` plus uncommitted owner-authorized
+  task/BACKLOG/PROGRESS `backlog` → `todo` promotion.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3 — `docs/PROGRESS.md` has duplicated/incorrect wording: “T-013Q is promoted T-013Q to `todo` for exact branch claim”. Replace with “The owner promoted T-013Q…” or equivalent.
+- Resolution: removed the duplicated subject and made the owner transition
+  explicit; no lifecycle state changed beyond the reviewed promotion.
+- Reviewer checks: readiness/dependency/task/BACKLOG/PROGRESS/branch absence,
+  exact next claim sequence, scoped diff, and `git diff --check`.
+- Verdict: not approved; P3 corrected and submitted for fresh re-review.
+
+### Promotion review Pass 2
+
+- Reviewer task name/vendor: `/root/t013_promotion_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `424c441` plus corrected complete
+  task/BACKLOG/PROGRESS promotion manifest.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Approved.
+- Resolution: none required; Pass 1 P3 is closed.
+- Reviewer checks: exact lifecycle states, readiness/dependency ancestry,
+  local/remote branch absence, empty pre-claim base/implementer, scoped manifest,
+  exact next claim sequence, and `git diff --check`.
+- Verdict: approved.
+
+## Resolved blocker
 
 - Cause: repository-owner promotion of T-013Q from `backlog` to `todo` has not
   occurred. AGENTS requires that committed owner transition before the exact
@@ -526,6 +564,10 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
   create it atomically from that promoted integration HEAD. In the first task
   commit, record that HEAD as `base-commit`, record the implementer, and set
   both task front matter and the matching BACKLOG row to `in-progress`.
+- Resolved 2026-08-11: repository owner explicitly instructed Codex to continue
+  implementation without waiting for further approvals. This commit performs
+  the reviewed task/BACKLOG `backlog` → `todo` promotion; exact branch claim is
+  next and remains subject to the recorded branch-absence/base safeguards.
 
 ## Review
 
@@ -569,3 +611,7 @@ the review; the implementer records it verbatim following
   found the identical owner-only promotion gate. Recorded the blocker, prior
   attempts, and exact unblock condition in task/PROGRESS; no implementation,
   branch, schema, migration, test, or database change was authorized.
+- 2026-08-11 repository owner: explicitly authorized continuing implementation
+  and owner lifecycle transitions without further approval waits. Promoted
+  readiness-approved T-013Q task/BACKLOG from `backlog` to `todo`; exact branch
+  claim from this committed integration HEAD is next.
