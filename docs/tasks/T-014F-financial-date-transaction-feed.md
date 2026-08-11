@@ -1,7 +1,7 @@
 ---
 id: T-014F
 title: Expose a stable financial-date feed for persisted transactions
-status: backlog
+status: todo
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md feed ordering and adjustment/exchange rows
 blocked-by: [T-001]
@@ -180,6 +180,16 @@ and REVIEW_PROTOCOL.
 - Resolution: none required.
 - Verdict: approved with no open P0–P3.
 
+### Owner promotion review
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Findings (verbatim, P0–P3):
+
+  > Read-only owner-promotion lifecycle review at HEAD `0e059599727f785d688e4cc1e950053d8d3ede9a`: APPROVED. P0: none. P1: none. P2: none. P3: none. The manifest contains exactly three documentation changes: T-014F task status `backlog`→`todo` plus repository-owner session log, matching BACKLOG `backlog`→`todo`, and PROGRESS stating T-014F is next for exact branch claim. T-014P is unchanged at `backlog`, retains `blocked-by: [T-014F]`, and is described as blocked. Exact readiness metadata is already committed at HEAD for both tasks, naming `/root/t014_split_final_review`, reviewed commit `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, verdict `ready`. No application, test, schema, migration, or other file changes. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Review
 
 Append-only implementation review passes. The implementer records each fresh
@@ -195,3 +205,6 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   findings; exact commit `5b47c92` and lifecycle metadata were approved with
   no open P0–P3. T-014F awaits owner promotion; no application or database
   file changed.
+- 2026-08-11 repository owner: promoted readiness-approved T-014F from
+  `backlog` to `todo`. Exact branch claim from the committed integration HEAD
+  is next; T-014P remains blocked.
