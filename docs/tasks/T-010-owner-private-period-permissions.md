@@ -1,13 +1,13 @@
 ---
 id: T-010
 title: Keep owner-private periods non-authorizing for shared users
-status: todo
+status: in-progress
 size: M
 spec: specs/ACCOUNT_PERIODS-v2.1.md §11
 blocked-by: [T-008, T-009]
 branch: task/T-010-owner-private-period-permissions
-base-commit:
-implementer:
+base-commit: 7fe318fd35a280d5b871ae82f0fe8b672faa58d3
+implementer: Codex
 readiness-reviewed-by: /root/t010_readiness_rereview (Codex same-vendor fallback)
 readiness-reviewed-commit: 23825eb
 readiness-verdict: ready
@@ -265,3 +265,5 @@ ends. Date · agent · what landed · what is left · open questions.
   question.
 - 2026-08-11 Owner: promoted the readiness-approved task from backlog to todo.
   Exact integration-base branch claim is next; no open question.
+- 2026-08-11 Codex: claimed `task/T-010-owner-private-period-permissions`
+  exactly from accepted integration commit `7fe318f`; implementation is next.
