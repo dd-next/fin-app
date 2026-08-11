@@ -8,9 +8,9 @@ blocked-by: [T-001]
 branch: task/T-012-mobile-valuation-rate-direction
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t010_readiness_rereview (Codex same-vendor fallback)
+readiness-reviewed-commit: e0f7e27
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -326,11 +326,18 @@ BACKLOG, and REVIEW_PROTOCOL.
 
 ### Pass 3
 
-- Reviewer task name/vendor:
-- Reviewed task-file commit:
+- Reviewer task name/vendor: `/root/t010_readiness_rereview`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `e0f7e27`.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Verdict:
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+- Resolution: every prior readiness finding is closed; no further change
+  required.
+- Verdict: ready.
 
 ## Review
 
@@ -367,3 +374,5 @@ ends. Date · agent · what landed · what is left · open questions.
   JSON-number precision, downgrade wording, and ADR gaps. The task now requires
   Decimal strings only, a valid full-AssetOut example, conditional wording, and
   ADR-0008. Fresh readiness re-review remains.
+- 2026-08-11 Codex: readiness Pass 3 approved committed task `e0f7e27` with no
+  P0–P3 findings. Owner promotion and exact branch claim are next.
