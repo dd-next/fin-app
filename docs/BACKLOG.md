@@ -42,12 +42,13 @@ backend gap remains open.
 | [T-012](tasks/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | done | M | audit: rates | T-001 |
 | [T-013Q](tasks/T-013Q-transfer-quote.md) | Exact one-amount same/cross-asset Transfer quote | done | M | audit: transfer | T-012 |
 | [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | done | M | audit: transfer | T-013Q |
-| T-014 | Financial-date feed: Planned plus adjustment/exchange projections | backlog | L | audit: feed | T-001 |
-| T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014 |
+| [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | backlog | M | audit: feed order/mapping | T-001 |
+| [T-014P](tasks/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | backlog | M | audit: planned rows | T-014F |
+| T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014P |
 | T-016 | Category merge/delete for transactions and Plan rules | backlog | M | audit: categories | T-001 |
 | T-017 | Restore archived accounts | backlog | S | audit: accounts | T-001 |
 | T-019 | Mobile Plan-rule create/edit/detail contract | backlog | M | audit: Plan | T-001, T-016 |
-| T-021 | Phase 14 backend acceptance matrix | backlog | L | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014–T-017, T-019 |
+| T-021 | Phase 14 backend acceptance matrix | backlog | L | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-015–T-017, T-019 |
 | T-022 | Merge accepted backend contracts into `FinnApp-v2.md` | backlog | S | all Phase 14 | T-021 |
 
 Every `L` row must be split into reviewed `S`/`M` task files before it is
