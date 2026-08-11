@@ -422,6 +422,25 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
 - Verdict: ready for repository-owner readiness recording and backlog → todo
   promotion.
 
+### Progress handoff review
+
+- Reviewer task name/vendor: `/root/t013_progress_review`, Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: HEAD `2d802b7` plus the uncommitted `docs/PROGRESS.md`
+  readiness-state diff; no application or database files.
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  > P1: None.
+  > P2: None.
+  > P3: None.
+  >
+  > Approved.
+  >
+  > `docs/PROGRESS.md` matches `BACKLOG.md` and both T-013 task files at `2d802b7`. It makes no T-013 implementation, test, migration, schema, or database-change claims. Links resolve, statuses and blockers are consistent, and `git diff --check` passes. No files edited.
+- Resolution: none required.
+- Verdict: approved.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -452,3 +471,6 @@ the review; the implementer records it verbatim following
 - 2026-08-11 Codex: readiness Pass 4 approved committed task `dacb871` with no
   P0–P3 findings. Owner promotion and exact T-013Q branch claim are next; no
   application code or database was changed.
+- 2026-08-11 Codex: updated the concise release-state handoff after readiness;
+  a fresh read-only reviewer approved its exact backlog/task consistency with
+  no P0–P3. T-013Q remains unclaimed pending owner promotion.

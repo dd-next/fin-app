@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0003_manual_rate_direction` |
 | Last full suite | **268 passed** (2026-08-11, T-012 final implementation gate) |
-| Active work | T-002–T-012 accepted; T-013 transfer quote/execution is next for specification/readiness |
+| Active work | T-002–T-012 accepted; split T-013Q/T-013E readiness is approved, T-013Q awaits owner promotion |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-012 accepted; T-013 is next for specification/readiness.**
+Status: **T-002–T-012 accepted; T-013Q/T-013E are readiness-approved and
+T-013Q awaits repository-owner `backlog` → `todo` promotion.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -91,6 +92,13 @@ Status: **T-002–T-012 accepted; T-013 is next for specification/readiness.**
   checks passed, and reviewed commit `437b5fa` was accepted locally by
   fast-forward. Detailed evidence:
   [`tasks/T-012-mobile-valuation-rate-direction.md`](tasks/T-012-mobile-valuation-rate-direction.md).
+- The L-sized transfer row is split into bounded quote and execution tasks.
+  Four independent readiness passes closed privacy, exact Decimal/rate,
+  aggregate-neutrality, state/FK, concurrency, expiry, migration, and lifecycle
+  findings; final Pass 4 approved both definitions with no P0–P3. T-013Q is
+  still unclaimed and awaits owner promotion; T-013E remains blocked by T-013Q.
+  Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
+  and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
