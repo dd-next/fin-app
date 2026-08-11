@@ -33,45 +33,54 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       unsupported scale/precision return input-derived `422` before a quote row
       is written. Auto/external sources remain unavailable.
 - [ ] The source and destination are distinct, active accounts in one
-      workspace. A same-asset quote retains the shipped `edit` permission on
-      both accounts: owner/editor are eligible and contributor/viewer are
-      denied. A cross-asset quote is owner-only because it consumes and returns
-      information derived from owner-private workspace manual rates; shared
-      editor/contributor/viewer and foreign users receive the accepted generic
-      owner-private `404 Workspace not found` without learning whether a pair or
-      rate exists. A failed quote writes nothing. Focused tests cover owner,
-      editor, contributor, viewer, and unrelated users for both same- and
-      cross-asset requests plus failure mutation neutrality.
+      workspace, and the quote API is owner-only for both identity and
+      cross-asset requests. This prevents the new quote surface from leaking
+      owner-private workspace/Main/rate state; existing direct same-asset
+      `/operations/transfer` keeps shipped editor behavior. Shared editor,
+      contributor, viewer, and foreign users receive the accepted generic
+      owner-private `404 Workspace not found` without learning whether a pair,
+      rate, or legacy row exists. A failed quote writes nothing. Focused tests
+      cover owner/editor/contributor/viewer/unrelated users for both paths plus
+      failure mutation neutrality.
 - [ ] A same-asset quote uses exact identity conversion: destination amount
       equals source amount after the one shared asset-precision validation,
-      rate is `1`, and no manual-rate row is required.
+      rate is `1`, and no rate is required. Main, canonical manual multiplication,
+      latest-exchange multiplication fallback, and unvalued exclusion are
+      additive over the unchanged combined asset balance. If an applicable
+      owner-workspace manual row is tagged legacy, quote creation returns the
+      same explicit resave `422` as cross-asset quoting; finite-precision legacy
+      division is not accepted even for identity quotes.
 - [ ] A cross-asset quote uses only the workspace's current manual
-      Asset-to-Main rows accepted by T-012. It first values the source exactly
-      in Main: a Main source is unchanged, a canonical source multiplies by its
-      stored `asset_to_main` value, and a tagged legacy source divides by its
-      original stored `main_to_asset_legacy` value. It then solves the target
-      amount with the exact inverse operation: unchanged for Main, division for
-      canonical target storage, multiplication for legacy target storage. The
-      calculation never substitutes T-012's 18-place public legacy reciprocal.
-      No latest transaction exchange, multi-hop non-Main pair, foreign rate,
-      external provider, or binary `float` participates.
+      canonical `asset_to_main` rows accepted by T-012. A Main source is valued
+      unchanged; every non-Main source multiplies by its exact stored canonical
+      rate. A Main target receives that exact value; every non-Main target is
+      solved by exact division by its stored canonical rate. Tagged
+      `main_to_asset_legacy` rows remain valid for shipped account valuation but
+      are deliberately ineligible for new quotes because finite-precision
+      per-account division is not additive. No public reciprocal, latest
+      transaction exchange, multi-hop pair, foreign rate, external provider,
+      or binary `float` participates.
 - [ ] Missing manual components return deterministic `422` naming each
       unvalued Asset-to-Main pair. The failure does not create a quote or alter
       accounts, rates, ledger rows, periods, or Undo candidates.
+- [ ] A required tagged legacy row returns deterministic `422 Manual valuation
+      rate must be resaved before transfer quoting: <Asset> → <Main>` and writes
+      nothing. The existing owner-only T-012 PUT of the displayed Asset-to-Main
+      Decimal converts only that row to canonical storage; quoting never
+      silently inverts, rewrites, or upgrades a legacy row.
 - [ ] Intermediate multiplication/division uses the repository's explicit
       high-precision Decimal helpers and never ambient 28-digit context.
       The source amount is validated once at source precision. The unrounded
-      target result from the exact canonical/legacy path is rounded once with
+      target result from the exact canonical path is rounded once with
       `ROUND_HALF_UP` to destination precision:
       `to_amount = quantize_asset(exact_main_to_target(exact_source_to_main(from_amount)))`.
       Public/stored effective `rate = to_amount / from_amount` is independently
       quantized `ROUND_HALF_UP` to 18 places through the supported exchange-rate
       helper. A zero after quantization, more than 20 integer digits, amount/
       product/quotient overflow, or unsupported money/rate result is `422` and
-      writes nothing. Tests cover canonical/canonical, canonical/legacy,
-      legacy/canonical, legacy/legacy, Main on either side, repeating quotients,
-      18-place underflow, maximum integer digits, and a poisoned ambient Decimal
-      context.
+      writes nothing. Tests cover canonical/canonical, Main on either side,
+      repeating quotients, 18-place underflow, maximum integer digits, explicit
+      legacy rejection/resave success, and a poisoned ambient Decimal context.
 - [ ] A quote is accepted only when exact outgoing Main value equals exact
       incoming Main value before any Main/presentation rounding. This remains
       neutral for every unrelated balance because Account summary sums exact
@@ -131,7 +140,7 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       nullable Numeric(38,18) stored value, nullable `String(24)` direction, and
       nullable UTC `DateTime` updated-at. Named checks enforce all-or-none tuple
       nullability, positive stored value, and direction exactly
-      `asset_to_main | main_to_asset_legacy`. Identity quotes require both
+      `asset_to_main`. Identity quotes require both
       dependency tuples absent, equal asset IDs, equal amounts, and rate `1`.
       Cross-asset quotes require a tuple absent exactly for a side whose asset
       equals quoted Main and a complete valid tuple for every non-Main side.
@@ -163,9 +172,10 @@ recalculating its amounts while rejecting changed rate dependencies as stale.
       silently discarded. The upgrade is additive and does not read, rewrite,
       or require `finapp.db` or legacy v1 rows.
 - [ ] ADR-0009 records persisted five-minute single-use quotes, manual
-      Asset-to-Main cross-rate derivation (including exact legacy divide
-      semantics), destination quantization, exact pre-rounding Main-value
-      equality for aggregate Total-capital neutrality,
+      Asset-to-Main cross-rate derivation, explicit legacy-row rejection with
+      owner resave through T-012, destination quantization, exact
+      pre-rounding Main-value equality under additive canonical multiplication
+      for aggregate Total-capital neutrality,
       owner-only cross-asset privacy, stale-on-rate/Main-change execution,
       immutable rate dependency snapshots, empty-only downgrade, and the
       decision not to add background cleanup; `docs/DECISIONS.md` indexes it.
@@ -337,6 +347,44 @@ AGENTS, BACKLOG, BUILD_PLAN, and REVIEW_PROTOCOL.
   documentation-only readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t013_readiness_final`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `508055f..7c7b511` (both split tasks).
+- Findings (verbatim, P0–P3):
+
+  > P0: None.
+  >
+  > P1 — Exact leg-value equality still does not guarantee aggregate Total-capital neutrality for legacy divide rates.
+  >
+  > - T-013Q accepts a quote when outgoing and incoming Main values compare equal before presentation rounding (`docs/tasks/T-013Q-transfer-quote.md:75`), and T-013E treats that as sufficient for arbitrary account balances (`docs/tasks/T-013E-transfer-execution.md:102`).
+  > - Canonical multiplication is linear, but legacy valuation uses a 100-significant-digit rounded division (`app/ledger.py:88-92`, `app/ledger.py:149-157`). Account summary values each complete account balance separately and then sums those results (`app/accounts.py:144-163`). Rounded division is not additive.
+  > - Counterexample using the shipped helpers and valid modeled values:
+  >   - Main has two decimals.
+  >   - Two different legacy assets both store `main_to_asset_legacy = 3`.
+  >   - Transfer `2 → 2`; both quoted leg values are the identical helper result `2 / 3`, so the new equality check passes.
+  >   - Participating balances change from `-20, -9` to `-22, -7`.
+  >   - An unrelated legacy account has balance `5797` and stored rate `600`.
+  >   - Before: `-0.005000…000`; after: `-0.004999…999`, a `1E-99` difference caused solely by per-account legacy division.
+  >   - `ROUND_HALF_UP` to Main precision therefore changes Total capital from `-0.01` to `-0.00`.
+  > - Thus the requested adversarial regression would expose a failure even though the quote’s leg values compare equal. The contract must additionally bound legacy behavior—for example by making aggregate legacy valuation genuinely exact, restricting accepted legacy divisors to exact terminating arithmetic, or specifying a balance-dependent neutrality proof and the snapshots/staleness needed to preserve it through execution.
+  >
+  > P2: None.
+  >
+  > P3: None.
+- Resolution: every quoted command is owner-only; any applicable tagged legacy
+  manual row makes quote creation ineligible and requires explicit owner resave
+  through T-012. Execution rejects a newly applicable legacy row as stale.
+  Cross-asset calculations and the exact equality proof use canonical additive
+  multiplication only; same-asset Main/canonical/latest-rate/unvalued paths are
+  also additive over the unchanged combined asset balance. Fresh re-review is
+  required.
+- Reviewer checks: direct committed docs/spec/code/test inspection;
+  `git diff --check 508055f..7c7b511` passed; no application tests run for
+  documentation-only readiness.
+- Verdict: not ready; corrected and submitted for fresh re-review.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -359,3 +407,8 @@ the review; the implementer records it verbatim following
   permissions match shipped owner/editor rules; dependency tuple constraints
   and execution conflict precedence are exact. Fresh readiness re-review
   remains; no application code or database was changed.
+- 2026-08-11 Codex: readiness Pass 3 exposed non-additive legacy divide
+  valuation at an aggregate rounding boundary. Both quote paths are now
+  owner-only and reject applicable legacy rows until explicit canonical resave;
+  the neutrality proof uses additive canonical multiplication. Fresh readiness
+  re-review remains; no application code or database was changed.

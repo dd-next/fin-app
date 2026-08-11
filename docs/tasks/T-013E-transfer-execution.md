@@ -37,18 +37,21 @@ dependencies are still unchanged.
       type, `201` success status, existing `TransactionOut` response reference,
       and documented `404`/`409`/`422` errors.
 - [ ] Only the quote creator may execute it, and execution rechecks current
-      transaction-create/edit permission on both quoted accounts. Hidden,
-      foreign-workspace, inaccessible, or archived accounts preserve accepted
-      privacy/error semantics. Same-asset execution retains shipped owner/editor
-      `edit` behavior and denies contributor/viewer. Cross-asset execution rechecks owner-only
-      workspace authorization and never exposes private rate state to shared or
-      foreign users.
+      owner authorization and current `edit` permission on both quoted accounts.
+      Hidden, foreign-workspace, inaccessible, or archived accounts preserve
+      accepted privacy/error semantics. Both identity and cross-asset execution
+      are owner-only; the preserved direct same-asset transfer route retains
+      shipped editor behavior. The quote surface never exposes private rate
+      state to shared or foreign users.
 - [ ] A cross-asset quote is stale and non-consumable when the workspace's
       current Main ID differs from the quoted Main ID or any source/target
       manual-rate dependency row is missing or differs in ID, exact stored
       value, direction, or updated timestamp. A historical Main switch away and
       back is deliberately not stale when the current ID and every rate
       dependency still match. Same-asset quotes have no rate dependency.
+      For same-asset execution, an applicable current manual row tagged legacy
+      also makes the quote stale; Main/canonical/fallback/unvalued linear paths
+      remain eligible without persisting a private rate dependency.
 - [ ] Execution atomically claims a quote only when status is `open`, it has
       not expired under one captured server clock (`now < expires_at`), and no
       executed transaction is linked. Errors are exact: hidden/unknown is `404
@@ -102,9 +105,11 @@ dependencies are still unchanged.
 - [ ] Before and after a no-fee quoted execution, Account summary Total capital
       is identical at Main precision. Same-asset transfers are exactly neutral;
       cross-asset execution is allowed only while the exact quote-time Main and
-      manual-rate dependencies still match, and T-013Q requires exact incoming
-      and outgoing Main values to be equal before rounding, so arbitrary other
-      account balances cannot change the aggregate. Stale updated/deleted-rate cases mutate
+      canonical manual-rate dependencies still match. T-013Q rejects legacy
+      divide dependencies and requires exact incoming/outgoing Main equality;
+      canonical multiplication is additive across complete account balances, so
+      arbitrary other balances cannot change the aggregate. Stale
+      updated/deleted-rate cases mutate
       no balance or summary. Both account balances and active/ended period
       projections change by their exact signed quote legs on success.
 - [ ] Existing `POST /api/v1/operations/transfer` remains same-asset-only and
@@ -198,6 +203,24 @@ BUILD_PLAN, and REVIEW_PROTOCOL.
   documentation-only readiness.
 - Verdict: not ready; corrected and submitted for fresh re-review.
 
+### Pass 3
+
+- Reviewer task name/vendor: `/root/t013_readiness_final`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file range: `508055f..7c7b511` (combined split-task pass).
+- Findings (verbatim, P0–P3): the complete combined verbatim block is recorded
+  under [`T-013Q` Readiness Pass 3](T-013Q-transfer-quote.md#pass-3). The sole
+  P1 showed that legacy divide valuation is not additive across complete account
+  balances even when quoted leg values compare equal; verdict: **NOT READY**.
+- Resolution: quote and execution are owner-only; applicable tagged legacy
+  manual rows are rejected until explicitly resaved canonical through T-012;
+  execution treats a newly applicable legacy row as stale. The execution
+  neutrality proof now uses additive canonical multiplication only.
+- Reviewer checks: direct committed docs/spec/code/test inspection;
+  `git diff --check 508055f..7c7b511` passed; no application tests run for
+  documentation-only readiness.
+- Verdict: not ready; corrected and submitted for fresh re-review.
+
 ## Review
 
 Append-only implementation review passes. A different read-only agent returns
@@ -219,3 +242,7 @@ the review; the implementer records it verbatim following
   aggregate-neutrality proof, dependency snapshot constraints, and conflict
   precedence. Fresh readiness re-review remains; no application code or
   database was changed.
+- 2026-08-11 Codex: readiness Pass 3 demonstrated non-additive legacy divide
+  valuation. Quoted commands are now owner-only and reject applicable legacy
+  rates until T-012 resaves them canonical; execution stales if legacy becomes
+  applicable. Fresh re-review remains; no application code or database changed.
