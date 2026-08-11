@@ -39,7 +39,7 @@ backend gap remains open.
 | [T-008](tasks/T-008-period-api-lifecycle-surface.md) | Period API and lifecycle surface | done | M | periods §9 | T-004, T-005, T-006, T-007 |
 | [T-009](tasks/T-009-remove-legacy-period-contracts.md) | Remove `funding_amount` / `remaining` / `planned` contracts | done | S | periods §3, §10 | T-008 |
 | [T-010](tasks/T-010-owner-private-period-permissions.md) | Owner-private period permissions for shared accounts | done | M | periods §11 | T-008, T-009 |
-| T-012 | Manual valuation-rate mobile pair direction | backlog | M | audit: rates | T-001 |
+| [T-012](tasks/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | backlog | M | audit: rates | T-001 |
 | T-013 | One-amount same/cross-asset Transfer quote and execution | backlog | L | audit: transfer | T-012 |
 | T-014 | Financial-date feed: Planned plus adjustment/exchange projections | backlog | L | audit: feed | T-001 |
 | T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014 |
