@@ -8,9 +8,9 @@ blocked-by: [T-014F]
 branch: task/T-014P-planned-feed-projection
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t014_split_final_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -214,6 +214,29 @@ BUILD_PLAN, and REVIEW_PROTOCOL.
 - Verdict: readiness-complete with no open P0–P3; T-014P remains blocked by
   accepted T-014F implementation.
 
+### Exact committed-task confirmation
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`.
+- Findings (verbatim, P0–P3):
+
+  > Exact committed-task readiness confirmation for `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b` (`T-014: define bounded transaction feed tasks`): APPROVED. P0: none. P1: none. P2: none. P3: none. The committed BACKLOG rewiring and T-014F/T-014P contracts preserve the previously approved manifest unchanged in substance, including the closed `plan_occurrence_id` compatibility clause and all Pass 1/2 resolutions; Pass 3 evidence is recorded verbatim. T-014F is readiness-complete and ready for owner `backlog`→`todo` promotion. T-014P is readiness-approved but remains blocked from promotion/claim until T-014F is accepted. HEAD is the exact commit and the worktree is clean. No files edited.
+- Resolution: none required.
+- Verdict: ready with no open P0–P3; T-014P remains blocked by T-014F.
+
+### Readiness metadata review
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: only both task front matters/evidence and PROGRESS after
+  exact commit confirmation; BACKLOG/application/tests unchanged.
+- Findings (verbatim, P0–P3):
+
+  > Read-only lifecycle evidence verdict: APPROVED. P0: none. P1: none. P2: none. P3: none. Both task front matters name `/root/t014_split_final_review (Codex same-vendor fallback)`, cite exact reviewed commit `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, and set `readiness-verdict: ready`. The appended exact-commit evidence is accurate and preserves the lifecycle distinction: T-014F remains `backlog` awaiting owner promotion; T-014P is readiness-approved but remains `backlog`/blocked-by T-014F. `docs/PROGRESS.md` states the same current release state without claiming implementation or acceptance. The complete manifest contains only these three expected documentation changes; BACKLOG and application/test files are unchanged. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Review
 
 Append-only implementation review passes. The implementer records each fresh
@@ -236,3 +259,5 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - 2026-08-11 Codex: Pass 3 approved both bounded contracts with no open P0–P3.
   Exact committed-task confirmation remains before readiness metadata and owner
   promotion; no application or database file changed.
+- 2026-08-11 Codex: exact commit `5b47c92` was readiness-confirmed with no open
+  P0–P3. T-014F awaits owner promotion; T-014P is ready but remains blocked.

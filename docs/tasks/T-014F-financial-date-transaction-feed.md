@@ -8,9 +8,9 @@ blocked-by: [T-001]
 branch: task/T-014F-financial-date-transaction-feed
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/t014_split_final_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -119,18 +119,6 @@ Append-only readiness passes against the audit, frozen Transactions screens/tap
 map/data model, accepted transaction/period/privacy behavior, AGENTS, BUILD_PLAN,
 and REVIEW_PROTOCOL.
 
-## Review
-
-Append-only implementation review passes. The implementer records each fresh
-read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
-
-## Session log
-
-- 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
-  Planned-projection tasks and drafted this first contract. Readiness review,
-  owner promotion, branch claim, implementation, and implementation review
-  remain; no application or database file changed.
-
 ### Split-contract review Pass 1
 
 - Reviewer task name/vendor: `/root/t014_split_review`, fresh Codex same-vendor
@@ -172,3 +160,38 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - Resolution: none required; every prior finding is closed.
 - Verdict: readiness-complete with no open P0–P3; T-014F is ready for owner
   promotion after exact committed-task confirmation.
+
+### Exact committed-task confirmation
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`.
+- Findings (verbatim, P0–P3): the complete confirmation is recorded under
+  [`T-014P` Exact committed-task confirmation](T-014P-planned-feed-projection.md#exact-committed-task-confirmation).
+- Resolution: none required.
+- Verdict: ready for owner promotion with no open P0–P3.
+
+### Readiness metadata review
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Findings (verbatim, P0–P3): the complete lifecycle verdict is recorded under
+  [`T-014P` Readiness metadata review](T-014P-planned-feed-projection.md#readiness-metadata-review).
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
+## Review
+
+Append-only implementation review passes. The implementer records each fresh
+read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
+
+## Session log
+
+- 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
+  Planned-projection tasks and drafted this first contract. Readiness review,
+  owner promotion, branch claim, implementation, and implementation review
+  remain; no application or database file changed.
+- 2026-08-11 Codex: three split-contract reviews closed four P1 and two P2
+  findings; exact commit `5b47c92` and lifecycle metadata were approved with
+  no open P0–P3. T-014F awaits owner promotion; no application or database
+  file changed.
