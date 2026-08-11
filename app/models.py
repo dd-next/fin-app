@@ -167,6 +167,10 @@ class ManualValuationRate(Base):
             "asset_id",
             name="uq_manual_rate_workspace_pair",
         ),
+        CheckConstraint(
+            "direction IN ('asset_to_main', 'main_to_asset_legacy')",
+            name="ck_manual_valuation_rate_direction",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -179,7 +183,8 @@ class ManualValuationRate(Base):
     asset_id: Mapped[int] = mapped_column(
         ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    displayed_rate: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    rate_value: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    direction: Mapped[str] = mapped_column(String(24), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )

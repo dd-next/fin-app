@@ -345,14 +345,71 @@ Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
 [`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
 
-### Pass <N>
+### Pass 1
 
-- Reviewer task name/vendor:
-- Reviewed base/head or working-tree manifest:
+- Reviewer task name/vendor: `/root/t012_implementation_review` (Codex
+  same-vendor fallback, fresh read-only agent).
+- Reviewed base/head or working-tree manifest: `HEAD fbd590a` plus every
+  tracked/untracked T-012 path in the paused working tree.
 - Findings (verbatim, P0–P3):
-- Resolution:
-- Reviewer checks:
-- Verdict:
+
+  > P0: None.
+  >
+  > P1 — API and ledger do not share the single direction-aware conversion
+  > helper required by Acceptance.
+  >
+  > - `app/ledger.py:130` and `app/ledger.py:141` implement two separate
+  >   `direction` branches.
+  > - API output calls `manual_rate_asset_to_main()`, while ledger valuation
+  >   calls `apply_manual_valuation()`. Their canonical/legacy dispatch can
+  >   therefore drift independently.
+  > - `tests/test_valuation_rate_direction_v21.py:185` only forbids old source
+  >   fragments; it does not freeze the required shared dispatch.
+  > - Consolidate the direction decision into one operation used by both API
+  >   output and ledger valuation, retaining legacy output quantization only at
+  >   the public-rate boundary.
+  >
+  > P2 — Mandatory migration-state and portability regressions are incomplete.
+  >
+  > - `tests/test_migrations_v2.py:504` proves a legacy-only round trip using
+  >   repeating reciprocal `26292`, but does not prove the required empty-table
+  >   downgrade or a terminating legacy reciprocal.
+  > - `tests/test_migrations_v2.py:581` does not assert timestamps and unique
+  >   constraints remain unchanged after failed upgrade, although atomic
+  >   preservation of both is explicit Acceptance.
+  > - `tests/test_migrations_v2.py:670` compiles only the ORM model for
+  >   PostgreSQL, not the actual `0003` upgrade/downgrade operations. The
+  >   migration DDL compiled correctly in my read-only check, but no automated
+  >   regression protects it.
+  > - The named direction check is inspected but never exercised with an
+  >   invalid inserted direction.
+  >
+  > P2 — The focused API tests do not freeze several explicit contract/security
+  > requirements.
+  >
+  > - `tests/test_valuation_rate_direction_v21.py:25` does not assert the exact
+  >   request pattern, integer ID types, `AssetOut` references/property sets, or
+  >   timestamp types/formats promised by Acceptance.
+  > - `tests/test_valuation_rate_direction_v21.py:110` checks rejected requests
+  >   preserve the listed row, but not the required derived account summary.
+  > - The suite has a valuation-rate privacy check for a viewer, but not the
+  >   explicit editor/contributor/viewer plus unrelated-foreign-user matrix.
+  >   Unknown and inactive asset behavior is also not focused-regression
+  >   protected.
+  >
+  > P3: None.
+- Resolution: P1 is fixed by the single `manual_rate_semantics()` direction
+  dispatch consumed by both API projection and ledger application, with a
+  source regression. P2 coverage now includes terminating/repeating/empty/
+  canonical migration states, failed-upgrade row/timestamp/constraint/index
+  neutrality, exercised direction CHECK, actual PostgreSQL operation
+  compilation, exact OpenAPI nested/type/pattern checks, rejected-summary
+  neutrality, the complete shared-role/foreign privacy matrix, and unknown/
+  inactive assets. Focused re-run: `48 passed`; behavior/coverage changed, so
+  fresh read-only re-review remains mandatory.
+- Reviewer checks: focused API/ledger/migration `60 passed`; `git diff --check`
+  passed; actual PostgreSQL migration operations compiled read-only.
+- Verdict: not approved; P1/P2 fixes implemented, re-review pending.
 
 ## Session log
 
@@ -380,3 +437,13 @@ ends. Date · agent · what landed · what is left · open questions.
   Exact accepted-integration branch claim is next.
 - 2026-08-11 Codex: claimed the task from exact accepted integration
   `b592bfacaf868d522159b8602e2df2467aaab20c`; implementation is in progress.
+- 2026-08-11 Codex: implemented canonical Decimal-string Asset-to-Main API,
+  direction-tagged storage/migration, shared valuation semantics, ADR-0008,
+  and focused API/privacy/migration coverage. Pre-review full suite was
+  `260 passed`; Pass 1 returned one P1 and migration/API P2 coverage gaps, all
+  implemented and rechecked as `48 passed`. Handoff remains on the exact task
+  branch. Next: fresh read-only re-review, retry scratch SPA E2E (the API
+  scenario reached the SPA request, where PowerShell `Invoke-WebRequest`
+  itself threw; scratch was cleaned), then full pytest/Node/diff, complete task
+  evidence/status, and create the final T-012 task commit. No open product
+  question; no push/PR/deploy is authorized.

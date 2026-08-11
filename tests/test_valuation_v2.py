@@ -1,4 +1,4 @@
-from decimal import Decimal, localcontext
+from decimal import Decimal
 from types import SimpleNamespace
 
 from app.ledger import quantize_main_amount
@@ -27,7 +27,7 @@ async def test_ledger_precision_is_preserved_before_main_currency_display(client
     )
     saved = await client.put(
         f"/api/v1/workspaces/{workspace_id}/valuation-rates/ETH",
-        json={"displayed_rate": "0.000001"},
+        json={"rate": "1000000"},
     )
     assert saved.status_code == 200, saved.text
     account = (await client.get(f"/api/v1/accounts/{eth['id']}")).json()
@@ -116,20 +116,14 @@ async def test_manual_override_delete_exchange_fallback_and_unvalued(client):
     assert regression["valued_balance"] == "610.34"
 
     route = f"/api/v1/workspaces/{workspace_id}/valuation-rates/VND"
-    saved = await client.put(route, json={"displayed_rate": "26292"})
+    saved = await client.put(route, json={"rate": "0.000038034383082306"})
     assert saved.status_code == 200, saved.text
     payload = saved.json()
     assert payload["workspace_id"] == workspace_id
-    assert payload["main_asset"]["code"] == "USD"
-    assert payload["asset"]["code"] == "VND"
-    assert Decimal(payload["displayed_rate"]) == Decimal("26292")
-    with localcontext() as context:
-        context.prec = 80
-        product = (
-            Decimal(payload["displayed_rate"])
-            * Decimal(payload["effective_valuation_rate"])
-        )
-    assert abs(product - Decimal(1)) < Decimal("1e-75")
+    assert payload["from_asset"]["code"] == "VND"
+    assert payload["to_asset"]["code"] == "USD"
+    assert payload["rate"] == "0.000038034383082306"
+    assert payload["source"] == "manual"
     summary = (await client.get("/api/v1/accounts/summary")).json()
     assert account_named(summary, "Regression VND")["valued_balance"] == "580.34"
 
@@ -140,7 +134,7 @@ async def test_manual_override_delete_exchange_fallback_and_unvalued(client):
     assert [item["id"] for item in listed.json()] == [payload["id"]]
     rejected_main = await client.put(
         f"/api/v1/workspaces/{workspace_id}/valuation-rates/USD",
-        json={"displayed_rate": "2"},
+        json={"rate": "2"},
     )
     assert rejected_main.status_code == 422
     assert "exactly 1" in rejected_main.json()["detail"]
@@ -164,7 +158,7 @@ async def test_main_currency_change_activates_only_its_saved_rate_pair(client):
     workspace_id = context["workspace"]["id"]
     rates_route = f"/api/v1/workspaces/{workspace_id}/valuation-rates"
     usd_rate = await client.put(
-        f"{rates_route}/VND", json={"displayed_rate": "26292"}
+        f"{rates_route}/VND", json={"rate": "0.000038034383082306"}
     )
     assert usd_rate.status_code == 200, usd_rate.text
 
@@ -177,10 +171,10 @@ async def test_main_currency_change_activates_only_its_saved_rate_pair(client):
     assert (await client.get(rates_route)).json() == []
 
     eur_rate = await client.put(
-        f"{rates_route}/VND", json={"displayed_rate": "25000"}
+        f"{rates_route}/VND", json={"rate": "0.00004"}
     )
     assert eur_rate.status_code == 200, eur_rate.text
-    assert eur_rate.json()["main_asset"]["code"] == "EUR"
+    assert eur_rate.json()["to_asset"]["code"] == "EUR"
     assert eur_rate.json()["id"] != usd_rate.json()["id"]
 
     changed_back = await client.patch(
@@ -191,7 +185,7 @@ async def test_main_currency_change_activates_only_its_saved_rate_pair(client):
     listed = (await client.get(rates_route)).json()
     assert len(listed) == 1
     assert listed[0]["id"] == usd_rate.json()["id"]
-    assert listed[0]["displayed_rate"] == "26292"
+    assert listed[0]["rate"] == "0.000038034383082306"
 
 
 async def test_shared_account_never_discloses_owner_workspace_rate(client):
@@ -200,7 +194,7 @@ async def test_shared_account_never_discloses_owner_workspace_rate(client):
     shared = await create_account(client, "Shared BTC", "BTC", "1")
     alice_rate = await client.put(
         f"/api/v1/workspaces/{workspace_id}/valuation-rates/BTC",
-        json={"displayed_rate": "0.00002"},
+        json={"rate": "50000"},
     )
     assert alice_rate.status_code == 200, alice_rate.text
     assert shared["valued_balance"] is None
@@ -226,7 +220,7 @@ async def test_shared_account_never_discloses_owner_workspace_rate(client):
     assert (
         await client.put(
             f"/api/v1/workspaces/{workspace_id}/valuation-rates/BTC",
-            json={"displayed_rate": "0.00001"},
+            json={"rate": "100000"},
         )
     ).status_code == 404
     assert (
@@ -242,12 +236,12 @@ async def test_shared_account_never_discloses_owner_workspace_rate(client):
         )
     ).json()
     assert len(alice_rates) == 1
-    assert alice_rates[0]["displayed_rate"] == "0.00002"
+    assert alice_rates[0]["rate"] == "50000"
 
     await login(client, "bob")
     bob_rate = await client.put(
         f"/api/v1/workspaces/{bob_workspace_id}/valuation-rates/BTC",
-        json={"displayed_rate": "0.00004"},
+        json={"rate": "25000"},
     )
     assert bob_rate.status_code == 200, bob_rate.text
     bob_summary = (await client.get("/api/v1/accounts/summary")).json()

@@ -38,6 +38,39 @@ RELEASE_TABLES = {
 }
 
 
+def _seed_manual_rate(connection, value: str) -> int:
+    connection.execute(
+        text(
+            "INSERT INTO user "
+            "(username, normalized_username, display_name, password_hash, timezone, "
+            "is_active, created_at, updated_at) "
+            "VALUES ('rate-owner', 'rate-owner', 'Rate owner', 'hash', 'UTC', 1, "
+            "'2026-01-01', '2026-01-01')"
+        )
+    )
+    ids = connection.execute(
+        text("SELECT id, code FROM asset WHERE code IN ('USD', 'VND')")
+    ).all()
+    assets = {row.code: row.id for row in ids}
+    connection.execute(
+        text(
+            "INSERT INTO workspace "
+            "(owner_user_id, name, base_asset_id, timezone, created_at) "
+            "VALUES (1, 'Rate workspace', :usd, 'UTC', '2026-01-01')"
+        ),
+        {"usd": assets["USD"]},
+    )
+    result = connection.execute(
+        text(
+            "INSERT INTO manual_valuation_rate "
+            "(workspace_id, main_asset_id, asset_id, displayed_rate, created_at, updated_at) "
+            "VALUES (1, :usd, :vnd, :value, '2026-01-02', '2026-01-03')"
+        ),
+        {"usd": assets["USD"], "vnd": assets["VND"], "value": value},
+    )
+    return int(result.lastrowid)
+
+
 def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
     tmp_path: Path, monkeypatch
 ):
@@ -52,7 +85,7 @@ def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version"))
             .scalar_one()
-            == "0002_period_snapshot_model"
+            == "0003_manual_rate_direction"
         )
         assert connection.execute(text("SELECT count(*) FROM asset")).scalar_one() == 8
         assert connection.execute(
@@ -100,7 +133,8 @@ def test_clean_v2_upgrade_builds_foundation_and_seeds_assets(
             "workspace_id",
             "main_asset_id",
             "asset_id",
-            "displayed_rate",
+            "rate_value",
+            "direction",
             "created_at",
             "updated_at",
         } <= {
@@ -457,10 +491,287 @@ def test_period_snapshot_populated_downgrade_and_reupgrade(
     with engine.connect() as connection:
         assert connection.execute(
             text("SELECT version_num FROM alembic_version")
-        ).scalar_one() == "0002_period_snapshot_model"
+        ).scalar_one() == "0003_manual_rate_direction"
         assert connection.execute(text("SELECT count(*) FROM account_period")).scalar_one() == 5
         assert connection.execute(text("SELECT count(*) FROM rebase_event")).scalar_one() == 1
     engine.dispose()
+
+
+@pytest.mark.parametrize("legacy_value", ["26292", "2"])
+def test_manual_rate_migration_preserves_legacy_row_and_downgrades_losslessly(
+    tmp_path: Path, monkeypatch, legacy_value
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / f"manual-rate-roundtrip-{legacy_value}.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "0002_period_snapshot_model")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        row_id = _seed_manual_rate(connection, legacy_value)
+    old_indexes = {
+        item["name"]
+        for item in inspect(engine).get_indexes("manual_valuation_rate")
+    }
+    engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0003_manual_rate_direction"
+        row = connection.execute(
+            text("SELECT * FROM manual_valuation_rate WHERE id = :id"),
+            {"id": row_id},
+        ).mappings().one()
+        assert Decimal(row["rate_value"]) == Decimal(legacy_value)
+        assert row["direction"] == "main_to_asset_legacy"
+        assert row["created_at"] == "2026-01-02"
+        assert row["updated_at"] == "2026-01-03"
+        inspector = inspect(connection)
+        assert {item["name"] for item in inspector.get_columns(
+            "manual_valuation_rate"
+        )} >= {"rate_value", "direction"}
+        direction = next(
+            item
+            for item in inspector.get_columns("manual_valuation_rate")
+            if item["name"] == "direction"
+        )
+        assert direction["nullable"] is False
+        assert direction["default"] is None
+        assert "ck_manual_valuation_rate_direction" in {
+            item["name"]
+            for item in inspector.get_check_constraints("manual_valuation_rate")
+        }
+        assert {
+            item["name"] for item in inspector.get_indexes("manual_valuation_rate")
+        } == old_indexes
+        assert any(
+            item["column_names"] == ["workspace_id", "main_asset_id", "asset_id"]
+            for item in inspector.get_unique_constraints("manual_valuation_rate")
+        )
+    engine.dispose()
+
+    with engine.begin() as connection:
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                text(
+                    "UPDATE manual_valuation_rate SET direction = 'invalid' "
+                    "WHERE id = :id"
+                ),
+                {"id": row_id},
+            )
+
+    command.downgrade(config, "0002_period_snapshot_model")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0002_period_snapshot_model"
+        row = connection.execute(
+            text("SELECT * FROM manual_valuation_rate WHERE id = :id"),
+            {"id": row_id},
+        ).mappings().one()
+        assert Decimal(row["displayed_rate"]) == Decimal(legacy_value)
+        assert row["created_at"] == "2026-01-02"
+        assert row["updated_at"] == "2026-01-03"
+        assert "direction" not in row
+        assert {
+            item["name"] for item in inspect(connection).get_indexes(
+                "manual_valuation_rate"
+            )
+        } == old_indexes
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["99999999999999999999.999999999999999999", "-1", "not-a-rate"],
+)
+def test_manual_rate_migration_preflight_is_atomic(tmp_path: Path, monkeypatch, value):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / f"manual-rate-reject-{value[:3]}.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "0002_period_snapshot_model")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        row_id = _seed_manual_rate(connection, value)
+    with engine.connect() as connection:
+        before_row = dict(
+            connection.execute(
+                text("SELECT * FROM manual_valuation_rate WHERE id = :id"),
+                {"id": row_id},
+            ).mappings().one()
+        )
+    old_columns = {
+        item["name"] for item in inspect(engine).get_columns("manual_valuation_rate")
+    }
+    old_indexes = {
+        item["name"] for item in inspect(engine).get_indexes("manual_valuation_rate")
+    }
+    old_unique = inspect(engine).get_unique_constraints("manual_valuation_rate")
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match=rf"row {row_id} cannot be migrated"):
+        command.upgrade(config, "head")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0002_period_snapshot_model"
+        assert dict(connection.execute(
+            text("SELECT * FROM manual_valuation_rate WHERE id = :id"),
+            {"id": row_id},
+        ).mappings().one()) == before_row
+        inspector = inspect(connection)
+        assert {
+            item["name"] for item in inspector.get_columns("manual_valuation_rate")
+        } == old_columns
+        assert {
+            item["name"] for item in inspector.get_indexes("manual_valuation_rate")
+        } == old_indexes
+        assert inspector.get_unique_constraints("manual_valuation_rate") == old_unique
+    engine.dispose()
+
+
+def test_manual_rate_downgrade_refuses_canonical_rows_atomically(
+    tmp_path: Path, monkeypatch
+):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "manual-rate-canonical-downgrade.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "0002_period_snapshot_model")
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        row_id = _seed_manual_rate(connection, "26292")
+    engine.dispose()
+    command.upgrade(config, "head")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE manual_valuation_rate "
+                "SET rate_value = '0.00004', direction = 'asset_to_main' "
+                "WHERE id = :id"
+            ),
+            {"id": row_id},
+        )
+    before_columns = {
+        item["name"] for item in inspect(engine).get_columns("manual_valuation_rate")
+    }
+    engine.dispose()
+
+    with pytest.raises(RuntimeError, match=rf"row {row_id} uses canonical direction"):
+        command.downgrade(config, "0002_period_snapshot_model")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0003_manual_rate_direction"
+        row = connection.execute(
+            text("SELECT rate_value, direction FROM manual_valuation_rate WHERE id = :id"),
+            {"id": row_id},
+        ).one()
+        assert Decimal(row.rate_value) == Decimal("0.00004")
+        assert row.direction == "asset_to_main"
+        assert {
+            item["name"]
+            for item in inspect(connection).get_columns("manual_valuation_rate")
+        } == before_columns
+    engine.dispose()
+
+
+def test_manual_rate_empty_table_downgrades_to_0002(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    database = tmp_path / "manual-rate-empty-downgrade.db"
+    config = Config("alembic.ini")
+    config.set_main_option("sqlalchemy.url", f"sqlite+aiosqlite:///{database}")
+    command.upgrade(config, "head")
+    command.downgrade(config, "0002_period_snapshot_model")
+
+    engine = create_engine(f"sqlite:///{database}")
+    with engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT version_num FROM alembic_version")
+        ).scalar_one() == "0002_period_snapshot_model"
+        columns = {
+            item["name"]
+            for item in inspect(connection).get_columns("manual_valuation_rate")
+        }
+        assert "displayed_rate" in columns
+        assert "rate_value" not in columns
+        assert "direction" not in columns
+    engine.dispose()
+
+
+def test_manual_rate_model_compiles_portable_postgresql_numeric_and_check():
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.schema import CreateTable
+
+    from app.models import ManualValuationRate
+
+    ddl = str(
+        CreateTable(ManualValuationRate.__table__).compile(
+            dialect=postgresql.dialect()
+        )
+    )
+    assert "rate_value NUMERIC(38, 18) NOT NULL" in ddl
+    assert "direction VARCHAR(24) NOT NULL" in ddl
+    assert "CONSTRAINT ck_manual_valuation_rate_direction CHECK" in ddl
+    assert "asset_to_main" in ddl
+    assert "main_to_asset_legacy" in ddl
+
+
+def test_manual_rate_migration_operations_compile_for_postgresql():
+    import importlib
+    from io import StringIO
+    from unittest.mock import patch
+
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    migration_path = Path("alembic/versions/0003_manual_rate_direction.py")
+    spec = importlib.util.spec_from_file_location(
+        "finapp_manual_rate_migration",
+        migration_path,
+    )
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    def compile_operation(name: str) -> str:
+        output = StringIO()
+        context = MigrationContext.configure(
+            url="postgresql://",
+            opts={"as_sql": True, "output_buffer": output},
+        )
+        operations = Operations(context)
+        preflight = (
+            "_preflight_upgrade" if name == "upgrade" else "_preflight_downgrade"
+        )
+        with (
+            patch.object(migration, "op", operations),
+            patch.object(migration, preflight, lambda connection: None),
+        ):
+            getattr(migration, name)()
+        return output.getvalue()
+
+    upgrade = compile_operation("upgrade")
+    assert "RENAME displayed_rate TO rate_value" in upgrade
+    assert "ADD COLUMN direction VARCHAR(24)" in upgrade
+    assert "ck_manual_valuation_rate_direction" in upgrade
+    assert "ALTER COLUMN direction DROP DEFAULT" in upgrade
+
+    downgrade = compile_operation("downgrade")
+    assert "DROP CONSTRAINT ck_manual_valuation_rate_direction" in downgrade
+    assert "DROP COLUMN direction" in downgrade
+    assert "RENAME rate_value TO displayed_rate" in downgrade
 
 
 def test_transaction_origin_constraint_accepts_only_release_values(
@@ -642,7 +953,7 @@ def test_migrated_scratch_database_runs_real_application_lifespan(
         assert (
             connection.execute(text("SELECT version_num FROM alembic_version"))
             .scalar_one()
-            == "0002_period_snapshot_model"
+            == "0003_manual_rate_direction"
         )
         assert connection.execute(text("SELECT count(*) FROM asset")).scalar_one() == 8
         assert connection.execute(text("SELECT count(*) FROM user")).scalar_one() == 0

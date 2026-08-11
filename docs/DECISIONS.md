@@ -19,3 +19,4 @@ Status: `accepted` · `superseded by ADR-NNNN`
 | [0005](decisions/ADR-0005-periods-are-optional-and-ledger-derived.md) | Periods are optional and derive from the ledger, not from a funded amount | accepted |
 | [0006](decisions/ADR-0006-repo-is-the-shared-agent-memory.md) | The repository is the only shared memory between agents | accepted |
 | [0007](decisions/ADR-0007-mobile-design-is-frozen-and-backend-first.md) | Freeze the mobile design, synchronize backend in Phase 14, then implement mobile in Phase 15 | accepted |
+| [0008](decisions/ADR-0008-canonical-manual-rate-direction.md) | Store manual valuation rates canonically in Asset-to-Main direction | accepted |

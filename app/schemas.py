@@ -84,17 +84,35 @@ class WorkspacePatch(BaseModel):
 
 
 class ManualValuationRateUpsert(BaseModel):
-    displayed_rate: PositiveAmount
+    model_config = ConfigDict(extra="forbid")
+
+    rate: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+
+    @field_validator("rate")
+    @classmethod
+    def validate_rate(cls, value: str) -> str:
+        integer, separator, fraction = value.partition(".")
+        decimal = Decimal(value)
+        if not decimal.is_finite() or decimal <= 0:
+            raise ValueError("Valuation rate must be positive and finite")
+        integer_digits = len(integer.lstrip("0"))
+        if integer_digits > 20 or len(fraction) > 18:
+            raise ValueError("Valuation rate exceeds Numeric(38,18)")
+        normalized_fraction = fraction.rstrip("0") if separator else ""
+        return (
+            f"{integer}.{normalized_fraction}"
+            if normalized_fraction
+            else integer
+        )
 
 
 class ManualValuationRateOut(BaseModel):
     id: int
     workspace_id: int
-    main_asset: AssetOut
-    asset: AssetOut
-    displayed_rate: Decimal
-    effective_valuation_rate: Decimal
-    active: bool
+    from_asset: AssetOut
+    to_asset: AssetOut
+    rate: str
+    source: Literal["manual"]
     created_at: datetime
     updated_at: datetime
 
