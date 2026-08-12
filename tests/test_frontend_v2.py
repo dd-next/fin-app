@@ -232,7 +232,7 @@ def test_operations_accessibility_and_loading_contract():
         "operations-transfer-error",
         "period-error",
     ):
-        assert f'id="{error_id}" class="form-error" role="alert"' in html
+        assert re.search(rf'id="{error_id}" class="[^"]*form-error[^"]*" role="alert"', html)
     assert "operationsPeriodLoading" in javascript
     assert "operationsPeriodError" in javascript
     assert "operations-period-retry" in javascript

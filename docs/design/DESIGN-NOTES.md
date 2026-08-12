@@ -149,6 +149,30 @@ current URL-backed view switch without adding a data refresh. Mobile uses the
 approved system font stack and an inset accent focus ring so keyboard focus is
 fully visible inside the clipped tab-bar boundary.
 
+T-024A imports the remaining primitive tokens currently exercised by production
+DOM: surface `#151A21` with `rgba(255,255,255,.08)`, field `#101419` with
+`rgba(255,255,255,.12)`, neutral control `#232A33`, secondary text `#C9D0D9`,
+muted text `#8A93A0`, hint/chevron text `#5F6875`/`#4A525E`, positive/negative
+`#6EE7A8`/`#FF7B7B`, accent tint/focus, danger surfaces, and destructive
+`#7A2F35` on `#FFD9D9`. These tokens and all `.mobile-*` geometry remain inside
+the 640px runtime boundary.
+
+The shared primitive contract uses one-surface Accounts and Plan metric strips
+(72px and 64px), 44px screen/group controls, 64px whole-button account rows,
+56px ghost rows, 96px account/period cards in both active and absent states,
+and a 44px four-way segmented control. The no-period card keeps a 44px semantic
+Start target around its 36px visual button. Form, sheet, amount/error, chip,
+and primary/secondary/inline/destructive classes expose the frozen component
+geometry without introducing overlays or changing workflows; later owning
+tasks compose them and remove interim native controls.
+
+Money presentation remains string based: existing asset precision feeds
+separate escaped value and muted currency-code spans with tabular, non-wrapping
+numerals. No float conversion is introduced. Long row text truncates, and the
+compact Operations balance is updated from the selected account while its
+desktop-only legacy controls remain unchanged. Shared/non-owner period privacy
+continues to rely on the accepted owner guard and generic `No period` state.
+
 ## Change log
 
 One line per landed design change: date, what changed, why.
@@ -161,3 +185,7 @@ One line per landed design change: date, what changed, why.
 - 2026-08-12 — imported the minimal runtime shell tokens, safe-area geometry,
   and accessible five-tab mobile navigation for T-023 while preserving the
   desktop shell and existing view-loading behavior.
+- 2026-08-12 — imported the T-024A mobile primitive tokens and production DOM
+  contracts for headers, rows, metric strips, Operations cards and controls,
+  fields, buttons, truncation, and precision-safe money presentation while
+  preserving the accepted desktop and financial workflows.

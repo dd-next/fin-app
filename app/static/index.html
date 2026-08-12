@@ -57,19 +57,19 @@
       <div id="page-loading" class="page-loading hidden" role="status">Updating…</div>
 
       <section id="view-accounts" class="app-view" aria-labelledby="accounts-title">
-        <div class="view-heading">
-          <div><p class="eyebrow">Overview</p><h2 id="accounts-title">Accounts</h2></div>
-          <button id="add-account">＋ Add account</button>
+        <div class="view-heading mobile-screen-header">
+          <div><p class="eyebrow">Overview</p><h2 id="accounts-title" class="mobile-screen-title">Accounts</h2></div>
+          <button id="add-account" class="mobile-interactive" aria-label="Add account">＋ Add account</button>
         </div>
-        <div class="summary-grid">
-          <article class="metric-card capital-card">
-            <span>Total capital</span>
-            <strong id="net-worth">—</strong>
+        <div class="summary-grid mobile-metric-strip mobile-surface accounts-metrics">
+          <article class="metric-card capital-card mobile-metric">
+            <span class="mobile-metric-label">Total capital</span>
+            <strong id="net-worth" class="mobile-metric-value">—</strong>
             <small id="net-worth-code">Across visible accounts</small>
           </article>
-          <article class="metric-card">
-            <span>Available</span>
-            <strong id="available-total">—</strong>
+          <article class="metric-card mobile-metric is-accent">
+            <span class="mobile-metric-label">Available</span>
+            <strong id="available-total" class="mobile-metric-value">—</strong>
             <small>Excludes protected accounts</small>
           </article>
         </div>
@@ -78,7 +78,7 @@
         <div id="accounts-empty" class="empty-state hidden">
           <div class="empty-icon">◫</div><h3>Add your first account</h3>
           <p>Cash, bank cards, wallets, reserves, and crypto can all live here.</p>
-          <button id="empty-add-account">Add account</button>
+          <button id="empty-add-account" class="mobile-ghost-row mobile-interactive"><span class="mobile-leading-icon" aria-hidden="true">＋</span><span class="mobile-ghost-label">Add account</span></button>
         </div>
       </section>
 
@@ -108,19 +108,26 @@
 
       <section id="view-operations" class="app-view hidden" aria-labelledby="operations-title">
         <div class="view-heading"><div><p class="eyebrow">Financial actions</p><h2 id="operations-title">Operations</h2></div></div>
-        <div class="operations-toolbar panel-subtle">
-          <label>Account<select id="operations-account" aria-label="Operations account"></select></label>
-          <button id="operations-undo" type="button" class="button-secondary hidden" disabled>↶ Undo</button>
+        <div class="operations-card-row">
+        <div id="operations-account-card" class="operations-toolbar panel-subtle mobile-ops-card is-active" role="group" aria-labelledby="operations-account-card-title">
+          <label><span id="operations-account-card-title" class="mobile-ops-topline mobile-ops-title">Account</span><select id="operations-account" class="mobile-field" aria-label="Operations account"></select></label>
+          <div class="operations-account-balance"><span class="mobile-ops-label">Balance</span><span id="operations-account-balance" class="mobile-money mobile-ops-value">—</span></div>
+          <button id="operations-undo" type="button" class="button-secondary mobile-button-inline mobile-interactive hidden" disabled>↶ Undo</button>
         </div>
-        <section id="operations-period" class="operations-period panel-subtle" aria-labelledby="operations-period-title" aria-busy="false">
+        <section id="operations-period" class="operations-period panel-subtle mobile-ops-card is-absent" role="group" aria-labelledby="operations-period-card-title" aria-busy="false">
+          <div class="operations-period-mobile">
+            <div class="mobile-ops-topline"><span class="mobile-ops-dot" aria-hidden="true"></span><span id="operations-period-card-title" class="mobile-ops-period-text">No period</span></div>
+            <div><span class="mobile-ops-label">Available today</span><span id="operations-period-mobile-value" class="mobile-money mobile-ops-value">N/A</span></div>
+            <button id="operations-add-period-mobile" type="button" class="mobile-start-period mobile-interactive"><span class="mobile-start-period-visual">＋ Start period</span></button>
+          </div>
           <div class="group-heading">
             <div><p class="eyebrow">Account period</p><h3 id="operations-period-title">Current period</h3></div>
             <div class="period-actions">
-              <button id="operations-add-period" type="button">Add period</button>
-              <button id="operations-edit-period" type="button" class="button-secondary hidden">Edit</button>
-              <button id="operations-close-period" type="button" class="button-secondary hidden">Close</button>
-              <button id="operations-period-history" type="button" class="button-secondary hidden">History</button>
-              <button id="operations-period-retry" type="button" class="button-secondary hidden">Retry</button>
+              <button id="operations-add-period" type="button" class="mobile-start-period mobile-interactive">Add period</button>
+              <button id="operations-edit-period" type="button" class="button-secondary mobile-interactive hidden">Edit</button>
+              <button id="operations-close-period" type="button" class="button-secondary mobile-interactive hidden">Close</button>
+              <button id="operations-period-history" type="button" class="button-secondary mobile-interactive hidden">History</button>
+              <button id="operations-period-retry" type="button" class="button-secondary mobile-interactive hidden">Retry</button>
             </div>
           </div>
           <div class="operations-period-cards summary-grid">
@@ -129,24 +136,25 @@
           </div>
           <p id="operations-period-status" class="muted" role="status">Select an account to see its period.</p>
         </section>
-        <div id="operations-selector" class="operations-selector" role="tablist" aria-label="Operation type">
-          <button id="operation-tab-spend" type="button" role="tab" data-operation-action="spend" aria-controls="operation-panel-spend" aria-selected="true" class="active">Spend</button>
-          <button id="operation-tab-add-funds" type="button" role="tab" data-operation-action="add-funds" aria-controls="operation-panel-add-funds" aria-selected="false" tabindex="-1">Add funds</button>
-          <button id="operation-tab-transfer" type="button" role="tab" data-operation-action="transfer" aria-controls="operation-panel-transfer" aria-selected="false" tabindex="-1">Transfer</button>
-          <button id="operation-tab-scan" type="button" role="tab" data-operation-action="scan" aria-controls="operation-panel-scan" aria-selected="false" tabindex="-1">Scan</button>
+        </div>
+        <div id="operations-selector" class="operations-selector mobile-segmented" role="tablist" aria-label="Operation type">
+          <button id="operation-tab-spend" type="button" role="tab" data-operation-action="spend" aria-controls="operation-panel-spend" aria-selected="true" class="active mobile-interactive">Spend</button>
+          <button id="operation-tab-add-funds" type="button" role="tab" data-operation-action="add-funds" aria-controls="operation-panel-add-funds" aria-selected="false" tabindex="-1" class="mobile-interactive">Add funds</button>
+          <button id="operation-tab-transfer" type="button" role="tab" data-operation-action="transfer" aria-controls="operation-panel-transfer" aria-selected="false" tabindex="-1" class="mobile-interactive">Transfer</button>
+          <button id="operation-tab-scan" type="button" role="tab" data-operation-action="scan" aria-controls="operation-panel-scan" aria-selected="false" tabindex="-1" class="mobile-interactive">Scan</button>
         </div>
         <div class="operations-workspace panel">
           <section id="operation-panel-spend" role="tabpanel" aria-labelledby="operation-tab-spend">
             <p class="eyebrow">Spend</p><h3>Record spending</h3>
             <form id="operations-spend-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>Amount<input id="operations-spend-amount" inputmode="decimal" required></label>
-                <label>Category<select id="operations-spend-category"><option value="">Uncategorized</option></select></label>
-                <label>Financial date<input id="operations-spend-date" type="date" required></label>
-                <label>Note<input id="operations-spend-note" maxlength="2000" placeholder="Optional"></label>
+                <label>Amount<input id="operations-spend-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required></label>
+                <label>Category<select id="operations-spend-category" class="mobile-field"><option value="">Uncategorized</option></select></label>
+                <label>Financial date<input id="operations-spend-date" class="mobile-field" type="date" required></label>
+                <label>Note<input id="operations-spend-note" class="mobile-field" maxlength="2000" placeholder="Optional"></label>
               </div>
-              <p id="operations-spend-error" class="form-error" role="alert"></p>
-              <div class="form-actions"><button id="operations-spend-submit" type="submit">Save spending</button></div>
+              <p id="operations-spend-error" class="form-error mobile-field-error" role="alert"></p>
+              <div class="form-actions"><button id="operations-spend-submit" class="mobile-button-primary" type="submit">Save spending</button></div>
             </form>
           </section>
           <section id="operation-panel-add-funds" role="tabpanel" aria-labelledby="operation-tab-add-funds" class="hidden">
@@ -190,10 +198,10 @@
       </section>
 
       <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
-        <div class="view-heading"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title">Plan</h2></div><button id="add-plan-rule">＋ Add rule</button></div>
-        <div class="plan-summary summary-grid">
-          <article class="metric-card"><span>Open items</span><strong id="plan-open-count">0</strong><small>Planned and overdue</small></article>
-          <article class="metric-card"><span>Completed</span><strong id="plan-completed-count">0</strong><small>Linked to real transactions</small></article>
+        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title" class="mobile-screen-title">Plan</h2></div><button id="add-plan-rule" class="mobile-interactive" aria-label="Add plan rule">＋ Add rule</button></div>
+        <div class="plan-summary summary-grid mobile-metric-strip mobile-surface">
+          <article class="metric-card mobile-metric"><span class="mobile-metric-label">Open items</span><strong id="plan-open-count" class="mobile-metric-value">0</strong><small>Planned and overdue</small></article>
+          <article class="metric-card mobile-metric"><span class="mobile-metric-label">Completed</span><strong id="plan-completed-count" class="mobile-metric-value">0</strong><small>Linked to real transactions</small></article>
         </div>
         <div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div>
         <div id="plan-rule-cards" class="plan-rule-cards"></div>

@@ -89,6 +89,15 @@ function formatMoney(value, code) {
   return `${formatNumber(value, precision)} ${code}`;
 }
 
+function moneyParts(value, code) {
+  return { value: formatNumber(value, assetByCode(code)?.decimals ?? null), code: String(code) };
+}
+
+function moneyMarkup(value, code) {
+  const parts = moneyParts(value, code);
+  return `<span class="mobile-money"><span class="mobile-money-value">${escapeHtml(parts.value)}</span><span class="mobile-money-code">${escapeHtml(parts.code)}</span></span>`;
+}
+
 function localDate(value) {
   if (!value) return "—";
   return new Intl.DateTimeFormat("en", {
@@ -347,6 +356,7 @@ function renderOperationsNavigation() {
     $("operations-account").value = String(state.operationsAccountId);
     writeOperationsPreference("account", state.operationsAccountId);
   }
+  renderOperationsAccountBalance();
   const storedAction = readOperationsPreference("action");
   const action = OPERATION_ACTIONS.includes(state.operationsAction)
     && state.operationsAction !== "spend"
@@ -362,6 +372,13 @@ function renderOperationsNavigation() {
 
 function selectedOperationsAccount() {
   return accountById(state.operationsAccountId);
+}
+
+function renderOperationsAccountBalance() {
+  const selectedAccount = selectedOperationsAccount();
+  $("operations-account-balance").innerHTML = selectedAccount
+    ? moneyMarkup(selectedAccount.balance, selectedAccount.asset.code)
+    : "—";
 }
 
 function renderOperationsUndo() {
@@ -595,6 +612,12 @@ function renderOperationsPeriod() {
     && !state.operationsPeriodError
     && !state.periodCommandLoading;
   const unavailable = !current;
+  $("operations-period").classList.toggle("is-active", Boolean(current));
+  $("operations-period").classList.toggle("is-absent", !current);
+  $("operations-period-card-title").textContent = current ? "Period active" : "No period";
+  $("operations-period-mobile-value").innerHTML = current
+    ? moneyMarkup(current.available_today, current.asset.code)
+    : "N/A";
   $("operations-period").setAttribute(
     "aria-busy",
     String(state.operationsPeriodLoading || state.periodCommandLoading),
@@ -606,6 +629,7 @@ function renderOperationsPeriod() {
     ? "N/A"
     : formatMoney(current.current_balance, current.asset.code);
   $("operations-add-period").classList.toggle("hidden", !ready || Boolean(current));
+  $("operations-add-period-mobile").classList.toggle("hidden", !ready || Boolean(current));
   $("operations-edit-period").classList.toggle("hidden", !ready || !current);
   $("operations-close-period").classList.toggle("hidden", !ready || !current);
   $("operations-period-history").classList.toggle("hidden", !ready);
@@ -835,8 +859,8 @@ function accountIcon(account) {
 function renderAccounts() {
   if (!state.summary) return;
   const base = state.summary.base_asset.code;
-  $("net-worth").textContent = formatMoney(state.summary.net_worth, base);
-  $("available-total").textContent = formatMoney(state.summary.available, base);
+  $("net-worth").innerHTML = moneyMarkup(state.summary.net_worth, base);
+  $("available-total").innerHTML = moneyMarkup(state.summary.available, base);
   $("net-worth-code").textContent = `Valued in ${base} across visible accounts`;
   const unvalued = state.summary.unvalued;
   $("unvalued-warning").classList.toggle("hidden", !unvalued.length);
@@ -857,20 +881,20 @@ function renderAccounts() {
     if (!accounts.length) continue;
     const section = document.createElement("section");
     section.className = "account-group";
-    section.innerHTML = `<div class="group-heading"><h3>${group}</h3><span>${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}</span></div><div class="account-grid"></div>`;
+    section.innerHTML = `<div class="group-heading mobile-group-header"><h3>${group}</h3><span class="mobile-group-count">${accounts.length} ${accounts.length === 1 ? "account" : "accounts"}</span></div><div class="account-grid"></div>`;
     const grid = section.querySelector(".account-grid");
     for (const account of accounts) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "account-card";
+      button.className = "account-card mobile-list-row mobile-interactive";
       button.dataset.accountId = account.id;
       const valued = account.valued_balance === null
         ? "Not valued"
         : formatMoney(account.valued_balance, base);
       button.innerHTML = `
-        <span class="account-top"><span class="account-icon">${accountIcon(account)}</span>${account.is_shared ? `<span class="badge shared">${escapeHtml(account.access_role)}</span>` : ""}</span>
-        <span class="account-name">${escapeHtml(account.name)}</span>
-        <strong>${formatMoney(account.balance, account.asset.code)}</strong>
+        <span class="account-top"><span class="account-icon mobile-leading-icon">${accountIcon(account)}</span>${account.is_shared ? `<span class="badge shared">${escapeHtml(account.access_role)}</span>` : ""}</span>
+        <span class="account-name mobile-row-title mobile-truncate">${escapeHtml(account.name)}</span>
+        <strong>${moneyMarkup(account.balance, account.asset.code)}</strong>
         <small>${account.include_in_available ? valued : `Protected · ${valued}`}</small>`;
       button.addEventListener("click", () => openAccountDetail(account.id));
       grid.append(button);
@@ -1266,10 +1290,10 @@ function nearestRuleOccurrences(rule) {
 
 function planRuleCardNode(rule) {
   const card = document.createElement("article");
-  card.className = "rule-card plan-rule-card";
+  card.className = "rule-card plan-rule-card mobile-surface";
   card.innerHTML = `
     <div class="plan-rule-head">
-      <div><strong>${escapeHtml(rule.name)}</strong><span>${planKindIcon(rule.kind)} ${escapeHtml(planKindLabel(rule.kind))} · ${formatMoney(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)}</span></div>
+      <div><strong>${escapeHtml(rule.name)}</strong><span class="plan-rule-meta">${planKindIcon(rule.kind)} ${escapeHtml(planKindLabel(rule.kind))} · ${moneyMarkup(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)}</span></div>
       <div class="rule-actions"></div>
     </div>
     <div class="plan-card-rows"></div>`;
@@ -1892,6 +1916,7 @@ $("operations-account").addEventListener("change", () => {
   const account = accountById($("operations-account").value);
   state.operationsAccountId = account?.id || null;
   if (state.operationsAccountId !== null) writeOperationsPreference("account", state.operationsAccountId);
+  renderOperationsAccountBalance();
   void renderOperationsForms();
   void loadOperationsPeriods();
   void loadOperationsUndoCandidate();
@@ -1905,6 +1930,7 @@ $("operations-has-fee").addEventListener("change", () => {
   updateOperationsTransferMode();
 });
 $("operations-add-period").addEventListener("click", () => openPeriodDialog());
+$("operations-add-period-mobile").addEventListener("click", () => openPeriodDialog());
 $("operations-edit-period").addEventListener("click", () => openPeriodDialog(currentOperationsPeriod()));
 $("operations-close-period").addEventListener("click", () => closeOperationsPeriod(currentOperationsPeriod()));
 $("operations-period-history").addEventListener("click", openPeriodHistory);
