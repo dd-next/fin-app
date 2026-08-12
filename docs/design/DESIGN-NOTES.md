@@ -131,6 +131,24 @@ specification/design-tokens.json` and `tokens.css`. Phase 15 imports only the
 tokens the application uses into `app/static/`; raw handoff files are not
 runtime dependencies.
 
+T-023 imports only the shell tokens currently used at runtime: background
+`#0B0D10`, primary text `#E7EAEE`, idle tab `#6B7482`, accent `#FFA24B`,
+hairline `rgba(255,255,255,.07)`, and the 56px tab-bar height. Production safe
+areas come from `env(safe-area-inset-top/bottom, 0px)` through
+`--mobile-safe-top` and `--mobile-safe-bottom`; browser acceptance may inject
+the reference bands with `--test-safe-top: 54px` and
+`--test-safe-bottom: 34px`.
+
+At widths up to 640px the authenticated shell occupies the visual viewport
+between the top safe area and the bottom tab/safe-area bands. It declares a
+`100vh` fallback before `100dvh`, contains horizontal overflow, and makes its
+content vertically reachable without allowing the fixed 56px tab bar to cover
+it. The desktop shell remains under the pre-existing selectors. Primary tabs
+use the frozen order and symbols, expose `aria-current="page"`, and retain the
+current URL-backed view switch without adding a data refresh. Mobile uses the
+approved system font stack and an inset accent focus ring so keyboard focus is
+fully visible inside the clipped tab-bar boundary.
+
 ## Change log
 
 One line per landed design change: date, what changed, why.
@@ -140,3 +158,6 @@ One line per landed design change: date, what changed, why.
 - 2026-08-12 — recorded the Phase 15 fast-track resolutions for Plan, unified
   versus advanced Transactions filters, history navigation, shared periods,
   software-keyboard/Undo acceptance, safe-area measurement, and archive copy.
+- 2026-08-12 — imported the minimal runtime shell tokens, safe-area geometry,
+  and accessible five-tab mobile navigation for T-023 while preserving the
+  desktop shell and existing view-loading behavior.

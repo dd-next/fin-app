@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-023 is ready and `todo`; Phase 15 implementation is not yet claimed |
-| Next | Atomically claim T-023 by creating `task/T-023-mobile-shell` from this local integration HEAD |
+| Active work | T-023 implementation and bounded reviews are complete on `task/T-023-mobile-shell`; status is `review` |
+| Next | Locally accept the fully verified T-023 task branch, then promote readiness-ready T-024A after its dependency is accepted |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -30,8 +30,9 @@ the one task file you are working on. Nothing else by default.
 Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
 files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
 usable local preview after T-029 without calling the phase accepted. Batch
-readiness review closed all P0–P2 findings; T-023 is the exact first
-implementation task and is now `todo`.
+readiness review closed all P0–P2 findings; T-023 implementation and bounded
+reviews are complete with status `review`, awaiting locally authorised
+acceptance.
 
 Phase 15 authority and constraints:
 

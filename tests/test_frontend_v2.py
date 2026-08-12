@@ -168,7 +168,7 @@ def test_responsive_styles_keep_mobile_controls_tappable():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "min-height: 44px" in css
     assert "@media (max-width: 640px)" in css
-    assert ".primary-nav { position: fixed" in css
+    assert re.search(r"\.primary-nav\s*\{[^}]*position:\s*fixed", css)
     assert ".operations-selector" in css
     assert "tracker" not in css.lower()
 

@@ -272,15 +272,18 @@ function switchView(view, updateUrl = true) {
   document.querySelectorAll(".app-view").forEach((section) => section.classList.add("hidden"));
   $(`view-${state.activeView}`).classList.remove("hidden");
   document.querySelectorAll(".primary-nav button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === state.activeView);
+    const current = button.dataset.view === state.activeView;
+    button.classList.toggle("active", current);
+    if (current) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   });
-  if (state.activeView === "operations") renderOperationsNavigation();
   if (updateUrl) {
     const url = new URL(window.location.href);
     if (state.activeView === "accounts") url.searchParams.delete("view");
     else url.searchParams.set("view", state.activeView);
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
+  $("app-shell").scrollTop = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 

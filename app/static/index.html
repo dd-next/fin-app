@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101217">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0D10">
   <title>FinApp v2</title>
   <link rel="stylesheet" href="/style.css">
 </head>
@@ -47,11 +47,11 @@
       </header>
 
       <nav class="primary-nav" aria-label="Primary">
-        <button data-view="accounts" class="active"><span aria-hidden="true">◫</span>Accounts</button>
-        <button data-view="transactions"><span aria-hidden="true">⇄</span>Transactions</button>
-        <button data-view="operations"><span aria-hidden="true">◎</span>Operations</button>
-        <button data-view="plan"><span aria-hidden="true">◇</span>Plan</button>
-        <button data-view="analytics"><span aria-hidden="true">⌁</span>Analytics</button>
+        <button type="button" data-view="accounts" class="active" aria-current="page" aria-controls="view-accounts"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Accounts</span></button>
+        <button type="button" data-view="transactions" aria-controls="view-transactions"><span class="nav-icon" aria-hidden="true">⇄</span><span class="nav-label">Transactions</span></button>
+        <button type="button" data-view="operations" aria-controls="view-operations"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Operations</span></button>
+        <button type="button" data-view="plan" aria-controls="view-plan"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-label">Plan</span></button>
+        <button type="button" data-view="analytics" aria-controls="view-analytics"><span class="nav-icon" aria-hidden="true">ϟ</span><span class="nav-label">Analytics</span></button>
       </nav>
 
       <div id="page-loading" class="page-loading hidden" role="status">Updating…</div>
