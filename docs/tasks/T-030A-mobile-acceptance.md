@@ -8,9 +8,9 @@ blocked-by: [T-029]
 branch: task/T-030A-mobile-acceptance
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -70,3 +70,5 @@ Append the bounded independent implementation review following the protocol.
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-030; not claimed.
+- 2026-08-12 Codex GPT-5: mobile Undo and shared-role matrix added after review;
+  limited independent re-review verdict `ready`.

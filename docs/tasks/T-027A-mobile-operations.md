@@ -8,9 +8,9 @@ blocked-by: [T-024B]
 branch: task/T-027A-mobile-operations
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -88,3 +88,5 @@ Append the bounded independent implementation review following the protocol.
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-027; not claimed.
+- 2026-08-12 Codex GPT-5: readiness findings added mobile Undo and shared-role
+  quote checks; limited re-review verdict `ready`; remains blocked by T-024B.

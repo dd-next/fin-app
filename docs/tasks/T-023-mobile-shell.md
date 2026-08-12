@@ -1,16 +1,16 @@
 ---
 id: T-023
 title: Import approved tokens and responsive mobile shell
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md; spec/02-components.md Tab bar; spec/05-interactions.md
 blocked-by: [T-022]
 branch: task/T-023-mobile-shell
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -75,3 +75,5 @@ Append the bounded independent implementation review following
 
 - 2026-08-12 Codex GPT-5: task specified in the Phase 15 fast-track preparation;
   implementation has not been claimed.
+- 2026-08-12 Codex GPT-5: independent batch readiness review and limited
+  re-review closed all P0–P2; owner promotion to `todo` recorded.

@@ -21,17 +21,17 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | Phase 15 specification/readiness preparation; no implementation claimed |
-| Next | Complete the batch readiness review, promote only T-023, then claim `task/T-023-mobile-shell` |
+| Active work | T-023 is ready and `todo`; Phase 15 implementation is not yet claimed |
+| Next | Atomically claim T-023 by creating `task/T-023-mobile-shell` from this local integration HEAD |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
 
 Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
 files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
-usable local preview after T-029 without calling the phase accepted. T-023 is
-the exact first implementation task and remains `backlog` until the batch
-readiness review is recorded.
+usable local preview after T-029 without calling the phase accepted. Batch
+readiness review closed all P0–P2 findings; T-023 is the exact first
+implementation task and is now `todo`.
 
 Phase 15 authority and constraints:
 

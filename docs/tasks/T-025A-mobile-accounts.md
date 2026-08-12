@@ -8,9 +8,9 @@ blocked-by: [T-024B]
 branch: task/T-025A-mobile-accounts
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -71,3 +71,5 @@ Append the bounded independent implementation review following the protocol.
 
 - 2026-08-12 Codex GPT-5: split from overloaded T-025 after readiness review;
   not claimed.
+- 2026-08-12 Codex GPT-5: limited independent re-review verdict `ready`; remains
+  blocked by T-024B.

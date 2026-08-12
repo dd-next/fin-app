@@ -8,9 +8,9 @@ blocked-by: [T-030B]
 branch: task/T-031-phase15-close
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -66,3 +66,5 @@ protocol.
 
 - 2026-08-12 Codex GPT-5: closure task specified for batch readiness; not
   claimed.
+- 2026-08-12 Codex GPT-5: closure range updated for every split; limited
+  independent re-review verdict `ready`.

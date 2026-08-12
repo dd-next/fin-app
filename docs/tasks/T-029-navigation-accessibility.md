@@ -8,9 +8,9 @@ blocked-by: [T-025B, T-026, T-027B, T-028]
 branch: task/T-029-navigation-accessibility
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict:
+readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: deb8a5a
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -71,3 +71,5 @@ Append the bounded independent implementation review following the protocol.
 
 - 2026-08-12 Codex GPT-5: integration task specified for batch readiness; not
   claimed.
+- 2026-08-12 Codex GPT-5: dependency references updated after T-025 split;
+  limited independent re-review verdict `ready`.
