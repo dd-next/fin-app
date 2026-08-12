@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None; T-024A is locally accepted and `done` |
-| Next | Atomically claim readiness-ready T-024B on `task/T-024B-mobile-overlays` |
+| Active work | T-024B is claimed on `task/T-024B-mobile-overlays`; status is `in-progress` |
+| Next | Implement and independently review the bounded mobile overlay controller |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -31,8 +31,8 @@ Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
 files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
 usable local preview after T-029 without calling the phase accepted. Batch
 readiness review closed all P0–P2 findings. T-023 is locally accepted and
-`done`; T-024A is locally accepted and `done`; readiness-ready T-024B is
-promoted to `todo` and is the next atomic claim.
+`done`; T-024A is locally accepted and `done`; T-024B is claimed and
+`in-progress` on its exact task branch.
 
 Phase 15 authority and constraints:
 
