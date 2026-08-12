@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **337 passed** (2026-08-12, T-014P final implementation gate) |
-| Active work | T-002–T-014P accepted; T-019 is next on the Phase 14 fast track |
+| Active work | T-002–T-019 accepted; T-021 lean acceptance is next |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-014P accepted. T-019 is next; T-015/T-016/T-017 are retained
+Status: **T-002–T-019 accepted. T-021 is next; T-015/T-016/T-017 are retained
 in the post-Phase-15 backlog under ADR-0010.**
 
 The current database is disposable pre-production data. ADR-0010 limits the
@@ -129,6 +129,13 @@ block Phases 14 or 15. T-021 is a lean retained-contract acceptance task.
   open P0–P3; full pytest `337 passed` and diff checks passed. Commit `6cf041d`
   was accepted locally by fast-forward. Detailed evidence:
   [`tasks/T-014P-planned-feed-projection.md`](tasks/T-014P-planned-feed-projection.md).
+- T-019 preserves the existing five-kind Plan subsystem while exposing exact
+  frozen camelCase mobile kinds, a dynamic source/destination `account_id`, and
+  an owner-private rule detail read through the current API. Existing
+  Skip/Link/archive behavior remains authoritative and ledger-neutral. One P2
+  transfer-coverage finding was closed; final focused Plan/privacy tests
+  `17 passed` and limited re-review found no open P0–P3. Detailed evidence:
+  [`tasks/T-019-mobile-plan-contract.md`](tasks/T-019-mobile-plan-contract.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

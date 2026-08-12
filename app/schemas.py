@@ -517,11 +517,29 @@ PlanKind = Literal[
     "reserve_transfer",
     "other_expense",
 ]
+MobilePlanKind = Literal[
+    "expectedIncome",
+    "requiredExpense",
+    "subscription",
+    "reserveTransfer",
+    "otherExpense",
+]
+PlanKindInput = Literal[
+    "income",
+    "expectedIncome",
+    "required_expense",
+    "requiredExpense",
+    "subscription",
+    "reserve_transfer",
+    "reserveTransfer",
+    "other_expense",
+    "otherExpense",
+]
 Recurrence = Literal["once", "weekly", "monthly", "yearly"]
 
 
 class PlanRuleCreate(BaseModel):
-    kind: PlanKind
+    kind: PlanKindInput
     name: str = Field(min_length=1, max_length=120)
     amount: PositiveAmount
     asset_code: str = Field(min_length=2, max_length=16)
@@ -530,7 +548,18 @@ class PlanRuleCreate(BaseModel):
     category_id: int | None = None
     default_from_account_id: int | None = None
     default_to_account_id: int | None = None
+    account_id: int | None = None
     is_required: bool = False
+
+    @field_validator("kind")
+    @classmethod
+    def normalize_mobile_plan_kind(cls, value: PlanKindInput) -> PlanKind:
+        return {
+            "expectedIncome": "income",
+            "requiredExpense": "required_expense",
+            "reserveTransfer": "reserve_transfer",
+            "otherExpense": "other_expense",
+        }.get(value, value)
 
     @field_validator("asset_code")
     @classmethod
@@ -539,7 +568,7 @@ class PlanRuleCreate(BaseModel):
 
 
 class PlanRulePatch(BaseModel):
-    kind: PlanKind | None = None
+    kind: PlanKindInput | None = None
     name: str | None = Field(default=None, min_length=1, max_length=120)
     amount: PositiveAmount | None = None
     asset_code: str | None = Field(default=None, min_length=2, max_length=16)
@@ -548,7 +577,22 @@ class PlanRulePatch(BaseModel):
     category_id: int | None = None
     default_from_account_id: int | None = None
     default_to_account_id: int | None = None
+    account_id: int | None = None
     is_required: bool | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def normalize_mobile_plan_kind(
+        cls, value: PlanKindInput | None
+    ) -> PlanKind | None:
+        if value is None:
+            return None
+        return {
+            "expectedIncome": "income",
+            "requiredExpense": "required_expense",
+            "reserveTransfer": "reserve_transfer",
+            "otherExpense": "other_expense",
+        }.get(value, value)
 
     @field_validator("asset_code")
     @classmethod
@@ -561,6 +605,7 @@ class PlanRuleOut(BaseModel):
     workspace_id: int
     created_by_user_id: int
     kind: PlanKind
+    mobile_kind: MobilePlanKind
     name: str
     amount: Decimal
     asset: AssetOut
@@ -569,6 +614,8 @@ class PlanRuleOut(BaseModel):
     category_id: int | None
     default_from_account_id: int | None
     default_to_account_id: int | None
+    account_field: Literal["to_account", "from_account"]
+    account_id: int | None
     is_required: bool
     is_active: bool
     created_at: datetime

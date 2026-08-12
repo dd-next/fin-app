@@ -45,17 +45,70 @@ EXPENSE_KINDS = {"required_expense", "subscription", "other_expense"}
 OPEN_STATUSES = {"planned", "overdue"}
 
 
+def mobile_plan_kind(kind: str) -> str:
+    return {
+        "income": "expectedIncome",
+        "required_expense": "requiredExpense",
+        "reserve_transfer": "reserveTransfer",
+        "other_expense": "otherExpense",
+    }.get(kind, kind)
+
+
+def mobile_account_values(rule: PlanRule) -> tuple[str, int | None]:
+    if rule.kind == "income":
+        return "to_account", rule.default_to_account_id
+    return "from_account", rule.default_from_account_id
+
+
+def resolve_mobile_account_alias(
+    *,
+    kind: str,
+    account_id: int | None,
+    from_account_id: int | None,
+    to_account_id: int | None,
+    fields_set: set[str],
+) -> tuple[int | None, int | None]:
+    if "account_id" not in fields_set:
+        return from_account_id, to_account_id
+
+    direction = "default_to_account_id" if kind == "income" else "default_from_account_id"
+    directional_value = to_account_id if kind == "income" else from_account_id
+    if direction in fields_set and directional_value != account_id:
+        raise HTTPException(
+            status_code=422,
+            detail=f"account_id conflicts with {direction}",
+        )
+
+    if kind == "income":
+        if "default_from_account_id" in fields_set and from_account_id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Income mobile account cannot also set a source account",
+            )
+        return None, account_id
+    if kind in EXPENSE_KINDS:
+        if "default_to_account_id" in fields_set and to_account_id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Expense mobile account cannot also set a target account",
+            )
+        return account_id, None
+    return account_id, to_account_id
+
+
 def workspace_today(workspace: Workspace) -> date:
     return datetime.now(UTC).astimezone(ZoneInfo(workspace.timezone)).date()
 
 
 async def plan_rule_out(session: AsyncSession, rule: PlanRule) -> PlanRuleOut:
     await session.refresh(rule, attribute_names=["asset"])
+    account_field, account_id = mobile_account_values(rule)
     return PlanRuleOut(
         id=rule.id,
         workspace_id=rule.workspace_id,
         created_by_user_id=rule.created_by_user_id,
         kind=rule.kind,
+        mobile_kind=mobile_plan_kind(rule.kind),
         name=rule.name,
         amount=rule.amount,
         asset=AssetOut.model_validate(rule.asset),
@@ -64,6 +117,8 @@ async def plan_rule_out(session: AsyncSession, rule: PlanRule) -> PlanRuleOut:
         category_id=rule.category_id,
         default_from_account_id=rule.default_from_account_id,
         default_to_account_id=rule.default_to_account_id,
+        account_field=account_field,
+        account_id=account_id,
         is_required=rule.is_required,
         is_active=rule.is_active,
         created_at=rule.created_at,
@@ -270,14 +325,21 @@ async def create_plan_rule(
 ):
     asset = await require_asset_code(session, body.asset_code)
     amount = validate_amount(body.amount, asset)
+    from_account_id, to_account_id = resolve_mobile_account_alias(
+        kind=body.kind,
+        account_id=body.account_id,
+        from_account_id=body.default_from_account_id,
+        to_account_id=body.default_to_account_id,
+        fields_set=body.model_fields_set,
+    )
     await validate_rule_fields(
         session,
         workspace_id,
         kind=body.kind,
         asset=asset,
         category_id=body.category_id,
-        from_account_id=body.default_from_account_id,
-        to_account_id=body.default_to_account_id,
+        from_account_id=from_account_id,
+        to_account_id=to_account_id,
     )
     rule = PlanRule(
         workspace_id=workspace_id,
@@ -289,8 +351,8 @@ async def create_plan_rule(
         recurrence=body.recurrence,
         first_due_date=body.first_due_date,
         category_id=body.category_id,
-        default_from_account_id=body.default_from_account_id,
-        default_to_account_id=body.default_to_account_id,
+        default_from_account_id=from_account_id,
+        default_to_account_id=to_account_id,
         is_required=body.is_required,
         is_active=True,
     )
@@ -317,6 +379,19 @@ async def list_plan_rules(
         await materialize_rule(session, rule, workspace)
     await session.commit()
     return [await plan_rule_out(session, rule) for rule in rules]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/plan-rules/{rule_id}", response_model=PlanRuleOut
+)
+async def get_plan_rule(
+    workspace_id: int,
+    rule_id: int,
+    workspace: Workspace = Depends(require_workspace_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    del workspace
+    return await plan_rule_out(session, await owned_rule(session, workspace_id, rule_id))
 
 
 @router.patch(
@@ -350,6 +425,13 @@ async def patch_plan_rule(
         if "default_to_account_id" in body.model_fields_set
         else rule.default_to_account_id
     )
+    from_account_id, to_account_id = resolve_mobile_account_alias(
+        kind=kind,
+        account_id=body.account_id,
+        from_account_id=from_account_id,
+        to_account_id=to_account_id,
+        fields_set=body.model_fields_set,
+    )
     await validate_rule_fields(
         session,
         workspace_id,
@@ -380,10 +462,10 @@ async def patch_plan_rule(
         rule.first_due_date = body.first_due_date
     if "category_id" in body.model_fields_set:
         rule.category_id = body.category_id
-    if "default_from_account_id" in body.model_fields_set:
-        rule.default_from_account_id = body.default_from_account_id
-    if "default_to_account_id" in body.model_fields_set:
-        rule.default_to_account_id = body.default_to_account_id
+    if {"default_from_account_id", "account_id"} & body.model_fields_set:
+        rule.default_from_account_id = from_account_id
+    if {"default_to_account_id", "account_id"} & body.model_fields_set:
+        rule.default_to_account_id = to_account_id
     if body.is_required is not None:
         rule.is_required = body.is_required
     await session.flush()
