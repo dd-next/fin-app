@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **333 passed** (2026-08-11, T-014F final implementation gate) |
-| Active work | T-002–T-014F accepted; T-014P is claimed and implementing planned feed projections |
+| Active work | T-002–T-014F accepted; T-014P implementation is independently approved and in final gates |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-014F accepted; T-014P is `in-progress` on its exact task
-branch, implementing planned feed projections and details.**
+Status: **T-002–T-014F accepted; T-014P is independently approved in `review`
+and running final gates.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.

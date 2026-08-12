@@ -184,6 +184,7 @@ async def materialize_rule(
     *,
     reset_schedule: bool = False,
     update_amount: bool = False,
+    today: date | None = None,
 ) -> None:
     if not rule.is_active:
         open_items = list(
@@ -215,7 +216,7 @@ async def materialize_rule(
         for item in reset_items:
             await session.delete(item)
         await session.flush()
-    today = workspace_today(workspace)
+    today = today or workspace_today(workspace)
     existing = {
         item.due_date: item
         for item in (
@@ -417,7 +418,10 @@ async def archive_plan_rule(
 
 
 async def materialize_workspace(
-    session: AsyncSession, workspace: Workspace
+    session: AsyncSession,
+    workspace: Workspace,
+    *,
+    today: date | None = None,
 ) -> None:
     rules = list(
         (
@@ -430,7 +434,7 @@ async def materialize_workspace(
         ).scalars()
     )
     for rule in rules:
-        await materialize_rule(session, rule, workspace)
+        await materialize_rule(session, rule, workspace, today=today)
     await session.commit()
 
 

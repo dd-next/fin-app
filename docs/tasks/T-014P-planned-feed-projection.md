@@ -1,7 +1,7 @@
 ---
 id: T-014P
 title: Project open Plan occurrences through Transaction details
-status: in-progress
+status: review
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md planned ledger rows
 blocked-by: [T-014F]
@@ -21,12 +21,12 @@ data route with Plan-specific actions.
 
 ## Acceptance
 
-- [ ] Extend `GET /api/v1/transaction-feed` with exact `filter=planned` and a
+- [x] Extend `GET /api/v1/transaction-feed` with exact `filter=planned` and a
       closed `kind="planned"` item branch. `filter=planned` returns only Plan
       projections; `filter=all` unions persisted T-014F items with Plan
       projections; the persisted `income|expense|transfer` filters remain
       unchanged and never return planned items.
-- [ ] Before the feed query, synchronously materialize the authenticated user's
+- [x] Before the feed query, synchronously materialize the authenticated user's
       primary workspace through the accepted idempotent Plan horizon logic.
       Strictly validate the complete query shape and decode/version-check the
       cursor before materialization or any write. Then capture one server clock
@@ -35,13 +35,13 @@ data route with Plan-specific actions.
       transaction, leg, exchange-rate, account-period, balance, summary, or
       Undo mutation. Materialized `PlanOccurrence` rows are not fake ledger
       rows and never affect capital or Available today.
-- [ ] Include only unresolved occurrence states `planned|overdue`. Completed
+- [x] Include only unresolved occurrence states `planned|overdue`. Completed
       occurrences are represented by their linked persisted transaction;
       skipped occurrences are absent. Inactive/archived rules generate no new
       projections. Archiving a rule marks every existing open occurrence
       `skipped`, so those occurrences are absent from both `all` and `planned`
       feeds and cannot open through feed detail.
-- [ ] Every planned list item is exactly: `kind="planned"`, stable
+- [x] Every planned list item is exactly: `kind="planned"`, stable
       `key="planned:<positive occurrence id>"`,
       `financial_date=due_date`, `mobile_type="planned"`, required property
       `mobile_status` with exact enum `planned|required|overdue`: `overdue`
@@ -49,13 +49,13 @@ data route with Plan-specific actions.
       `rule.is_required`, otherwise `planned`; and the existing full
       `PlanOccurrenceOut` under `occurrence`. Planned amount/asset/account/rule
       data stays Decimal/exact and owner-private.
-- [ ] Planned ordering uses the T-014F total cursor key with
+- [x] Planned ordering uses the T-014F total cursor key with
       `sort_at=workspace_day_boundary(due_date)`, `kind_rank=0`, and
       `item_id=PlanOccurrence.id`. Transaction and planned keys merge under one
       descending comparator and one opaque version-1 continuation cursor.
       Same-date/timestamp/kind ties are deterministic; fixed-dataset paging has
       no duplicates or omissions across the union.
-- [ ] Extend the common detail route with authenticated
+- [x] Extend the common detail route with authenticated
       `GET /api/v1/transaction-feed/planned/{occurrence_id}`. It returns the
       closed planned projection plus exact ordered
       `available_actions=["edit_rule","skip","link_transaction"]` for an
@@ -63,25 +63,25 @@ data route with Plan-specific actions.
       never redirects to a Plan route. Completed/skipped, foreign, hidden, or
       unknown occurrences return generic `404 Feed item not found` without
       revealing owner-private Plan state.
-- [ ] The action names bind to existing accepted commands: Edit rule uses the
+- [x] The action names bind to existing accepted commands: Edit rule uses the
       occurrence's `plan_rule_id`; Skip affects only this occurrence; Link
       transaction attaches an eligible posted root. Executing those existing
       commands changes subsequent feed/detail results through domain state; the
       feed adds no duplicate write command and performs no action itself.
-- [ ] Shared-account editor/contributor/viewer and unrelated users never see or
+- [x] Shared-account editor/contributor/viewer and unrelated users never see or
       infer another workspace's Plan projections through `filter=all`,
       `filter=planned`, cursor contents, counts, ordering gaps, detail IDs, or
       errors. They continue to see persisted shared-leg transactions according
       to T-014F without gaining Plan access.
-- [ ] OpenAPI freezes the expanded filter enum, discriminated page union,
+- [x] OpenAPI freezes the expanded filter enum, discriminated page union,
       exact planned list/detail property/required/type/format/enum/bound sets,
       `additionalProperties: false`, nested `PlanOccurrenceOut` reference,
       ordered action enum, common cursor shape, and documented `404`/`422`.
-- [ ] Invalid/duplicate/unknown query parameters and malformed or unsupported
+- [x] Invalid/duplicate/unknown query parameters and malformed or unsupported
       cursors are rejected before Plan materialization. Those `422` responses
       leave rules, occurrences, transactions, legs, periods, balances,
       captured rates, and Undo rows unchanged.
-- [ ] Correction/Delete of persisted transactions and Skip/Link/rule archival
+- [x] Correction/Delete of persisted transactions and Skip/Link/rule archival
       of Plan occurrences produce the exact next fresh feed order/content.
       Deleting a transaction linked to a Plan occurrence keeps the deleted
       transaction history row and reopens the occurrence as `planned` or
@@ -90,10 +90,10 @@ data route with Plan-specific actions.
       Pagination tests cover transaction/planned interleaving at equal dates,
       page boundaries, and owner-private filtering without creating ledger
       movements.
-- [ ] Existing `/workspaces/{workspace_id}/plan-occurrences`, rule endpoints,
+- [x] Existing `/workspaces/{workspace_id}/plan-occurrences`, rule endpoints,
       Skip/Link commands, `/transactions`, T-014F transaction-only projections,
       richer desktop filters, balances, periods, and Undo remain compatible.
-- [ ] Focused union/detail/privacy/no-ledger/pagination/OpenAPI tests, existing
+- [x] Focused union/detail/privacy/no-ledger/pagination/OpenAPI tests, existing
       Plan/transaction tests, full pytest, Node syntax, and diff/status gates
       pass on isolated fixtures.
 
@@ -253,6 +253,35 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
 - Resolution: none required.
 - Verdict: approved with no open P0–P3.
 
+### Implementation review
+
+- Reviewer task name/vendor: `/root/t014p_impl_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed HEAD: `059ace7f240d236af033d34894eb9e28c25ffbbf`.
+- Reviewed manifest: modified `app/plan.py`, `app/schemas.py`,
+  `app/transaction_feed.py`, `tests/test_transaction_feed_v21.py`; untracked
+  `tests/test_planned_transaction_feed_v21.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014P implementation review verdict: **APPROVED**.
+  >
+  > P0: none. P1: none. P2: none. P3: none.
+  >
+  > Evidence:
+  >
+  > - The union uses the required descending total key `(financial_date, sort_at, kind_rank, item_id)`, with planned rows fixed at workspace-day boundary/rank 0. Both source queries apply compatible continuation predicates and fetch `limit + 1` before the bounded merge.
+  > - Query-shape and versioned-cursor validation occur before Plan materialization or domain writes.
+  > - One captured clock supplies the workspace date to materialization and mobile-status projection.
+  > - Only active-rule `planned|overdue` occurrences are exposed; skip, link, archive, and linked-transaction Delete transitions produce the required fresh results.
+  > - Planned data is restricted to the authenticated user’s primary workspace. Shared users retain accepted T-014F shared-leg transaction visibility without Plan exposure; hidden detail returns the generic 404.
+  > - Planned amounts and nested rule/occurrence data reuse Decimal-backed `PlanOccurrenceOut`/`PlanRuleOut`; no fake ledger movement or balance path was added.
+  > - The closed discriminated schemas and fixed three-action tuple produce the required OpenAPI union, exact outer property sets, bounds, enums, and ordered actions.
+  > - Accepted T-014F behavior remains covered by its complete focused test file.
+  >
+  > Reviewer rerun: focused union/feed `8 passed in 3.99s`; `git diff --check` passed with line-ending conversion warnings only. Supplied adjacent gate: `30 passed in 10.50s`. No files were edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
 ## Session log
 
 - 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
@@ -279,3 +308,17 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   `b5984f59123904e1b7899e5b632b3b3b32415548`, verified the exact task branch
   was absent, and atomically claimed `task/T-014P-planned-feed-projection`.
   Recorded the immutable base and implementer; implementation is next.
+- 2026-08-11 Codex: implemented owner-private planned projections, bounded
+  one-clock materialization reuse, common-cursor union pagination, closed
+  planned detail/actions, and exact transition/privacy/OpenAPI coverage.
+  Focused union/feed `8 passed`; adjacent Plan/ledger/period `30 passed`; fresh
+  implementation review approved with no open P0–P3. Full final gates remain.
+- 2026-08-12 Claude Code: ran the remaining final gates on the unchanged
+  implementation. Full pytest `337 passed in 130.58s` (`333` T-014F baseline
+  plus the four new T-014P tests) and `git diff --check` passed. The suite needs
+  a writable `--basetemp`; the default Windows temp path raised
+  `PermissionError [WinError 5]` on `tmp_path` for 61 filesystem-backed tests
+  before the run was repeated correctly. `node --check app/static/app.js` could
+  not be executed because Node is not installed on this machine; T-014P changes
+  no JavaScript, so `app/static/app.js` is byte-identical to the commit where
+  that gate last passed. No database-backed test opened `finapp.db`.

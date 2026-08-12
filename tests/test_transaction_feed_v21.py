@@ -59,6 +59,7 @@ async def test_feed_openapi_and_strict_query_contract_are_frozen(client):
         "income",
         "expense",
         "transfer",
+        "planned",
     }
     assert parameters["limit"]["schema"]["minimum"] == 1
     assert parameters["limit"]["schema"]["maximum"] == 100
@@ -77,7 +78,12 @@ async def test_feed_openapi_and_strict_query_contract_are_frozen(client):
         "string",
         "null",
     }
-    item_ref = page["properties"]["items"]["items"]["$ref"]
+    item_union = page["properties"]["items"]["items"]
+    item_ref = next(
+        branch["$ref"]
+        for branch in item_union["oneOf"]
+        if branch["$ref"].endswith("/TransactionFeedTransactionOut")
+    )
     item = openapi["components"]["schemas"][item_ref.rsplit("/", 1)[1]]
     assert item["additionalProperties"] is False
     assert set(item["required"]) == set(item["properties"])
@@ -135,7 +141,7 @@ async def test_feed_openapi_and_strict_query_contract_are_frozen(client):
     invalid_urls = [
         f"{FEED}?unknown=1",
         f"{FEED}?filter=all&filter=income",
-        f"{FEED}?filter=planned",
+        f"{FEED}?filter=unknown",
         f"{FEED}?limit=0",
         f"{FEED}?limit=101",
         f"{FEED}?limit=nope",
@@ -147,6 +153,9 @@ async def test_feed_openapi_and_strict_query_contract_are_frozen(client):
     for url in invalid_urls:
         response = await client.get(url)
         assert response.status_code == 422, (url, response.text)
+    planned = await client.get(f"{FEED}?filter=planned")
+    assert planned.status_code == 200
+    assert planned.json() == {"items": [], "next_cursor": None}
     assert await domain_counts(client) == before
 
 

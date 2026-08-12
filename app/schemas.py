@@ -485,13 +485,6 @@ class TransactionFeedTransactionOut(BaseModel):
     transaction: TransactionOut
 
 
-class TransactionFeedPageOut(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    items: list[TransactionFeedTransactionOut]
-    next_cursor: str | None
-
-
 SharedRole = Literal["editor", "contributor", "viewer"]
 
 
@@ -594,6 +587,38 @@ class PlanOccurrenceOut(BaseModel):
     matched_at: datetime | None
     created_at: datetime
     rule: PlanRuleOut
+
+
+class TransactionFeedPlannedOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["planned"]
+    key: str = Field(pattern=r"^planned:[1-9][0-9]*$")
+    financial_date: date
+    mobile_type: Literal["planned"]
+    mobile_status: Literal["planned", "required", "overdue"]
+    occurrence: PlanOccurrenceOut
+
+
+class TransactionFeedPlannedDetailOut(TransactionFeedPlannedOut):
+    available_actions: tuple[
+        Literal["edit_rule"],
+        Literal["skip"],
+        Literal["link_transaction"],
+    ]
+
+
+TransactionFeedItemOut = Annotated[
+    TransactionFeedTransactionOut | TransactionFeedPlannedOut,
+    Field(discriminator="kind"),
+]
+
+
+class TransactionFeedPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TransactionFeedItemOut]
+    next_cursor: str | None
 
 
 class PlanLinkTransactionIn(BaseModel):

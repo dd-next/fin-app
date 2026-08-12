@@ -15,9 +15,13 @@ from app.access import visible_account_ids
 from app.auth import primary_workspace, require_user
 from app.db import get_session
 from app.ledger import transaction_out
-from app.models import Transaction, TransactionLeg, User
+from app.models import PlanOccurrence, PlanRule, Transaction, TransactionLeg, User, utcnow
+from app.periods import workspace_day_at, workspace_day_boundary
+from app.plan import materialize_workspace, plan_occurrence_out
 from app.schemas import (
     TransactionFeedPageOut,
+    TransactionFeedPlannedDetailOut,
+    TransactionFeedPlannedOut,
     TransactionFeedTransactionOut,
 )
 from app.transactions import _visible_transaction
@@ -25,7 +29,7 @@ from app.transactions import _visible_transaction
 
 router = APIRouter(prefix="/transaction-feed", tags=["transactions"])
 
-FeedFilter = Literal["all", "income", "expense", "transfer"]
+FeedFilter = Literal["all", "income", "expense", "transfer", "planned"]
 ALLOWED_QUERY_PARAMETERS = {"filter", "cursor", "limit"}
 CURSOR_VERSION = 1
 
@@ -112,6 +116,19 @@ def transaction_cursor(transaction: Transaction) -> FeedCursor:
     )
 
 
+def planned_cursor(
+    occurrence: PlanOccurrence,
+    *,
+    boundary: datetime,
+) -> FeedCursor:
+    return FeedCursor(
+        financial_date=occurrence.due_date,
+        sort_at=boundary,
+        kind_rank=0,
+        item_id=occurrence.id,
+    )
+
+
 def transaction_continuation(cursor: FeedCursor):
     return or_(
         Transaction.local_date < cursor.financial_date,
@@ -129,6 +146,27 @@ def transaction_continuation(cursor: FeedCursor):
             Transaction.occurred_at == cursor.sort_at,
             cursor.kind_rank == 1,
             Transaction.id < cursor.item_id,
+        ),
+    )
+
+
+def planned_continuation(cursor: FeedCursor, *, boundary: datetime):
+    return or_(
+        PlanOccurrence.due_date < cursor.financial_date,
+        and_(
+            PlanOccurrence.due_date == cursor.financial_date,
+            boundary < cursor.sort_at,
+        ),
+        and_(
+            PlanOccurrence.due_date == cursor.financial_date,
+            boundary == cursor.sort_at,
+            0 < cursor.kind_rank,
+        ),
+        and_(
+            PlanOccurrence.due_date == cursor.financial_date,
+            boundary == cursor.sort_at,
+            cursor.kind_rank == 0,
+            PlanOccurrence.id < cursor.item_id,
         ),
     )
 
@@ -157,6 +195,30 @@ async def transaction_projection(
     )
 
 
+async def planned_projection(
+    session: AsyncSession,
+    occurrence: PlanOccurrence,
+    rule: PlanRule,
+    *,
+    today: date,
+) -> TransactionFeedPlannedOut:
+    status = (
+        "overdue"
+        if occurrence.status == "overdue" or occurrence.due_date < today
+        else "required"
+        if rule.is_required
+        else "planned"
+    )
+    return TransactionFeedPlannedOut(
+        kind="planned",
+        key=f"planned:{occurrence.id}",
+        financial_date=occurrence.due_date,
+        mobile_type="planned",
+        mobile_status=status,
+        occurrence=await plan_occurrence_out(session, occurrence),
+    )
+
+
 @router.get(
     "",
     response_model=TransactionFeedPageOut,
@@ -173,54 +235,130 @@ async def list_transaction_feed(
     validate_query_shape(request)
     decoded_cursor = decode_cursor(cursor) if cursor is not None else None
     workspace = await primary_workspace(session, user.id)
+    clock = utcnow()
+    today = workspace_day_at(workspace, clock)
+    await materialize_workspace(session, workspace, today=today)
     visible_ids = await visible_account_ids(session, user.id)
-    statement = (
-        select(Transaction)
-        .outerjoin(TransactionLeg)
-        .where(
-            or_(
-                Transaction.workspace_id == workspace.id,
-                TransactionLeg.account_id.in_(visible_ids),
-                and_(
-                    Transaction.created_by_user_id == user.id,
-                    Transaction.status == "unassigned",
-                    TransactionLeg.account_id.is_(None),
-                ),
+    transactions: list[Transaction] = []
+    if filter != "planned":
+        statement = (
+            select(Transaction)
+            .outerjoin(TransactionLeg)
+            .where(
+                or_(
+                    Transaction.workspace_id == workspace.id,
+                    TransactionLeg.account_id.in_(visible_ids),
+                    and_(
+                        Transaction.created_by_user_id == user.id,
+                        Transaction.status == "unassigned",
+                        TransactionLeg.account_id.is_(None),
+                    ),
+                )
             )
         )
-    )
-    if filter != "all":
-        statement = statement.where(Transaction.type == filter)
-    if decoded_cursor is not None:
-        statement = statement.where(transaction_continuation(decoded_cursor))
-    transactions = list(
-        (
-            await session.execute(
-                statement.distinct()
-                .order_by(
-                    Transaction.local_date.desc(),
-                    Transaction.occurred_at.desc(),
-                    Transaction.id.desc(),
+        if filter != "all":
+            statement = statement.where(Transaction.type == filter)
+        if decoded_cursor is not None:
+            statement = statement.where(transaction_continuation(decoded_cursor))
+        transactions = list(
+            (
+                await session.execute(
+                    statement.distinct()
+                    .order_by(
+                        Transaction.local_date.desc(),
+                        Transaction.occurred_at.desc(),
+                        Transaction.id.desc(),
+                    )
+                    .limit(limit + 1)
                 )
-                .limit(limit + 1)
+            ).scalars()
+        )
+
+    planned_rows: list[tuple[PlanOccurrence, PlanRule, datetime]] = []
+    if filter in {"all", "planned"}:
+        planned_statement = (
+            select(PlanOccurrence, PlanRule)
+            .join(PlanRule, PlanRule.id == PlanOccurrence.plan_rule_id)
+            .where(
+                PlanRule.workspace_id == workspace.id,
+                PlanRule.is_active.is_(True),
+                PlanOccurrence.status.in_({"planned", "overdue"}),
             )
-        ).scalars()
+        )
+        if decoded_cursor is not None:
+            cursor_boundary = workspace_day_boundary(
+                workspace, decoded_cursor.financial_date
+            )
+            planned_statement = planned_statement.where(
+                planned_continuation(decoded_cursor, boundary=cursor_boundary)
+            )
+        raw_planned = list(
+            (
+                await session.execute(
+                    planned_statement.order_by(
+                        PlanOccurrence.due_date.desc(),
+                        PlanOccurrence.id.desc(),
+                    ).limit(limit + 1)
+                )
+            ).all()
+        )
+        planned_rows = [
+            (
+                occurrence,
+                rule,
+                workspace_day_boundary(workspace, occurrence.due_date),
+            )
+            for occurrence, rule in raw_planned
+        ]
+
+    merged = [
+        (transaction_cursor(item), "transaction", item, None)
+        for item in transactions
+    ] + [
+        (
+            planned_cursor(occurrence, boundary=boundary),
+            "planned",
+            occurrence,
+            rule,
+        )
+        for occurrence, rule, boundary in planned_rows
+    ]
+    merged.sort(
+        key=lambda row: (
+            row[0].financial_date,
+            row[0].sort_at,
+            row[0].kind_rank,
+            row[0].item_id,
+        ),
+        reverse=True,
     )
-    has_more = len(transactions) > limit
-    page = transactions[:limit]
-    return TransactionFeedPageOut(
-        items=[
-            await transaction_projection(
-                session,
-                item,
-                redacted_account_ids=(
-                    None if item.workspace_id == workspace.id else visible_ids
-                ),
+    has_more = len(merged) > limit
+    page = merged[:limit]
+    items = []
+    for _, kind, item, rule in page:
+        if kind == "transaction":
+            items.append(
+                await transaction_projection(
+                    session,
+                    item,
+                    redacted_account_ids=(
+                        None if item.workspace_id == workspace.id else visible_ids
+                    ),
+                )
             )
-            for item in page
-        ],
+        else:
+            items.append(
+                await planned_projection(
+                    session,
+                    item,
+                    rule,
+                    today=today,
+                )
+            )
+    return TransactionFeedPageOut(
+        items=items,
         next_cursor=(
-            encode_cursor(transaction_cursor(page[-1]))
+            encode_cursor(page[-1][0])
             if has_more and page
             else None
         ),
@@ -252,4 +390,42 @@ async def get_transaction_feed_item(
         session,
         transaction,
         redacted_account_ids=visible_ids,
+    )
+
+
+@router.get(
+    "/planned/{occurrence_id}",
+    response_model=TransactionFeedPlannedDetailOut,
+    responses={
+        404: {"description": "Feed item not found"},
+        422: {"description": "Invalid occurrence ID"},
+    },
+)
+async def get_planned_feed_item(
+    occurrence_id: Annotated[int, Path(gt=0)],
+    user: User = Depends(require_user),
+    session: AsyncSession = Depends(get_session),
+):
+    workspace = await primary_workspace(session, user.id)
+    clock = utcnow()
+    today = workspace_day_at(workspace, clock)
+    await materialize_workspace(session, workspace, today=today)
+    row = (
+        await session.execute(
+            select(PlanOccurrence, PlanRule)
+            .join(PlanRule, PlanRule.id == PlanOccurrence.plan_rule_id)
+            .where(
+                PlanOccurrence.id == occurrence_id,
+                PlanRule.workspace_id == workspace.id,
+                PlanRule.is_active.is_(True),
+                PlanOccurrence.status.in_({"planned", "overdue"}),
+            )
+        )
+    ).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    projected = await planned_projection(session, row[0], row[1], today=today)
+    return TransactionFeedPlannedDetailOut(
+        **projected.model_dump(),
+        available_actions=("edit_rule", "skip", "link_transaction"),
     )
