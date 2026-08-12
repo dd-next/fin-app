@@ -1,7 +1,7 @@
 ---
 id: T-024A
 title: Build reusable mobile visual primitives
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md; spec/02-components.md
 blocked-by: [T-023]
@@ -74,3 +74,6 @@ protocol.
 - 2026-08-12 Codex GPT-5: task split from the former L-sized T-024; not claimed.
 - 2026-08-12 Codex GPT-5: independent batch readiness verdict `ready`; remains
   `backlog` until T-023 is accepted.
+- 2026-08-12 repository owner authorisation executed by Codex GPT-5: promoted
+  readiness-ready T-024A from `backlog` to `todo` after local acceptance of
+  dependency T-023; implementation is not yet claimed.

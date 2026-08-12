@@ -1,7 +1,7 @@
 ---
 id: T-023
 title: Import approved tokens and responsive mobile shell
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md; spec/02-components.md Tab bar; spec/05-interactions.md
 blocked-by: [T-022]
@@ -239,3 +239,30 @@ Append the bounded independent implementation review following
   regression coverage, closed both review P2 findings, and passed targeted
   static/browser gates. Task is ready for locally authorised acceptance; no
   open questions.
+- 2026-08-12 repository owner authorisation executed by Codex GPT-5: locally
+  fast-forward accepted verified task commits `a3916e4..f8fa0ef` into
+  `finapp-v2-develop`; all P0–P2 were closed before acceptance. No push,
+  deploy, task archival, or Phase 15 commit was performed.
+
+### Local acceptance lifecycle review
+
+- Reviewer: `/root/t023_accept_review`, Codex GPT-5 same-vendor fallback;
+  cross-vendor reviewer was unavailable.
+- Reviewed scope: `finapp-v2-develop` at `f8fa0ef` plus the complete lifecycle
+  manifest in `docs/BACKLOG.md`, `docs/PROGRESS.md`, this task, and T-024A.
+- Verbatim result:
+
+  > P0: none. P1: none. P2: none. P3: none.
+  >
+  > Explicit result: **no findings**.
+  >
+  > Lifecycle state is consistent: T-023 is `done` in the task, backlog, and
+  > progress summary; T-024A is readiness-reviewed `ready`, dependency T-023
+  > is accepted, and it is `todo` in the task, backlog, and progress summary.
+  > `task/T-024A-mobile-primitives` does not yet exist, so the next
+  > atomic-claim wording is accurate.
+  >
+  > The acceptance record accurately describes delegated owner authorization
+  > executed locally by Codex and does not claim a Phase 15 acceptance or
+  > permanent-data readiness. No task archival, push, deploy, or final Phase
+  > 15 commit is recorded or present. `git diff --check` passes.
