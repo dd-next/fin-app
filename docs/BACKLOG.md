@@ -47,7 +47,7 @@ Phase 14 backend gap remains open.
 | [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | done | M | audit: feed order/mapping | T-001 |
 | [T-014P](tasks/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | done | M | audit: planned rows | T-014F |
 | [T-019](tasks/T-019-mobile-plan-contract.md) | Mobile Plan-rule create/edit/detail contract | done | M | audit: Plan | T-001 |
-| T-021 | Lean Phase 14 backend acceptance | backlog | M | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-019 |
+| [T-021](tasks/T-021-phase14-acceptance.md) | Lean Phase 14 backend acceptance | done | M | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-019 |
 | T-022 | Merge accepted backend contracts into `FinnApp-v2.md` | backlog | S | all Phase 14 | T-021 |
 
 Every `L` row must be split into reviewed `S`/`M` task files before it is

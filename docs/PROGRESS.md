@@ -18,8 +18,8 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **337 passed** (2026-08-12, T-014P final implementation gate) |
-| Active work | T-002–T-019 accepted; T-021 lean acceptance is next |
+| Last full suite | **341 passed** (2026-08-12, T-021 Phase 14 gate) |
+| Active work | T-002–T-021 accepted; T-022 specification merge is next |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-019 accepted. T-021 is next; T-015/T-016/T-017 are retained
+Status: **T-002–T-021 accepted. T-022 is next; T-015/T-016/T-017 are retained
 in the post-Phase-15 backlog under ADR-0010.**
 
 The current database is disposable pre-production data. ADR-0010 limits the
@@ -136,6 +136,12 @@ block Phases 14 or 15. T-021 is a lean retained-contract acceptance task.
   transfer-coverage finding was closed; final focused Plan/privacy tests
   `17 passed` and limited re-review found no open P0–P3. Detailed evidence:
   [`tasks/T-019-mobile-plan-contract.md`](tasks/T-019-mobile-plan-contract.md).
+- T-021 passed the lean retained-contract smoke (`7 passed`) and the single
+  final Phase 14 suite (`341 passed`). Node syntax, diff check, one Alembic
+  head, fresh `0001 → 0004`, scratch `alembic check`, application startup,
+  `/health`, and SPA root all passed. The docs-only acceptance manifest was
+  independently approved with no P0–P3. Detailed evidence:
+  [`tasks/T-021-phase14-acceptance.md`](tasks/T-021-phase14-acceptance.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
