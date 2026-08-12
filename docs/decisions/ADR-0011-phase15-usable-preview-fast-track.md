@@ -34,7 +34,7 @@ Phase 15 follows a local **usable-preview fast-track**:
   desktop matrix run once in the T-030/T-031 close path;
 - each implemented screen gets a scratch-database 390×844 browser smoke before
   task acceptance so visual defects are found before the final matrix;
-- T-024, T-027, and T-030 are split before implementation. After shared mobile
+- T-024, T-025, T-027, and T-030 are split before implementation. After shared mobile
   primitives are accepted, independent screen tasks may use separate Git
   worktrees, but integration and owner acceptance remain serialized.
 
@@ -46,7 +46,7 @@ mobile-only styling.
 
 ## Usable-preview boundary
 
-A local preview may be used for feedback after T-025 through T-028 are
+A local preview may be used for feedback after T-025A/T-025B through T-028 are
 integrated and their P0/P1 findings are closed. It is not a Phase 15 release:
 T-029 interaction/accessibility integration, T-030 acceptance/regression, and
 T-031 documentation/close still remain.
@@ -54,9 +54,9 @@ T-031 documentation/close still remain.
 ## Consequences
 
 - T-023 is the only initial `todo` task.
-- T-024 becomes T-024A/T-024B, T-027 becomes T-027A/T-027B, and T-030 becomes
-  T-030A/T-030B.
-- T-025, T-026, T-027A, and T-028 may be prepared in parallel worktrees only
+- T-024 becomes T-024A/T-024B, T-025 becomes T-025A/T-025B, T-027 becomes
+  T-027A/T-027B, and T-030 becomes T-030A/T-030B.
+- T-025A, T-026, T-027A, and T-028 may be prepared in parallel worktrees only
   after T-024B is accepted. Because the SPA is intentionally small and uses one
   stylesheet, merge conflicts are resolved and reverified on the feature task
   branch before serialized acceptance into `finapp-v2-develop`.

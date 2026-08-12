@@ -68,12 +68,13 @@ rows remain blocked until their accepted dependencies land.
 | [T-023](tasks/T-023-mobile-shell.md) | Import approved tokens and responsive mobile shell | backlog | M | design §01 | T-022 |
 | [T-024A](tasks/T-024A-mobile-primitives.md) | Build reusable mobile visual primitives | backlog | M | design §01–§02 | T-023 |
 | [T-024B](tasks/T-024B-mobile-overlays.md) | Establish sheets, pickers, and confirmations | backlog | M | design §02, §04–§05 | T-024A |
-| [T-025](tasks/T-025-mobile-accounts-profile.md) | Accounts, Profile, manual rates, logout, and sharing | backlog | M | design §03.1, §04 | T-024B |
+| [T-025A](tasks/T-025A-mobile-accounts.md) | Accounts and account lifecycle | backlog | M | design §03.1, §04 | T-024B |
+| [T-025B](tasks/T-025B-mobile-profile-access.md) | Profile, categories, rates, sharing, and logout | backlog | M | design §04–§06 | T-025A |
 | [T-026](tasks/T-026-mobile-transactions.md) | Transactions feed, filters, details, correction, and swipe | backlog | M | design §03.2, §05 | T-024B |
 | [T-027A](tasks/T-027A-mobile-operations.md) | Operations action surface and exact Save flows | backlog | M | design §03.3, §05 | T-024B |
 | [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | backlog | M | design §03.3, §04–§05 | T-027A |
 | [T-028](tasks/T-028-mobile-plan-analytics.md) | Plan rule/occurrence flows and Analytics placeholder | backlog | M | spec §8, design §03.4–§03.5 | T-019, T-024B |
-| [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | backlog | M | design §05, §08 | T-025, T-026, T-027B, T-028 |
+| [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | backlog | M | design §05, §08 | T-025B, T-026, T-027B, T-028 |
 | [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the 390×844 mobile acceptance matrix | backlog | M | design §01–§08 | T-029 |
 | [T-030B](tasks/T-030B-desktop-regression.md) | Preserve desktop and run the Phase 15 regression gate | backlog | M | build plan Phase 15 | T-030A |
 | [T-031](tasks/T-031-phase15-close.md) | Assemble Phase 15 closure evidence | backlog | S | all Phase 15 | T-030B |

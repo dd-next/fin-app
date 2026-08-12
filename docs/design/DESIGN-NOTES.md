@@ -112,6 +112,12 @@ changing financial semantics:
   250px keyboard drawing is the reference visual-viewport acceptance state,
   not a custom keyboard to implement. Operations must remain usable when the
   real keyboard occupies that budget.
+- The accepted persistent Undo contract remains visible on mobile even though
+  the exported screen omitted it. When a server candidate exists, a compact
+  44×44 Undo affordance occupies the account card's top row without changing
+  either 96px card height; account switching remains a separate semantic
+  control. Undo uses branded confirmation, then disappears without falling
+  back to an older candidate, including after reload.
 - Reference browser checks inject 54px top and 34px bottom safe-area test
   variables because desktop headless browsers report zero for `env(safe-area-
   inset-*)`; production CSS continues to use the real environment insets.
@@ -133,4 +139,4 @@ One line per landed design change: date, what changed, why.
   backend gap audit; no design asset changed.
 - 2026-08-12 — recorded the Phase 15 fast-track resolutions for Plan, unified
   versus advanced Transactions filters, history navigation, shared periods,
-  software-keyboard acceptance, safe-area measurement, and archive copy.
+  software-keyboard/Undo acceptance, safe-area measurement, and archive copy.

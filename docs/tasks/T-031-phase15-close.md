@@ -20,8 +20,9 @@ archiving, pushing, deploying, or declaring permanent use on the agent's behalf.
 
 ## Acceptance
 
-- [ ] T-023 through T-030B are accepted into local `finapp-v2-develop`; their
-      task logs contain exact implementation review and targeted/browser gates.
+- [ ] T-023, every A/B split through T-030B, and all intervening numbered tasks
+      are accepted into local `finapp-v2-develop`; their task logs contain exact
+      implementation review and targeted/browser gates.
 - [ ] All P0–P2 are closed; each deferred P3 has an explicit disposition.
 - [ ] `docs/PROGRESS.md` reports the actual Phase 15 outcome in 2–4 lines, exact
       final gate results, and links to task evidence/ADRs; no stale count is

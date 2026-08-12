@@ -28,7 +28,7 @@ the one task file you are working on. Nothing else by default.
 ## Phase 15 handoff — mobile redesign
 
 Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
-files, including the required T-024/T-027/T-030 splits. ADR-0011 defines a
+files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
 usable local preview after T-029 without calling the phase accepted. T-023 is
 the exact first implementation task and remains `backlog` until the batch
 readiness review is recorded.

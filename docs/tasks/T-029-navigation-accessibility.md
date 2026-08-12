@@ -4,7 +4,7 @@ title: Integrate navigation, keyboard, motion, and accessibility
 status: backlog
 size: M
 spec: design/Finnapp mobile specification/spec/05-interactions.md; spec/08-acceptance.md
-blocked-by: [T-025, T-026, T-027B, T-028]
+blocked-by: [T-025B, T-026, T-027B, T-028]
 branch: task/T-029-navigation-accessibility
 base-commit:
 implementer:

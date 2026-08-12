@@ -41,7 +41,7 @@ authorization boundaries.
       inaccessible component gallery is added.
 - [ ] Existing desktop dialogs remain functional until feature owners migrate
       them; concrete feature catalogues and final removal of native controls
-      belong to T-025–T-029.
+      belong to T-025A–T-029.
 - [ ] No API, ledger mutation, financial formatter, backend, schema, or
       migration change is introduced.
 - [ ] `DESIGN-NOTES.md` records the overlay contract.

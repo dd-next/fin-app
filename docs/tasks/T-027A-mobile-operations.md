@@ -31,16 +31,29 @@ financial commands and Saved handling, leaving period lifecycle to T-027B.
 - [ ] Transfer accepts one source amount and destination, executes a Phase 14
       quote, never requests target amount, and performs no client float/rate
       calculation.
-- [ ] Amount/Category/Date/Destination/Note use T-024 controls. Invalid/zero
+- [ ] Amount/Category/Date/Destination/Note use T-024A/T-024B controls. Invalid/zero
       amount blocks Save; exceeding Available today does not.
 - [ ] Submit and Scan copy match spec exactly; Scan performs no OCR.
 - [ ] Successful saves show exact branded dynamic Saved copy. Done clears
       amount/note/destination, retains mode/account, and refreshes account,
       allowance and Undo state.
+- [ ] When the server returns an Undo candidate, a compact 44×44 mobile Undo
+      affordance appears in the account card top row without changing either
+      96px card. It uses branded confirmation and the accepted server command,
+      soft-voids the candidate, refreshes affected values, disappears, survives
+      reload, and never falls back to an older transaction after consumption.
+- [ ] Account switching remains a separate semantic control from Undo. There is
+      never more than one visible candidate for the selected account.
+- [ ] Spend/Add funds controls and targets reflect existing account roles;
+      denied mutations remain unavailable or show the server-derived error.
+      Quote-based mobile Transfer is owner-only and neither offers inaccessible
+      targets nor calls quote/execute for a non-owner. Viewer, contributor,
+      editor, and owner states do not leak hidden accounts or owner-private
+      rate/quote data.
 - [ ] Operations works without a period. T-027A supplies a stable 96px
       period-card host/loading/error interface but no lifecycle forms.
 - [ ] Desktop explicit exchange, optional fee, persistent Undo and richer forms
-      remain functional even when omitted from mobile.
+      remain functional.
 - [ ] No period mutation, backend/schema, fake rate, OCR, history list, or
       desktop redesign is added.
 
@@ -64,7 +77,8 @@ git diff --check
 ```
 
 Use `verify` for all modes, same/cross-asset transfer, invalid/zero/overspend,
-Saved reset, no-period, Scan and persistence at 390×844; preserve desktop at
+Saved reset, no-period, Scan, persistent Undo before/after reload, and
+viewer/contributor/editor/owner role states at 390×844; preserve desktop at
 1280×900.
 
 ## Review

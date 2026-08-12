@@ -25,6 +25,10 @@ database.
 - [ ] Empty, populated and long-list Accounts/Transactions/Plan states pass.
 - [ ] All Operations modes, active/absent period, invalid/above-Available,
       account switch, real software keyboard Transfer, and Saved pass.
+- [ ] Mobile persistent Undo is verified with candidate present, branded
+      confirmation, soft-void refresh, disappearance, reload persistence, and
+      no fallback to an older transaction; shared roles and owner-only quote
+      presentation are included.
 - [ ] Every concrete sheet, nested picker return, swipe state and branded
       destructive/success confirmation passes.
 - [ ] Measurements prove 700px content, 96px cards, target/type minima,
