@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, T-021 Phase 14 gate) |
-| Active work | T-002–T-021 accepted; T-022 specification merge is next |
+| Active work | T-002–T-022 accepted; Phase 14 close/handoff is next |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,7 +38,7 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-021 accepted. T-022 is next; T-015/T-016/T-017 are retained
+Status: **T-002–T-022 accepted. Phase close is next; T-015/T-016/T-017 are retained
 in the post-Phase-15 backlog under ADR-0010.**
 
 The current database is disposable pre-production data. ADR-0010 limits the
@@ -142,6 +142,12 @@ block Phases 14 or 15. T-021 is a lean retained-contract acceptance task.
   `/health`, and SPA root all passed. The docs-only acceptance manifest was
   independently approved with no P0–P3. Detailed evidence:
   [`tasks/T-021-phase14-acceptance.md`](tasks/T-021-phase14-acceptance.md).
+- T-022 makes `specs/FinnApp-v2.md` the consolidated Phase 15 authority for
+  accepted periods, canonical rates, quote/execute, financial-date feed, and
+  mobile Plan contracts, plus the ADR-0010 migration policy and deferred
+  T-015/T-016/T-017 controls. Two P1 omissions in the first authority pass were
+  corrected; limited re-review found no open P0–P3. Detailed evidence:
+  [`tasks/T-022-phase14-spec-merge.md`](tasks/T-022-phase14-spec-merge.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and

@@ -1,12 +1,10 @@
 # FinApp v2.1 — account-period backend and budget logic requirements
 
-Status: **proposed change specification; not yet implemented**.
+Status: **accepted and merged into `FinnApp-v2.md` by Phase 14**.
 
-This document records the agreed backend and domain-logic changes for account
-periods. It is intended to become the implementation source for the next
-period revision after approval. Until it is merged into
-[`FinnApp-v2.md`](FinnApp-v2.md), that file remains the active release
-authority.
+This document retains the detailed account-period requirements and acceptance
+fixtures. [`FinnApp-v2.md`](FinnApp-v2.md) is now the active consolidated
+release authority; a conflict is resolved in favor of that file.
 
 Frontend composition, responsive layout, visual states, and the Claude
 Design/Figma handoff are intentionally specified separately. This document
