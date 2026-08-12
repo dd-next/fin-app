@@ -1,7 +1,7 @@
 ---
 id: T-014P
 title: Project open Plan occurrences through Transaction details
-status: review
+status: done
 size: M
 spec: design/MOBILE-BACKEND-GAP-AUDIT.md planned ledger rows
 blocked-by: [T-014F]
@@ -322,3 +322,8 @@ read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
   not be executed because Node is not installed on this machine; T-014P changes
   no JavaScript, so `app/static/app.js` is byte-identical to the commit where
   that gate last passed. No database-backed test opened `finapp.db`.
+- 2026-08-12 repository owner: accepted independently approved commit
+  `6cf041d`; T-014P is `done` and `finapp-v2-develop` fast-forwards onto it.
+  Every Phase 14 task branch through T-014P is merged and deleted. T-015
+  remains `backlog` and must be split before it is claimed, so no row is
+  promoted by this acceptance.

@@ -15,11 +15,11 @@ the one task file you are working on. Nothing else by default.
 
 | | |
 |---|---|
-| Branch | `task/T-014P-planned-feed-projection` |
+| Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **333 passed** (2026-08-11, T-014F final implementation gate) |
-| Active work | T-002–T-014F accepted; T-014P implementation is independently approved and in final gates |
+| Last full suite | **337 passed** (2026-08-12, T-014P final implementation gate) |
+| Active work | T-002–T-014P accepted; T-015 must be split before it is claimed |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,8 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-014F accepted; T-014P is independently approved in `review`
-and running final gates.**
+Status: **T-002–T-014P accepted. The next row, T-015, is `L` and must be split
+into reviewed `S`/`M` task files before it is claimed.**
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -112,8 +112,18 @@ and running final gates.**
   coverage findings were closed in the existing four focused tests; fresh
   re-review approved with no open P0–P3. Focused/adjacent `33 passed`, full
   pytest `333 passed`, Node syntax, and diff checks passed. Commit `20c37c9`
-  was accepted locally; T-014P is now claimed and in progress. Detailed evidence:
+  was accepted locally. Detailed evidence:
   [`tasks/T-014F-financial-date-transaction-feed.md`](tasks/T-014F-financial-date-transaction-feed.md).
+- T-014P adds owner-private open Plan occurrences to that feed as explicit
+  non-ledger projections: exact `filter=planned`, a `filter=all` union under one
+  descending total cursor key, and the closed planned detail route with ordered
+  `edit_rule`/`skip`/`link_transaction` actions. Materialization reuses the
+  accepted idempotent horizon logic under one captured clock and only after
+  complete query/cursor validation, so planned rows create no ledger movement
+  and malformed requests write nothing. Implementation review approved with no
+  open P0–P3; full pytest `337 passed` and diff checks passed. Commit `6cf041d`
+  was accepted locally by fast-forward. Detailed evidence:
+  [`tasks/T-014P-planned-feed-projection.md`](tasks/T-014P-planned-feed-projection.md).
 
 Requirements live in
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
