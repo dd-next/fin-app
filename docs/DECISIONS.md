@@ -21,3 +21,4 @@ Status: `accepted` · `superseded by ADR-NNNN`
 | [0007](decisions/ADR-0007-mobile-design-is-frozen-and-backend-first.md) | Freeze the mobile design, synchronize backend in Phase 14, then implement mobile in Phase 15 | accepted |
 | [0008](decisions/ADR-0008-canonical-manual-rate-direction.md) | Store manual valuation rates canonically in Asset-to-Main direction | accepted |
 | [0009](decisions/ADR-0009-bound-transfer-quotes.md) | Persist exact five-minute Transfer quotes bound to canonical manual rates | accepted |
+| [0010](decisions/ADR-0010-preproduction-fast-track.md) | Fast-track Phase 14 on disposable pre-production data | accepted |

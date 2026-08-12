@@ -17,15 +17,17 @@ see [`AGENTS.md`](../AGENTS.md) § Session protocol.
 
 ## Next — Phase 14: backend contract synchronization
 
-Phase 14 completes every backend capability required by the frozen mobile
-design before the UI redesign starts. Requirements come from
+Phase 14 completes the backend capabilities retained on the fast-track path to
+the frozen mobile design. Requirements come from
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and the
 accepted [`design/MOBILE-BACKEND-GAP-AUDIT.md`](design/MOBILE-BACKEND-GAP-AUDIT.md).
-The design assets do not change in this phase.
+The owner-approved exclusions are recorded in
+[`ADR-0010`](decisions/ADR-0010-preproduction-fast-track.md). The design assets
+do not change in this phase.
 
 Order follows `BUILD_PLAN-v2.md`: contract → schema → domain → API → cross-domain
-capabilities → acceptance → docs. Do not start Phase 15 while any Phase 14
-backend gap remains open.
+capabilities → acceptance → docs. Do not start Phase 15 while any non-deferred
+Phase 14 backend gap remains open.
 
 | ID | Task | Status | Size | Spec | Blocked by |
 |----|------|--------|------|------|------------|
@@ -44,11 +46,8 @@ backend gap remains open.
 | [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | done | M | audit: transfer | T-013Q |
 | [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | done | M | audit: feed order/mapping | T-001 |
 | [T-014P](tasks/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | done | M | audit: planned rows | T-014F |
-| T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014P |
-| T-016 | Category merge/delete for transactions and Plan rules | backlog | M | audit: categories | T-001 |
-| T-017 | Restore archived accounts | backlog | S | audit: accounts | T-001 |
-| T-019 | Mobile Plan-rule create/edit/detail contract | backlog | M | audit: Plan | T-001, T-016 |
-| T-021 | Phase 14 backend acceptance matrix | backlog | L | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-015–T-017, T-019 |
+| T-019 | Mobile Plan-rule create/edit/detail contract | backlog | M | audit: Plan | T-001 |
+| T-021 | Lean Phase 14 backend acceptance | backlog | M | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-019 |
 | T-022 | Merge accepted backend contracts into `FinnApp-v2.md` | backlog | S | all Phase 14 | T-021 |
 
 Every `L` row must be split into reviewed `S`/`M` task files before it is
@@ -60,7 +59,8 @@ and logout keeps the existing server-session model.
 
 Phase 15 uses the frozen mobile specification only after T-022 closes Phase
 14. Desktop remains functional and is preserved where no desktop redesign
-exists.
+exists. Under ADR-0010, Phase 15 omits transaction-type conversion, category
+merge/delete, and account-restoration controls and does not promise restoration.
 
 | ID | Task | Status | Size | Spec | Blocked by |
 |----|------|--------|------|------|------------|
@@ -73,6 +73,18 @@ exists.
 | T-029 | Navigation graph, keyboard states, motion, and accessibility | backlog | M | design §05, §08 | T-025–T-028 |
 | T-030 | 390×844 acceptance and desktop regression matrix | backlog | L | design §08 | T-029 |
 | T-031 | Phase 15 documentation and release close | backlog | S | all Phase 15 | T-030 |
+
+## Deferred — after Phase 15
+
+These owner-deferred capabilities remain in backlog, but do not block Phase 14
+or the mobile redesign. They are not Icebox ideas: they should be reconsidered
+after the application becomes comfortable enough for permanent use.
+
+| ID | Task | Status | Size | Spec | Blocked by |
+|----|------|--------|------|------|------------|
+| T-015 | Transaction type conversion and mobile type/detail boundaries | backlog | L | audit: edit transaction | T-014P |
+| T-016 | Category merge/delete for transactions and Plan rules | backlog | M | audit: categories | T-001 |
+| T-017 | Restore archived accounts | backlog | S | audit: accounts | T-001 |
 
 ## Icebox
 

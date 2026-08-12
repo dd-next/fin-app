@@ -5,7 +5,8 @@ Status: **accepted planning input, implementation pending** · 2026-08-09
 This audit compares the final mobile source screen and written handoff with
 the shipped backend and the proposed account-period v2.1 contract. It does not
 edit the exported source geometry; later owner-approved behavioral corrections
-are recorded in the written specs and `DESIGN-NOTES.md`. Every backend gap is routed to Phase 14 in
+are recorded in the written specs and `DESIGN-NOTES.md`. Every backend gap is
+routed to Phase 14 or to an explicit ADR exception and post-Phase-15 backlog in
 [`BACKLOG.md`](../BACKLOG.md); the mobile UI starts only in Phase 15.
 
 ## Authority used for the audit
@@ -37,10 +38,10 @@ acceptance authority.
 | Cross-asset Transfer | Transfer has one source amount and one destination selector, including accounts in another asset | Backend requires explicit From amount and To amount for a cross-asset exchange | Add quote/execute semantics that derive the destination amount from the selected rate source, bind execution to the quoted rate, and preserve exact signed legs and valuation invariants | T-013 |
 | Planned ledger rows | Transactions has a real Planned filter and Planned rows mixed into its date-grouped feed; tapping any row opens Transaction details | Transactions exposes only persisted financial transactions; Plan occurrences are a separate API and must not affect balances | Add a discriminated feed projection that unions visible transactions with open Plan occurrences without creating fake ledger rows. A planned row uses the specified Transaction-details route with a discriminated planned detail/action payload; it is never silently redirected to Plan | T-014 |
 | Feed ordering | Date groups and rows follow financial date | Transaction pagination orders by transaction id, so a corrected financial date can appear in the wrong group/order | Use a stable `(local_date, occurred_at/id)` cursor and prove correction, deletion, planned projection, and pagination ordering | T-014 |
-| Adjustment/exchange rows | Mobile filters expose Income, Expense, Transfer, and Planned, while real opening/reconciliation adjustments and exchanges still appear in All | Backend has first-class `adjustment` and `exchange` types and richer desktop filters | Define stable mobile row/type/detail mapping: adjustments remain identifiable non-convertible balance corrections; exchanges render as transfer-like rows without losing their two-amount detail. Preserve richer desktop filters | T-014, T-015 |
-| Transaction type edit | Edit transaction includes an editable Type field | `TransactionPatch` cannot change transaction type | Support validated type conversion by replacing signed legs atomically, rechecking permissions/period impact/category semantics, and preserving audit history | T-015 |
-| Category merge/delete | Edit category exposes Merge into another and Delete; delete moves history to Uncategorized | Backend can rename/archive only; active and archived Plan rules also reference categories restrictively | Add merge and delete/archive-as-Uncategorized commands for transactions and Plan rules, usage counts, idempotency, workspace isolation, historical-link preservation, and regression proof that ledger amounts never change | T-016 |
-| Account restoration | Archive confirmation promises that the account can be restored later | Backend archives accounts but has no restore command | Add owner-only restore with uniqueness handling; restored accounts re-enter totals according to their rates and `include_in_available` | T-017 |
+| Adjustment/exchange rows | Mobile filters expose Income, Expense, Transfer, and Planned, while real opening/reconciliation adjustments and exchanges still appear in All | Backend has first-class `adjustment` and `exchange` types and richer desktop filters | T-014 supplies the stable read mapping. Transaction-type conversion is deferred without hiding adjustment/exchange history | T-014; T-015 deferred by ADR-0010 |
+| Transaction type edit | Edit transaction includes an editable Type field | `TransactionPatch` cannot change transaction type | Owner-approved exception: omit the Type edit control in Phase 15; retain conversion in the post-Phase-15 backlog | T-015 deferred by ADR-0010 |
+| Category merge/delete | Edit category exposes Merge into another and Delete; delete moves history to Uncategorized | Backend can rename/archive only; active and archived Plan rules also reference categories restrictively | Owner-approved exception: retain supported rename/archive behavior and omit merge/delete controls in Phase 15 | T-016 deferred by ADR-0010 |
+| Account restoration | Archive confirmation promises that the account can be restored later | Backend archives accounts but has no restore command | Owner-approved exception: do not promise restoration in Phase 15; retain restoration in the post-Phase-15 backlog | T-017 deferred by ADR-0010 |
 | Owner role | Owner remains visible in the role picker as disabled `Coming soon` | Backend cannot safely transfer ownership across workspace-scoped data | No Phase 14 change and no blocker for the redesign; defer ownership architecture/implementation until after Phase 15 | T-025, Icebox |
 | Plan rule shape | Mobile uses a dynamic account label and adds Skip beside Edit rule/Link transaction; Delete rule archives the rule | Backend has five kinds, source/destination fields, occurrence Skip, and rule archival | Define kind mapping, map Expected income account to destination and expense account to source, keep Skip occurrence-scoped, and guarantee archival retains linked transactions while disabling future selection/generation | T-019 |
 | Logout | Owner correction removes the local-data/invite-only statement; logout is a normal server session action | Backend already revokes the session and supports username/password re-entry | No backend change. Phase 15 uses truthful server-side logout confirmation copy | T-025 |
@@ -78,7 +79,7 @@ design explicitly replaces them:
 - Plan Skip and full occurrence history;
 - investment/e-wallet/exchange/virtual account variants;
 - transaction adjustment/exchange filters and full status details. Their mobile
-  `All`-feed representation is still required by T-014/T-015.
+  `All`-feed representation is supplied by T-014.
 
 Omission from the 390×844 screen is not permission to delete an existing
 desktop or public API capability.
@@ -115,5 +116,6 @@ exists.
 
 Phase 14 is not complete until every row marked as a required backend change
 has an accepted task result or an explicit owner-approved exception recorded
-in an ADR. Phase 15 must not compensate for a missing backend contract with
-hard-coded financial values or fake local state.
+in an ADR. ADR-0010 supplies the exceptions for T-015/T-016/T-017. Phase 15
+must omit those deferred controls rather than compensate with hard-coded
+financial values, fake local state, or misleading copy.

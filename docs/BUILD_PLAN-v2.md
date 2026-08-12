@@ -216,15 +216,16 @@ are not changed in this phase.
    disabled Phase 15 placeholder.
 5. **Transactions and Plan feed** — expose planned occurrences through the
    specified Transaction-details route without creating fake posted movements,
-   map adjustment/exchange rows, order by financial date, support the shown
-   transaction-type edit, and reconcile mobile Plan-rule fields with domain
-   validation.
-6. **Account and category lifecycle** — restore archived accounts and
-   merge/delete categories and Plan-rule references without changing balances.
-   Owner transfer is deferred; logout keeps the shipped server-session model.
-7. **Acceptance and specification merge** — run the complete backend matrix,
-   close every contract blocker, and merge the accepted changes into the
-   primary product specification.
+   map adjustment/exchange rows, order by financial date, and reconcile mobile
+   Plan-rule fields with domain validation. Transaction-type conversion is
+   deferred by ADR-0010.
+6. **Deferred lifecycle conveniences** — category merge/delete and archived
+   account restoration remain in the post-Phase-15 backlog under ADR-0010.
+   Owner transfer remains deferred; logout keeps the shipped server-session
+   model.
+7. **Acceptance and specification merge** — run the lean retained-contract
+   acceptance gate, close its blockers, and merge the accepted changes and
+   explicit exclusions into the primary product specification.
 
 ### Phase checks
 
@@ -232,10 +233,12 @@ are not changed in this phase.
   explicitly accepted by the repository owner;
 - all financial values remain Decimal and posted ledger movements remain the
   source of account balances;
-- period, transfer, manual-rate, feed, category, account, and Plan
-  contracts have API and permission regression tests;
+- period, transfer, manual-rate, feed, and Plan contracts retained in Phase 14
+  have targeted API and permission regression tests;
 - a fresh scratch database migrates to one Alembic head and `alembic check`
   reports no pending operations;
+- populated-database preservation and downgrade checks are not Phase 14 gates
+  while pre-production data remains disposable under ADR-0010;
 - the full automated suite, JS syntax check, and diff/status manifest pass.
 
 ## Phase 15 — Mobile redesign implementation
@@ -251,7 +254,8 @@ required backend contract, while preserving the working desktop experience.
 2. **Reusable primitives** — rows, metric strips, Operations cards, controls,
    bottom sheets, branded confirmations, and accessible focus handling.
 3. **Accounts and Transactions** — mobile list/empty/detail/filter/swipe flows
-   backed by the Phase 14 contracts.
+   backed by the Phase 14 contracts. Omit the deferred transaction-type,
+   category merge/delete, and account-restoration controls.
 4. **Operations and periods** — exact 390×844 composition, keyboard clearance,
    validation, account/period states, and success confirmations.
 5. **Plan, Profile, Settings, and Analytics** — implement the Plan item

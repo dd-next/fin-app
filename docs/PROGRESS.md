@@ -19,7 +19,7 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **337 passed** (2026-08-12, T-014P final implementation gate) |
-| Active work | T-002–T-014P accepted; T-015 must be split before it is claimed |
+| Active work | T-002–T-014P accepted; T-019 is next on the Phase 14 fast track |
 | Blocker | None |
 
 Last verified checks, Phase 13 acceptance (2026-07-19):
@@ -38,8 +38,13 @@ them before relying on them.
 
 ## Active — Phase 14: backend contract synchronization
 
-Status: **T-002–T-014P accepted. The next row, T-015, is `L` and must be split
-into reviewed `S`/`M` task files before it is claimed.**
+Status: **T-002–T-014P accepted. T-019 is next; T-015/T-016/T-017 are retained
+in the post-Phase-15 backlog under ADR-0010.**
+
+The current database is disposable pre-production data. ADR-0010 limits the
+remaining migration gate to a fresh upgrade/head/startup check and accepts the
+known populated-`0002` Decimal risk; populated upgrades and downgrades do not
+block Phases 14 or 15. T-021 is a lean retained-contract acceptance task.
 
 - T-002 replaced editable period funding storage with exact opening/closing
   ledger snapshots and stable rollover-policy constraints.
@@ -137,7 +142,9 @@ successor after close/expiry, and defines exact Decimal allowance formulas.
 The mobile audit adds the backend contracts the frozen redesign also needs:
 manual rate direction, transfer quoting, planned feed projection, transaction
 type conversion, category/account lifecycle, and the Plan mobile adapter.
-Mobile UI implementation is a separate Phase 15.
+Under ADR-0010, transaction type conversion and category/account lifecycle
+(T-015/T-016/T-017) are deferred until after Phase 15; the Plan mobile adapter
+remains in Phase 14. Mobile UI implementation is a separate Phase 15.
 
 Review evidence for the specification itself (2026-08-08):
 
