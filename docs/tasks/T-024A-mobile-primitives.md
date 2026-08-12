@@ -1,7 +1,7 @@
 ---
 id: T-024A
 title: Build reusable mobile visual primitives
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md; spec/02-components.md
 blocked-by: [T-023]
@@ -351,3 +351,7 @@ contracts. Limited fifth re-review, verbatim:
   JavaScript and diff checks pass. `$verify` scratch mobile/desktop smoke passed.
   Independent implementation re-review closed all P0–P3 findings; task is now
   `review`, awaiting authorised local acceptance. No open questions.
+- 2026-08-12 repository owner authorisation executed by Codex GPT-5: locally
+  accepted fully verified task commit `c08901f` by fast-forward into
+  `finapp-v2-develop`; task is `done`. No push, deploy, archive, or Phase 15
+  commit was created.

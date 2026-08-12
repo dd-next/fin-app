@@ -1,7 +1,7 @@
 ---
 id: T-024B
 title: Establish mobile sheets, pickers, and confirmations
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/02-components.md; spec/04-sheets.md; spec/05-interactions.md
 blocked-by: [T-024A]
@@ -81,3 +81,6 @@ protocol.
 - 2026-08-12 Codex GPT-5: task split from the former L-sized T-024; not claimed.
 - 2026-08-12 Codex GPT-5: independent batch readiness verdict `ready`; remains
   blocked by T-024A.
+- 2026-08-12 repository owner authorisation executed by Codex GPT-5: promoted
+  readiness-ready T-024B from `backlog` to `todo` after local acceptance of
+  dependency T-024A; implementation is not yet claimed.
