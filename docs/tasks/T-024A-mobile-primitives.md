@@ -1,13 +1,13 @@
 ---
 id: T-024A
 title: Build reusable mobile visual primitives
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md; spec/02-components.md
 blocked-by: [T-023]
 branch: task/T-024A-mobile-primitives
-base-commit:
-implementer:
+base-commit: 818f864
+implementer: Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
@@ -69,6 +69,35 @@ period-card states, then a functional 1280×900 desktop smoke.
 Append the bounded independent implementation review following the repository
 protocol.
 
+### Atomic claim review
+
+- Reviewer: `/root/t024a_claim_review`, Codex GPT-5 same-vendor fallback;
+  cross-vendor reviewer was unavailable.
+- Reviewed scope: branch/base invariants and the complete lifecycle diff in
+  this task, `docs/BACKLOG.md`, and `docs/PROGRESS.md`.
+- Verbatim result:
+
+  > Read-only review of T-024A atomic claim: **No findings (P0–P3).**
+  >
+  > Verified:
+  >
+  > - Branch `task/T-024A-mobile-primitives` is at `818f864`; reflog confirms
+  >   it was created from that commit.
+  > - Accepted integration `finapp-v2-develop` is also at `818f864`.
+  > - At the accepted base, T-023 is `done` and T-024A was readiness-ready
+  >   `todo`.
+  > - Current lifecycle diff contains only the three expected documentation
+  >   files.
+  > - Task, backlog, and progress consistently record `in-progress`.
+  > - `base-commit: 818f864`, `implementer: Codex GPT-5`, exact branch,
+  >   dependency, and session log are correct.
+  > - No implementation or acceptance overclaim.
+  > - `git diff --check` passes.
+  >
+  > This reviewed lifecycle diff should be committed unchanged as the first
+  > T-024A task commit before implementation begins. Reviewer:
+  > `/root/t024a_claim_review`, Codex GPT-5 same-vendor fallback.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from the former L-sized T-024; not claimed.
@@ -77,3 +106,7 @@ protocol.
 - 2026-08-12 repository owner authorisation executed by Codex GPT-5: promoted
   readiness-ready T-024A from `backlog` to `todo` after local acceptance of
   dependency T-023; implementation is not yet claimed.
+- 2026-08-12 Codex GPT-5: atomically claimed
+  `task/T-024A-mobile-primitives` from accepted local integration `818f864`;
+  lifecycle metadata and shared state now identify the active implementer.
+  Implementation remains bounded to T-024A; no open questions.

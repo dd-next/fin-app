@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-023 is locally accepted and `done`; readiness-ready T-024A is promoted to `todo` |
-| Next | Atomically claim T-024A by creating `task/T-024A-mobile-primitives` from the current local integration HEAD |
+| Active work | T-024A is claimed on `task/T-024A-mobile-primitives`; status is `in-progress` |
+| Next | Implement and independently review the bounded mobile primitive contract |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -31,7 +31,7 @@ Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
 files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
 usable local preview after T-029 without calling the phase accepted. Batch
 readiness review closed all P0–P2 findings. T-023 is locally accepted and
-`done`; T-024A is the next exact implementation task and is now `todo`.
+`done`; T-024A is claimed and `in-progress` on its exact task branch.
 
 Phase 15 authority and constraints:
 
