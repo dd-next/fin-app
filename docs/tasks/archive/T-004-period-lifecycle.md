@@ -255,7 +255,7 @@ Append-only readiness passes. The reviewer checks this definition against
 
 Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
-[`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
+[`../REVIEW_PROTOCOL-v2.md`](../../REVIEW_PROTOCOL-v2.md).
 
 ### Pass 1 — close, expiry, and closed-ledger behavior
 

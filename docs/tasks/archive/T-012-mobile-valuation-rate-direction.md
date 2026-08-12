@@ -343,7 +343,7 @@ BACKLOG, and REVIEW_PROTOCOL.
 
 Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
-[`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
+[`../REVIEW_PROTOCOL-v2.md`](../../REVIEW_PROTOCOL-v2.md).
 
 ### Pass 1
 

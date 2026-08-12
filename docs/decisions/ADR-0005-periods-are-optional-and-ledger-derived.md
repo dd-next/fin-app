@@ -35,6 +35,6 @@ Plan subsystem.
   later changed.
 - The old rule that rejected every overlapping historical date range on one
   account is superseded: only a *current* period blocks a new one.
-- The document remains proposed until Phase 14 is accepted and merged into
-  `specs/FinnApp-v2.md`; until then `specs/FinnApp-v2.md` is the active
-  authority.
+- Phase 14 accepted this contract and merged it into `specs/FinnApp-v2.md`,
+  which is now the consolidated Phase 15 authority; the detailed v2.1 document
+  remains as fixture and acceptance evidence.

@@ -1,228 +1,83 @@
 # FinApp — current state
 
-What is true right now. This file is **state, not a log**: entries are replaced
-as reality changes, and closed work moves to [`history/`](history/). If it
-grows past roughly 150 lines, archive the oldest closed entry.
+What is true right now. This file is **state, not a log**: closed work moves to
+[`history/`](history/) and detailed task evidence moves to
+[`tasks/archive/`](tasks/archive/).
 
 Read at the start of a session: [`../AGENTS.md`](../AGENTS.md), this file, then
 the one task file you are working on. Nothing else by default.
 
 - What to work on next → [`BACKLOG.md`](BACKLOG.md)
+- Active release authority → [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md)
+- Mobile source hierarchy → [`design/DESIGN-NOTES.md`](design/DESIGN-NOTES.md)
 - Why something is the way it is → [`DECISIONS.md`](DECISIONS.md)
-- Evidence for closed phases → [`history/PROGRESS-phases-8-13.md`](history/PROGRESS-phases-8-13.md)
+- Closed evidence → [`history/`](history/)
 
 ## Release status
 
 | | |
 |---|---|
 | Branch | `finapp-v2-develop` |
-| Release v2 | shipped — Phases 8–13 complete, all §12 acceptance criteria evidenced |
+| Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **341 passed** (2026-08-12, T-021 Phase 14 gate) |
-| Active work | T-002–T-022 accepted; Phase 14 close/handoff is next |
+| Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
+| Active work | None — Phase 15 has not started |
+| Next | Specify and readiness-review T-023; do not claim implementation before that reviewed task exists |
 | Blocker | None |
 
-Last verified checks, Phase 13 acceptance (2026-07-19):
+## Phase 15 handoff — mobile redesign
+
+Phase 14 is closed. T-023 is the exact first Phase 15 task: import only the
+approved design tokens that the runtime uses and establish the responsive
+390×844 mobile shell, safe areas, and five-tab navigation while preserving the
+working desktop shell. Before implementation, create its bounded task file and
+complete the required readiness review; its backlog status remains `backlog`.
+
+Phase 15 authority and constraints:
+
+- [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md) contains the accepted backend
+  contract and ADR-0010 migration policy.
+- [`design/Finnapp mobile specification/AGENTS.md`](design/Finnapp%20mobile%20specification/AGENTS.md)
+  gives the mobile reading order; `Finapp Screen.dc.html` is the final visual
+  source, and `design-tokens.json`/`tokens.css` are the token sources.
+- The reference viewport is 390×844. Desktop remains functional where no
+  desktop redesign exists.
+- Do not implement T-015 transaction conversion, T-016 category merge/delete,
+  or T-017 account restoration. Owner and automatic rates stay disabled
+  `Coming soon`; Scan and Analytics remain placeholders.
+- Do not promise account restoration. Do not use native `select`, `alert`,
+  `confirm`, or `prompt` in the mobile UI.
+- Do not change the accepted backend contracts to compensate for frontend
+  composition. Period values stay ledger-derived; Plan projections stay
+  non-ledger; money/rates stay exact Decimal.
+
+## Last verified gates — Phase 14 (2026-08-12)
 
 ```text
-pytest                                    111 passed in 11.19s
-node --check app/static/app.js            ok
-alembic check                             no new upgrade operations
-docker build -t finapp-v2 .               image built, 190 MB
-docker compose down -v && up -d           clean volume migrates, /health ok
-browser acceptance 480×900 and 1280×900   pass
+retained-contract smoke                    7 passed in 1.06s
+full pytest                                341 passed in 32.45s
+node --check app/static/app.js             passed
+git diff --check                           passed
+alembic heads                              0004_transfer_quotes (single head)
+fresh alembic upgrade head                 0001 -> 0002 -> 0003 -> 0004
+fresh alembic check                        no new upgrade operations
+scratch FastAPI /health                    200 {"status":"ok"}
+scratch SPA /                              200 text/html
 ```
 
-These are historical results, not a claim about the current worktree. Re-run
-them before relying on them.
+The database is disposable pre-production data under
+[`ADR-0010`](decisions/ADR-0010-preproduction-fast-track.md). Populated upgrade,
+downgrade, and current-test-data preservation were intentionally not Phase 14
+gates. This does not relax runtime Decimal, ledger, permission, privacy,
+atomicity, or fresh-schema correctness.
 
-## Active — Phase 14: backend contract synchronization
-
-Status: **T-002–T-022 accepted. Phase close is next; T-015/T-016/T-017 are retained
-in the post-Phase-15 backlog under ADR-0010.**
-
-The current database is disposable pre-production data. ADR-0010 limits the
-remaining migration gate to a fresh upgrade/head/startup check and accepts the
-known populated-`0002` Decimal risk; populated upgrades and downgrades do not
-block Phases 14 or 15. T-021 is a lean retained-contract acceptance task.
-
-- T-002 replaced editable period funding storage with exact opening/closing
-  ledger snapshots and stable rollover-policy constraints.
-- Populated migration preflights incompatible legacy data, preserves period and
-  rebase identities, and derives snapshot balances without `float`.
-- T-002 gate: full pytest `116 passed`; JS syntax, fresh scratch migration,
-  `alembic check`, and `git diff --check` passed. Detailed review evidence:
-  [`tasks/T-002-period-model-migration.md`](tasks/T-002-period-model-migration.md).
-- T-003 added one-cutoff ledger reconciliation for current periods, strict
-  ended boundaries, and immutable closed-history projections. Full pytest
-  `118 passed`; detailed evidence:
-  [`tasks/T-003-ledger-derived-balance.md`](tasks/T-003-ledger-derived-balance.md).
-- T-004 enforces write-neutral natural expiry, exact atomic manual close,
-  immutable post-close history, and serialized exact-boundary successors. Full
-  pytest `126 passed`; detailed evidence:
-  [`tasks/T-004-period-lifecycle.md`](tasks/T-004-period-lifecycle.md).
-- T-005 adds pure exact `carry_next_day` allowance math and a common immutable
-  exact/presentation result contract while preserving legacy callers. Full
-  pytest `142 passed`; detailed evidence:
-  [`tasks/T-005-carry-next-day-policy.md`](tasks/T-005-carry-next-day-policy.md).
-- T-006 adds exact `redistribute_remaining_days` math and the common pure
-  policy dispatcher with redistribution as default. Full pytest `153 passed`;
-  detailed evidence:
-  [`tasks/T-006-redistribute-policy.md`](tasks/T-006-redistribute-policy.md).
-- T-007 adds atomic Start-date replay with exact predecessor/snapshot
-  reconstruction, chronological guards, resulting-ended behavior, and
-  serialized stale-request protection. Full pytest `160 passed`; detailed
-  evidence: [`tasks/T-007-period-start-replay.md`](tasks/T-007-period-start-replay.md).
-- T-008 exposes exact current/ended/closed API shapes, policy create/PATCH,
-  one-cutoff allowance reads, and canonical lifecycle-aware Transactions
-  membership. Full pytest `173 passed`; detailed evidence:
-  [`tasks/T-008-period-api-lifecycle-surface.md`](tasks/T-008-period-api-lifecycle-surface.md).
-- T-009 removes the transitional period funding/remaining/planned and period
-  confirmation contracts from schemas, routes, OpenAPI, and the existing
-  desktop consumer. Exact forbidden-input mutation tests and all lifecycle
-  shapes are independently approved; full pytest `224 passed`, Node syntax
-  and diff-check passed. Detailed evidence:
-  [`tasks/T-009-remove-legacy-period-contracts.md`](tasks/T-009-remove-legacy-period-contracts.md).
-- T-010 makes owner-private period state non-authorizing for shared users while
-  preserving owner ended-period confirmation, generic shared correction
-  confirmation, every role/leg permission boundary, and closed snapshots.
-  Focused privacy matrices, scratch FastAPI+SPA E2E, Node/diff checks, and full
-  pytest `229 passed`; implementation review approved with no open P0–P3.
-  Detailed evidence:
-  [`tasks/T-010-owner-private-period-permissions.md`](tasks/T-010-owner-private-period-permissions.md).
-- T-012 implements exact Decimal-string `Asset → Main` manual rates,
-  canonical/legacy direction-tagged storage, and guarded migration/downgrade.
-  Fresh implementation re-review approved the complete committed range with no
-  open P0–P3; scratch FastAPI+SPA E2E, full pytest `268`, Node syntax, and diff
-  checks passed, and reviewed commit `437b5fa` was accepted locally by
-  fast-forward. Detailed evidence:
-  [`tasks/T-012-mobile-valuation-rate-direction.md`](tasks/T-012-mobile-valuation-rate-direction.md).
-- The L-sized transfer row is split into bounded quote and execution tasks.
-  T-013Q now persists exact owner-private same/cross-asset quotes, derives
-  cross-asset amounts only through canonical manual Asset-to-Main rates, and
-  records immutable dependencies for T-013E. Fresh cumulative review approved
-  the full manifest with no open P0–P3; full pytest `322`, Node syntax, and
-  diff checks passed. Reviewed commit `9f02bf1` was accepted locally by
-  fast-forward. T-013E atomically executes the persisted amounts through the
-  existing transfer/exchange, period, captured-rate, and Undo paths; exact
-  concurrency, stale/expiry, rollback, privacy, and OpenAPI coverage passed.
-  Fresh implementation re-review approved with no open P0–P3; full pytest
-  `329`, Node syntax, and diff checks passed. Reviewed commit `119504f` was
-  accepted locally by fast-forward.
-  Detailed evidence: [`tasks/T-013Q-transfer-quote.md`](tasks/T-013Q-transfer-quote.md)
-  and [`tasks/T-013E-transfer-execution.md`](tasks/T-013E-transfer-execution.md).
-- T-014F adds the closed persisted transaction feed and detail projection with
-  strict versioned cursors, stable financial-date ordering, exact signed legs,
-  accepted visibility/redaction, and no change to `/transactions`. Two P2
-  coverage findings were closed in the existing four focused tests; fresh
-  re-review approved with no open P0–P3. Focused/adjacent `33 passed`, full
-  pytest `333 passed`, Node syntax, and diff checks passed. Commit `20c37c9`
-  was accepted locally. Detailed evidence:
-  [`tasks/T-014F-financial-date-transaction-feed.md`](tasks/T-014F-financial-date-transaction-feed.md).
-- T-014P adds owner-private open Plan occurrences to that feed as explicit
-  non-ledger projections: exact `filter=planned`, a `filter=all` union under one
-  descending total cursor key, and the closed planned detail route with ordered
-  `edit_rule`/`skip`/`link_transaction` actions. Materialization reuses the
-  accepted idempotent horizon logic under one captured clock and only after
-  complete query/cursor validation, so planned rows create no ledger movement
-  and malformed requests write nothing. Implementation review approved with no
-  open P0–P3; full pytest `337 passed` and diff checks passed. Commit `6cf041d`
-  was accepted locally by fast-forward. Detailed evidence:
-  [`tasks/T-014P-planned-feed-projection.md`](tasks/T-014P-planned-feed-projection.md).
-- T-019 preserves the existing five-kind Plan subsystem while exposing exact
-  frozen camelCase mobile kinds, a dynamic source/destination `account_id`, and
-  an owner-private rule detail read through the current API. Existing
-  Skip/Link/archive behavior remains authoritative and ledger-neutral. One P2
-  transfer-coverage finding was closed; final focused Plan/privacy tests
-  `17 passed` and limited re-review found no open P0–P3. Detailed evidence:
-  [`tasks/T-019-mobile-plan-contract.md`](tasks/T-019-mobile-plan-contract.md).
-- T-021 passed the lean retained-contract smoke (`7 passed`) and the single
-  final Phase 14 suite (`341 passed`). Node syntax, diff check, one Alembic
-  head, fresh `0001 → 0004`, scratch `alembic check`, application startup,
-  `/health`, and SPA root all passed. The docs-only acceptance manifest was
-  independently approved with no P0–P3. Detailed evidence:
-  [`tasks/T-021-phase14-acceptance.md`](tasks/T-021-phase14-acceptance.md).
-- T-022 makes `specs/FinnApp-v2.md` the consolidated Phase 15 authority for
-  accepted periods, canonical rates, quote/execute, financial-date feed, and
-  mobile Plan contracts, plus the ADR-0010 migration policy and deferred
-  T-015/T-016/T-017 controls. Two P1 omissions in the first authority pass were
-  corrected; limited re-review found no open P0–P3. Detailed evidence:
-  [`tasks/T-022-phase14-spec-merge.md`](tasks/T-022-phase14-spec-merge.md).
-
-Requirements live in
-[`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and
-[`design/MOBILE-BACKEND-GAP-AUDIT.md`](design/MOBILE-BACKEND-GAP-AUDIT.md).
-They are proposed changes: `specs/FinnApp-v2.md` remains the shipped release
-authority until T-022 merges the accepted Phase 14 result into it.
-
-The period work makes periods optional, replaces editable Funding/Remaining
-with the real ledger balance, removes Planned from period logic, permits a
-successor after close/expiry, and defines exact Decimal allowance formulas.
-The mobile audit adds the backend contracts the frozen redesign also needs:
-manual rate direction, transfer quoting, planned feed projection, transaction
-type conversion, category/account lifecycle, and the Plan mobile adapter.
-Under ADR-0010, transaction type conversion and category/account lifecycle
-(T-015/T-016/T-017) are deferred until after Phase 15; the Plan mobile adapter
-remains in Phase 14. Mobile UI implementation is a separate Phase 15.
-
-Review evidence for the specification itself (2026-08-08):
-
-- `period_v21_spec_review` — five P1 and two P2 gaps in reconciliation,
-  redistribution, natural expiry, membership, formulas, API, and history; all
-  resolved.
-- `period_v21_spec_rereview` — one P1 ended-window cutoff and one P2 example
-  error; both fixed.
-- `period_v21_spec_final_review` — **APPROVED, no P0–P3 findings** for the
-  period-only proposal. The later mobile comparison required a coherent
-  `685882` fixture and explicit start-date reconciliation; T-001 added both.
-  Available today is owner-confirmed as informational and never blocks
-  spending.
-- `git diff --check` on the specification and this file — passed. No
-  application code, migration, database, or frontend file changed.
-
-Period decisions are recorded in
-[ADR-0005](decisions/ADR-0005-periods-are-optional-and-ledger-derived.md); the
-frozen-design/backend-first order is
-[ADR-0007](decisions/ADR-0007-mobile-design-is-frozen-and-backend-first.md).
-
-Task breakdown and order: [`BACKLOG.md`](BACKLOG.md). T-001 is accepted;
-T-002 passed independent readiness review and is the first implementation task.
-
-## Workflow and design handoff
-
-`docs/` was reorganised around a task-based flow: `BACKLOG.md` for priority,
-`tasks/` for the unit of work and its handoff, `DECISIONS.md` for durable
-decisions, `design/` for design truth, `history/` for closed evidence.
-`CLAUDE.md` is now a symlink to `AGENTS.md` so both agent vendors read one
-file. The phase discipline from `BUILD_PLAN-v2.md` and the reviewer protocol
-are unchanged — a task is the logical block those documents already require.
-
-The 2026-08-09 consistency pass makes the task file the detailed evidence
-authority and `PROGRESS.md` the phase summary, separates task commits from the
-owner's phase-closing commit, defines atomic branch claims and sequential
-handoffs, and makes read-only reviewer output verbatim evidence. The mobile
-source hierarchy is recorded in `design/DESIGN-NOTES.md`; raw uploads and early
-canvases are outside the intended Git set.
-
-## Entry template
-
-Copy this when a task or phase closes. Do not record completion without every
-line being evidenced.
-
-```md
-### <T-NNN or Phase N> — <name> (YYYY-MM-DD)
-
-- Status: [~] / [x] / [!]
-- Completed: <2–4 concise implementation facts>
-- Reviewer: <reviewer task name → findings → resolution>
-- Tests: `<exact command>` — <exact pass/fail result>
-- Checks: <migration/browser/Docker/diff evidence the work required>
-- Decisions: <link the ADR, do not restate it here>
-- Blocker (if any): <cause and attempted fixes>
-```
+Detailed Phase 14 implementation, review, and gate evidence:
+[`history/PROGRESS-phase-14.md`](history/PROGRESS-phase-14.md).
 
 ## Historical note
 
-Git history preserves the earlier root-level implementation ledger. Root
-`PROGRESS.md` and `BUILD_PLAN-v2.md` are compatibility pointers and must not be
-used to skip the current work.
+Phases 8–13 are recorded in
+[`history/PROGRESS-phases-8-13.md`](history/PROGRESS-phases-8-13.md). Git history
+preserves the earlier root-level implementation ledger. Root `PROGRESS.md` and
+`BUILD_PLAN-v2.md` are compatibility pointers and must not override the active
+files under `docs/`.

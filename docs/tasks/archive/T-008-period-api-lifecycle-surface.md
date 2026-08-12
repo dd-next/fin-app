@@ -296,7 +296,7 @@ verbatim evidence before continuing.
 
 Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
-[`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
+[`../REVIEW_PROTOCOL-v2.md`](../../REVIEW_PROTOCOL-v2.md).
 
 ### Block 1 — canonical allowance projection, Pass 1
 

@@ -19,9 +19,9 @@ Read further only when the task needs it:
   to do next, which is the owner's call, not an agent's.
 - [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md) — product and technical
   requirements, active release authority.
-- [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) — proposed
-  period revision; authoritative for Phase 14 work, not yet merged into the
-  file above.
+- [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) — accepted
+  detailed period fixtures; its Phase 14 result is merged into the primary
+  specification above.
 - [`design/MOBILE-BACKEND-GAP-AUDIT.md`](design/MOBILE-BACKEND-GAP-AUDIT.md) —
   required backend changes for the frozen mobile design; Phase 14 planning
   authority alongside the period specification.
@@ -56,10 +56,9 @@ docs/
 
 - If code, an old document, or a prior progress entry conflicts with these
   documents, this directory wins.
-- Within this directory: `specs/FinnApp-v2.md` outranks everything except an
-  accepted spec/ADR explicitly superseding it for a named phase. Phase 14 uses
-  `specs/ACCOUNT_PERIODS-v2.1.md`, the mobile backend gap audit, and ADR-0007;
-  T-022 merges the accepted result back into the primary specification.
+- Within this directory: `specs/FinnApp-v2.md` is the consolidated authority
+  for Phase 15. Detailed accepted specs and ADRs may explain it but cannot
+  silently override it; a new conflict requires an explicit accepted decision.
 - Do not infer an unlisted requirement from the old Tracker or
   `BudgetCommitment` design.
 - Amend this documentation first when a genuinely new product decision is

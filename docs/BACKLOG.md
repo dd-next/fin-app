@@ -15,9 +15,9 @@ A row becomes workable only once it has a task file under
 [`tasks/`](tasks/). Writing that file is the Specify step and is itself work —
 see [`AGENTS.md`](../AGENTS.md) § Session protocol.
 
-## Next — Phase 14: backend contract synchronization
+## Done — Phase 14: backend contract synchronization
 
-Phase 14 completes the backend capabilities retained on the fast-track path to
+Phase 14 completed the backend capabilities retained on the fast-track path to
 the frozen mobile design. Requirements come from
 [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) and the
 accepted [`design/MOBILE-BACKEND-GAP-AUDIT.md`](design/MOBILE-BACKEND-GAP-AUDIT.md).
@@ -25,42 +25,42 @@ The owner-approved exclusions are recorded in
 [`ADR-0010`](decisions/ADR-0010-preproduction-fast-track.md). The design assets
 do not change in this phase.
 
-Order follows `BUILD_PLAN-v2.md`: contract → schema → domain → API → cross-domain
-capabilities → acceptance → docs. Do not start Phase 15 while any non-deferred
-Phase 14 backend gap remains open.
+Order followed `BUILD_PLAN-v2.md`: contract → schema → domain → API →
+cross-domain capabilities → acceptance → docs. Detailed evidence is archived
+in [`history/PROGRESS-phase-14.md`](history/PROGRESS-phase-14.md).
 
 | ID | Task | Status | Size | Spec | Blocked by |
 |----|------|--------|------|------|------------|
-| [T-001](tasks/T-001-mobile-backend-contract-sync.md) | Synchronize mobile design and backend contracts | done | M | design audit | — |
-| [T-002](tasks/T-002-period-model-migration.md) | Period model and migration | done | M | periods §3 | T-001 |
-| [T-003](tasks/T-003-ledger-derived-balance.md) | Ledger-derived `current_balance` and reconciliation input | done | M | periods §6, §6.1 | T-002 |
-| [T-004](tasks/T-004-period-lifecycle.md) | Lifecycle: manual close, natural expiry, successor rules | done | M | periods §4, §5 | T-002 |
-| [T-005](tasks/T-005-carry-next-day-policy.md) | `carry_next_day` policy in pure `app/budget.py` | done | M | periods §7.1, §7.3 | T-003 |
-| [T-006](tasks/T-006-redistribute-policy.md) | `redistribute_remaining_days` policy in pure `app/budget.py` | done | M | periods §7.2, §7.3 | T-003, T-005 |
-| [T-007](tasks/T-007-period-start-replay.md) | Period create/edit Start date semantics and snapshot replay | done | M | periods §8 + audit | T-002, T-003, T-004 |
-| [T-008](tasks/T-008-period-api-lifecycle-surface.md) | Period API and lifecycle surface | done | M | periods §9 | T-004, T-005, T-006, T-007 |
-| [T-009](tasks/T-009-remove-legacy-period-contracts.md) | Remove `funding_amount` / `remaining` / `planned` contracts | done | S | periods §3, §10 | T-008 |
-| [T-010](tasks/T-010-owner-private-period-permissions.md) | Owner-private period permissions for shared accounts | done | M | periods §11 | T-008, T-009 |
-| [T-012](tasks/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | done | M | audit: rates | T-001 |
-| [T-013Q](tasks/T-013Q-transfer-quote.md) | Exact one-amount same/cross-asset Transfer quote | done | M | audit: transfer | T-012 |
-| [T-013E](tasks/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | done | M | audit: transfer | T-013Q |
-| [T-014F](tasks/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | done | M | audit: feed order/mapping | T-001 |
-| [T-014P](tasks/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | done | M | audit: planned rows | T-014F |
-| [T-019](tasks/T-019-mobile-plan-contract.md) | Mobile Plan-rule create/edit/detail contract | done | M | audit: Plan | T-001 |
-| [T-021](tasks/T-021-phase14-acceptance.md) | Lean Phase 14 backend acceptance | done | M | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-019 |
-| [T-022](tasks/T-022-phase14-spec-merge.md) | Merge accepted backend contracts into `FinnApp-v2.md` | done | S | all Phase 14 | T-021 |
+| [T-001](tasks/archive/T-001-mobile-backend-contract-sync.md) | Synchronize mobile design and backend contracts | done | M | design audit | — |
+| [T-002](tasks/archive/T-002-period-model-migration.md) | Period model and migration | done | M | periods §3 | T-001 |
+| [T-003](tasks/archive/T-003-ledger-derived-balance.md) | Ledger-derived `current_balance` and reconciliation input | done | M | periods §6, §6.1 | T-002 |
+| [T-004](tasks/archive/T-004-period-lifecycle.md) | Lifecycle: manual close, natural expiry, successor rules | done | M | periods §4, §5 | T-002 |
+| [T-005](tasks/archive/T-005-carry-next-day-policy.md) | `carry_next_day` policy in pure `app/budget.py` | done | M | periods §7.1, §7.3 | T-003 |
+| [T-006](tasks/archive/T-006-redistribute-policy.md) | `redistribute_remaining_days` policy in pure `app/budget.py` | done | M | periods §7.2, §7.3 | T-003, T-005 |
+| [T-007](tasks/archive/T-007-period-start-replay.md) | Period create/edit Start date semantics and snapshot replay | done | M | periods §8 + audit | T-002, T-003, T-004 |
+| [T-008](tasks/archive/T-008-period-api-lifecycle-surface.md) | Period API and lifecycle surface | done | M | periods §9 | T-004, T-005, T-006, T-007 |
+| [T-009](tasks/archive/T-009-remove-legacy-period-contracts.md) | Remove `funding_amount` / `remaining` / `planned` contracts | done | S | periods §3, §10 | T-008 |
+| [T-010](tasks/archive/T-010-owner-private-period-permissions.md) | Owner-private period permissions for shared accounts | done | M | periods §11 | T-008, T-009 |
+| [T-012](tasks/archive/T-012-mobile-valuation-rate-direction.md) | Manual valuation-rate mobile pair direction | done | M | audit: rates | T-001 |
+| [T-013Q](tasks/archive/T-013Q-transfer-quote.md) | Exact one-amount same/cross-asset Transfer quote | done | M | audit: transfer | T-012 |
+| [T-013E](tasks/archive/T-013E-transfer-execution.md) | Atomic execution of a bound Transfer quote | done | M | audit: transfer | T-013Q |
+| [T-014F](tasks/archive/T-014F-financial-date-transaction-feed.md) | Stable financial-date persisted transaction feed | done | M | audit: feed order/mapping | T-001 |
+| [T-014P](tasks/archive/T-014P-planned-feed-projection.md) | Planned projections through Transaction details | done | M | audit: planned rows | T-014F |
+| [T-019](tasks/archive/T-019-mobile-plan-contract.md) | Mobile Plan-rule create/edit/detail contract | done | M | audit: Plan | T-001 |
+| [T-021](tasks/archive/T-021-phase14-acceptance.md) | Lean Phase 14 backend acceptance | done | M | periods §12 + audit | T-009, T-010, T-012, T-013Q, T-013E, T-014F, T-014P, T-019 |
+| [T-022](tasks/archive/T-022-phase14-spec-merge.md) | Merge accepted backend contracts into `FinnApp-v2.md` | done | S | all Phase 14 | T-021 |
 
-Every `L` row must be split into reviewed `S`/`M` task files before it is
-claimed. The external-rate, ownership-transfer, and invite-only session
-questions no longer block Phase 14: Auto and Owner are disabled placeholders,
-and logout keeps the existing server-session model.
+The external-rate, ownership-transfer, and invite-only session questions did
+not block Phase 14: Auto and Owner are disabled placeholders, and logout keeps
+the existing server-session model.
 
-## Later — Phase 15: mobile redesign
+## Next — Phase 15: mobile redesign
 
-Phase 15 uses the frozen mobile specification only after T-022 closes Phase
-14. Desktop remains functional and is preserved where no desktop redesign
-exists. Under ADR-0010, Phase 15 omits transaction-type conversion, category
-merge/delete, and account-restoration controls and does not promise restoration.
+Phase 15 uses the frozen mobile specification after accepted T-022. Desktop
+remains functional and is preserved where no desktop redesign exists. Under
+ADR-0010, Phase 15 omits transaction-type conversion, category merge/delete,
+and account-restoration controls and does not promise restoration. T-023 is the
+first row, but it is not workable until its task file and readiness review exist.
 
 | ID | Task | Status | Size | Spec | Blocked by |
 |----|------|--------|------|------|------------|
@@ -95,7 +95,8 @@ Not scheduled. Rows here are notes, not commitments.
 | T-032 | Implement Owner invitation and safe ownership/workspace transfer | Explicitly deferred until after the mobile redesign; Phase 15 shows disabled `Owner · Coming soon`. |
 | T-033 | External automatic daily rates | Explicitly deferred; Phase 15 supports manual input and a disabled `Auto · Coming soon` option. |
 
-## Done
+## Closed evidence
 
 Archived task files live in [`tasks/archive/`](tasks/archive/). Phases 8–13 are
-recorded in [`history/PROGRESS-phases-8-13.md`](history/PROGRESS-phases-8-13.md).
+recorded in [`history/PROGRESS-phases-8-13.md`](history/PROGRESS-phases-8-13.md)
+and Phase 14 in [`history/PROGRESS-phase-14.md`](history/PROGRESS-phase-14.md).

@@ -199,7 +199,7 @@ T-010 permissions or schema/model work.
 
 Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
-[`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
+[`../REVIEW_PROTOCOL-v2.md`](../../REVIEW_PROTOCOL-v2.md).
 
 ### Pass 1
 

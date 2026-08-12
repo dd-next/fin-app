@@ -125,7 +125,7 @@ Append-only readiness passes against `specs/ACCOUNT_PERIODS-v2.1.md` §7.2 and
 
 Append-only implementation review passes. A different read-only agent returns
 the review; the implementer records it verbatim following
-[`../REVIEW_PROTOCOL-v2.md`](../REVIEW_PROTOCOL-v2.md).
+[`../REVIEW_PROTOCOL-v2.md`](../../REVIEW_PROTOCOL-v2.md).
 
 ### Pass 1
 
