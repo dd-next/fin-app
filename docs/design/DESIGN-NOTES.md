@@ -88,6 +88,36 @@ without changing its geometry. Phase 15 applies them when implementing the UI:
   the incorrect local-data/invite-only claim.
 - rates are manual only; Auto remains a disabled `Coming soon` placeholder.
 
+## Phase 15 implementation resolutions
+
+These owner-approved fast-track resolutions remove ambiguities between the
+exported source, the written handoff, and the accepted Phase 14 API without
+changing financial semantics:
+
+- Plan follows `specs/FinnApp-v2.md` §8: one card per rule with only its nearest
+  overdue and nearest future occurrence. The older global `UPCOMING` list in
+  mobile spec §3.4 is superseded. Plan's screen-header affordance is the accent
+  `+`; Accounts and Analytics use the avatar.
+- Mobile top chips use the unified `/api/v1/transaction-feed`. The advanced
+  Filters sheet uses the existing persisted `/api/v1/transactions` contract;
+  while advanced filters are active it shows persisted ledger rows only.
+  Selecting a top chip clears advanced filters and returns to the unified feed,
+  so Planned is never approximated from one client-side page.
+- Account-details `Full history` opens account-filtered Transactions. Period
+  history remains reachable from Operations.
+- A shared/non-owner account renders one non-actionable `No period` state and
+  never requests owner-private period endpoints; the UI must not reveal
+  whether its owner has a period.
+- The device/browser software keyboard is the shipped input mechanism. The
+  250px keyboard drawing is the reference visual-viewport acceptance state,
+  not a custom keyboard to implement. Operations must remain usable when the
+  real keyboard occupies that budget.
+- Reference browser checks inject 54px top and 34px bottom safe-area test
+  variables because desktop headless browsers report zero for `env(safe-area-
+  inset-*)`; production CSS continues to use the real environment insets.
+- Mobile account archive copy ends after `History is kept.` and never promises
+  restoration.
+
 ## Tokens
 
 The handoff tokens are supplied in `Finnapp mobile
@@ -101,3 +131,6 @@ One line per landed design change: date, what changed, why.
 
 - 2026-08-09 — registered the frozen mobile source hierarchy and linked the
   backend gap audit; no design asset changed.
+- 2026-08-12 — recorded the Phase 15 fast-track resolutions for Plan, unified
+  versus advanced Transactions filters, history navigation, shared periods,
+  software-keyboard acceptance, safe-area measurement, and archive copy.

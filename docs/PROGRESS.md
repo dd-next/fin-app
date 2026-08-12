@@ -21,17 +21,17 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None — Phase 15 has not started |
-| Next | Specify and readiness-review T-023; do not claim implementation before that reviewed task exists |
+| Active work | Phase 15 specification/readiness preparation; no implementation claimed |
+| Next | Complete the batch readiness review, promote only T-023, then claim `task/T-023-mobile-shell` |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
 
-Phase 14 is closed. T-023 is the exact first Phase 15 task: import only the
-approved design tokens that the runtime uses and establish the responsive
-390×844 mobile shell, safe areas, and five-tab navigation while preserving the
-working desktop shell. Before implementation, create its bounded task file and
-complete the required readiness review; its backlog status remains `backlog`.
+Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
+files, including the required T-024/T-027/T-030 splits. ADR-0011 defines a
+usable local preview after T-029 without calling the phase accepted. T-023 is
+the exact first implementation task and remains `backlog` until the batch
+readiness review is recorded.
 
 Phase 15 authority and constraints:
 
@@ -50,6 +50,11 @@ Phase 15 authority and constraints:
 - Do not change the accepted backend contracts to compensate for frontend
   composition. Period values stay ledger-derived; Plan projections stay
   non-ledger; money/rates stay exact Decimal.
+- [`ADR-0011`](decisions/ADR-0011-phase15-usable-preview-fast-track.md) permits
+  targeted per-task gates and a local preview checkpoint; final P0–P2 closure,
+  full tests, mobile acceptance, and desktop regression remain mandatory.
+- Origin is intentionally not the task base. Local accepted
+  `finapp-v2-develop` is authoritative until the owner later pushes/deploys.
 
 ## Last verified gates — Phase 14 (2026-08-12)
 

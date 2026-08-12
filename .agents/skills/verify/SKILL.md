@@ -5,57 +5,82 @@ description: Launch and drive this app end-to-end (FastAPI + SPA) to verify a ch
 
 # Verify this app end-to-end
 
-## Launch (isolated — never against the repo's finapp.db)
+## Launch (isolated — never against the repo's `finapp.db`)
 
 ```sh
-DATABASE_URL="sqlite+aiosqlite:////ABS/PATH/scratch.db" \
-  .venv/bin/uvicorn app.main:app --port 8765 --log-level warning &
-curl -s http://127.0.0.1:8765/health   # {"status":"ok"} when up
+FINAPP_VERIFY_DIR="$(mktemp -d /private/tmp/finapp-verify.XXXXXX)"
+FINAPP_VERIFY_DB="$FINAPP_VERIFY_DIR/finapp.db"
+DATABASE_URL="sqlite+aiosqlite:///$FINAPP_VERIFY_DB" .venv/bin/alembic upgrade head
+DATABASE_URL="sqlite+aiosqlite:///$FINAPP_VERIFY_DB" \
+  .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8765 --log-level warning
 ```
 
-`app/db.py` reads `DATABASE_URL`; four slashes = absolute path.
-
-## Drive
+Run Uvicorn in a persistent terminal/session, then verify from another shell:
 
 ```sh
-curl -s -X POST :8765/period -H 'Content-Type: application/json' \
-  -d '{"total_amount":"1000","start_date":"2026-07-14","end_date":"2026-07-23"}'
-curl -s -X POST :8765/operations -d '{"amount":"90","comment":"x"}' -H 'Content-Type: application/json'
-curl -s -X POST :8765/operations -d '{"amount":"50","kind":"income"}' -H 'Content-Type: application/json'
-curl -s ":8765/budget?pending=50"        # live preview
-curl -s :8765/export.xlsx -o /tmp/e.xlsx # read back with .venv openpyxl
+curl -sS -i http://127.0.0.1:8765/health
+curl -sS -I http://127.0.0.1:8765/
 ```
 
-Multi-day states: start the period in the past, and/or backdate expenses by
-writing to the scratch DB directly:
+`app/db.py` reads `DATABASE_URL`; four slashes before an absolute path are
+required. Keep the explicit scratch URL on both Alembic and Uvicorn. Never
+unset `DATABASE_URL` and assume that the default database is safe.
+
+## Establish an authenticated scratch workspace
+
+Register through the visible UI, or preserve the session cookie with the
+current API:
 
 ```sh
-sqlite3 scratch.db "INSERT INTO expense (period_id, amount, kind, comment, created_at)
-  VALUES (1, '250', 'expense', 'yesterday', '2026-07-14 12:00:00.000000');"
+curl -sS -c "$FINAPP_VERIFY_DIR/cookies.txt" \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"uiowner","password":"correct-horse-battery","display_name":"UI Owner","timezone":"Asia/Ho_Chi_Minh","base_asset_code":"USD"}' \
+  http://127.0.0.1:8765/api/v1/auth/register
+curl -sS -b "$FINAPP_VERIFY_DIR/cookies.txt" \
+  http://127.0.0.1:8765/api/v1/auth/me
 ```
 
-Gotchas: amounts are stored as TEXT; `POST /period` deletes + recreates the
-period so SQLite **reuses rowid 1** — always `SELECT id FROM period` first
-(the sqlite3 CLI does not enforce the FK, so a wrong period_id silently
-creates an invisible orphan row).
+Use the public `/api/v1` contracts or the visible UI to create accounts,
+periods, operations, rates, and Plan data. Do not insert directly into SQLite:
+direct rows can bypass ledger, permission, replay, and soft-void invariants.
 
-## UI pixels (headless Chrome works on this machine)
+## Browser matrix
+
+The app is the acceptance surface. Drive it with the available browser tooling
+against the scratch server and retain screenshots in the task's scratch
+directory.
+
+- Mobile reference: `390×844`.
+- Preserved desktop acceptance width: `1280×900`.
+- Register or log in through the UI so the actual cookie/session flow is used.
+- Exercise the task's visible state, loading/error/empty state, keyboard/focus
+  state when applicable, and the return path from sheets/confirmations.
+- Inspect browser console errors and horizontal/forbidden vertical overflow.
+- Never treat a static HTML/CSS string assertion as visual acceptance.
+
+For a public/auth-shell pixel smoke, headless Chrome is available:
 
 ```sh
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --headless=new --disable-gpu --hide-scrollbars --window-size=480,900 \
-  --virtual-time-budget=4000 --user-data-dir="$SCRATCH/chrome-profile-N" \
-  --screenshot="$SCRATCH/ui.png" http://127.0.0.1:8765/
+  --headless=new --disable-gpu --hide-scrollbars --window-size=390,844 \
+  --virtual-time-budget=4000 \
+  --user-data-dir="$FINAPP_VERIFY_DIR/chrome-mobile" \
+  --screenshot="$FINAPP_VERIFY_DIR/mobile-auth.png" \
+  http://127.0.0.1:8765/
 ```
 
-Use a **fresh** `--user-data-dir` per shot (profile lock makes reruns silently
-produce nothing). `--virtual-time-budget` lets the SPA's fetches finish.
+Use a fresh `--user-data-dir` per Chrome run; profile locks otherwise make
+reruns silently fail. Headless screenshots do not replace authenticated
+interactive checks for feature tasks.
 
-## Flows worth driving
+## Required financial UI checks when the task touches them
 
-- 1:1 spend: today's number must drop by exactly the expense amount.
-- Over-state: spend past `budget_today` → UI shows 0, "now spending the
-  overall budget", red `next_daily` ("was `daily_base`").
-- Carryover: period started yesterday, nothing spent → today = 2 × base.
-- Rebase: backdated overspent day → today = remaining / days-after.
-- Delete an expense → numbers recompute (pure function of DB state).
+- Spend above Available today remains valid; the recalculated allowance may be
+  negative.
+- Transfer uses the quote/execute result and preserves both account values and
+  Total capital semantics.
+- Period Start/Edit uses the selected rollover policy and refreshes the
+  ledger-derived cards.
+- Delete and Undo remain soft operations and refresh balances/periods.
+- Planned feed rows never change real balances until an eligible transaction
+  is linked.

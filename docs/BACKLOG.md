@@ -59,20 +59,24 @@ the existing server-session model.
 Phase 15 uses the frozen mobile specification after accepted T-022. Desktop
 remains functional and is preserved where no desktop redesign exists. Under
 ADR-0010, Phase 15 omits transaction-type conversion, category merge/delete,
-and account-restoration controls and does not promise restoration. T-023 is the
-first row, but it is not workable until its task file and readiness review exist.
+and account-restoration controls and does not promise restoration. ADR-0011
+defines the usable-preview fast-track. T-023 is the only initial task; later
+rows remain blocked until their accepted dependencies land.
 
 | ID | Task | Status | Size | Spec | Blocked by |
 |----|------|--------|------|------|------------|
-| T-023 | Import approved tokens and responsive mobile shell | backlog | M | design §01 | T-022 |
-| T-024 | Mobile primitives, sheets, pickers, and confirmations | backlog | L | design §02, §04 | T-023 |
-| T-025 | Accounts, Profile, manual rates, logout, and sharing placeholders | backlog | M | design §03.1, §04 | T-024 |
-| T-026 | Transactions feed, filters, details, correction, and swipe flows | backlog | M | design §03.2, §05 | T-024 |
-| T-027 | Operations/period flows and informational Available today | backlog | L | design §03.3, §05 | T-024, T-022 |
-| T-028 | Plan three-action row, settings, and Analytics placeholder | backlog | M | design §03.4–§03.5 | T-019, T-024 |
-| T-029 | Navigation graph, keyboard states, motion, and accessibility | backlog | M | design §05, §08 | T-025–T-028 |
-| T-030 | 390×844 acceptance and desktop regression matrix | backlog | L | design §08 | T-029 |
-| T-031 | Phase 15 documentation and release close | backlog | S | all Phase 15 | T-030 |
+| [T-023](tasks/T-023-mobile-shell.md) | Import approved tokens and responsive mobile shell | backlog | M | design §01 | T-022 |
+| [T-024A](tasks/T-024A-mobile-primitives.md) | Build reusable mobile visual primitives | backlog | M | design §01–§02 | T-023 |
+| [T-024B](tasks/T-024B-mobile-overlays.md) | Establish sheets, pickers, and confirmations | backlog | M | design §02, §04–§05 | T-024A |
+| [T-025](tasks/T-025-mobile-accounts-profile.md) | Accounts, Profile, manual rates, logout, and sharing | backlog | M | design §03.1, §04 | T-024B |
+| [T-026](tasks/T-026-mobile-transactions.md) | Transactions feed, filters, details, correction, and swipe | backlog | M | design §03.2, §05 | T-024B |
+| [T-027A](tasks/T-027A-mobile-operations.md) | Operations action surface and exact Save flows | backlog | M | design §03.3, §05 | T-024B |
+| [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | backlog | M | design §03.3, §04–§05 | T-027A |
+| [T-028](tasks/T-028-mobile-plan-analytics.md) | Plan rule/occurrence flows and Analytics placeholder | backlog | M | spec §8, design §03.4–§03.5 | T-019, T-024B |
+| [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | backlog | M | design §05, §08 | T-025, T-026, T-027B, T-028 |
+| [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the 390×844 mobile acceptance matrix | backlog | M | design §01–§08 | T-029 |
+| [T-030B](tasks/T-030B-desktop-regression.md) | Preserve desktop and run the Phase 15 regression gate | backlog | M | build plan Phase 15 | T-030A |
+| [T-031](tasks/T-031-phase15-close.md) | Assemble Phase 15 closure evidence | backlog | S | all Phase 15 | T-030B |
 
 ## Deferred — after Phase 15
 
