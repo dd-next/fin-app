@@ -1,13 +1,13 @@
 ---
 id: T-025A
 title: Implement mobile Accounts and account lifecycle
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.1; spec/04-sheets.md account catalogue
 blocked-by: [T-024B]
 branch: task/T-025A-mobile-accounts
-base-commit:
-implementer:
+base-commit: 27a80e97e71ea110197950025be5b06a67f8f51b
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
