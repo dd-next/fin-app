@@ -1,7 +1,7 @@
 ---
 id: T-028
 title: Implement mobile Plan flows and Analytics placeholder
-status: backlog
+status: todo
 size: M
 spec: specs/FinnApp-v2.md §8; design/Finnapp mobile specification/spec/03-screens.md §3.4–§3.5; spec/04-sheets.md
 blocked-by: [T-019, T-024B]
@@ -75,3 +75,7 @@ Append the bounded independent implementation review following the protocol.
 - 2026-08-12 Codex GPT-5: task specified for batch readiness; not claimed.
 - 2026-08-12 Codex GPT-5: independent batch readiness verdict `ready`; remains
   blocked by T-024B.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  confirmed T-019 and T-024B accepted, accepted T-028 readiness evidence, and
+  promoted T-028 from `backlog` to `todo` on accepted integration `0630535`;
+  no task branch was claimed in this checkpoint.
