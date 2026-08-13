@@ -22,8 +22,8 @@ the one task file you are working on. Nothing else by default.
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
 | Active work | T-030A core iPhone 15 mobile acceptance on `task/T-030A-mobile-acceptance` |
-| Next | Fix and verify Accounts, Transactions, and Operations Safari regressions |
-| Blocker | None |
+| Next | Repository-owner iPhone 15 Safari acceptance for reviewed T-030A checkpoint |
+| Blocker | Actual-device Safari evidence is required to accept T-030A |
 
 ## Phase 15 handoff — mobile redesign
 
@@ -56,13 +56,16 @@ now locally accepted: reviewed implementation `0ac4693` was fast-forwarded into
 exact 11-test target, diff and forbidden-native-API checks were re-run at
 acceptance and pass; the syntax gate stands on the implementation session's
 bundled-Node run because no Node runtime exists in the acceptance environment.
-The preview is usable under ADR-0011. The repository owner has narrowed T-030A
-to an iPhone 15 fast-track for Accounts, Transactions, and Operations after
+The preview is usable under ADR-0011. The repository owner narrowed T-030A to
+an iPhone 15 fast-track for Accounts, Transactions, and Operations after
 reporting Safari regressions; Plan, Analytics, and desktop verification are
-explicitly deferred and their code is out of scope. Phase 15 remains incomplete
-and unaccepted. The narrowed T-030A readiness review and two limited re-reviews
-closed all P0–P3 findings. It is claimed from accepted integration `867f87e`
-and in progress on its exact task branch.
+explicitly deferred. The reviewed implementation now fixes the reported core
+tab-bar, mixed Planned feed, sheet geometry and focus-zoom regressions. Its
+focused 72-test, JavaScript and diff gates pass, and disposable 393×852 plus
+390×844 browser evidence passes with a clean console. The independent bounded
+implementation review has no remaining P0–P3 finding. T-030A is in `review` on
+its exact task branch; actual iPhone 15 Safari evidence is still required for
+owner acceptance. Phase 15 remains incomplete and unaccepted.
 
 `finapp-v2-develop` has been pushed to `origin` on owner instruction, so the
 remote integration branch now matches local accepted state. `finapp-v2` was not

@@ -1,7 +1,7 @@
 ---
 id: T-030A
 title: Pass the core iPhone 15 mobile acceptance matrix
-status: in-progress
+status: review
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md through spec/06-content.md; spec/08-acceptance.md scoped to Accounts, Transactions, and Operations
 blocked-by: [T-029]
@@ -48,10 +48,10 @@ desktop verification out of this task without changing their current code.
       override older exported fixtures.
 - [ ] Contrast and reduced motion pass; console and network contain no
       unexplained errors.
-- [ ] Transactions keeps the bottom tab bar visible while the feed scrolls and
+- [x] Transactions keeps the bottom tab bar visible while the feed scrolls and
       excludes planned occurrences from All/Income/Expense/Transfer; planned
       rows appear only after explicitly selecting Planned.
-- [ ] `All` is a lossless frontend drain over the existing
+- [x] `All` is a lossless frontend drain over the existing
       `/api/v1/transaction-feed?filter=all` financial-date feed and its opaque
       cursor: successive mixed source pages are consumed until 50 persisted
       rows have been collected or the source cursor is exhausted, and planned
@@ -59,7 +59,7 @@ desktop verification out of this task without changing their current code.
       rows still needed, so no persisted overflow buffer is lost. Income/
       Expense/Transfer/Planned keep using their accepted feed filters; no
       backend/API contract changes.
-- [ ] Core-section sheets span the viewport width, extend through the tab bar
+- [x] Core-section sheets span the viewport width, extend through the tab bar
       to the bottom safe edge, and cover the tab bar while open. Option rows and
       hairlines fill the available body width; long bodies scroll without
       clipping the header, footer, or actions. Scrim, close, Escape and
@@ -69,13 +69,13 @@ desktop verification out of this task without changing their current code.
 - [ ] Focusing text, numeric, date, or textarea controls in iPhone Safari does
       not trigger automatic page zoom; user-initiated pinch zoom remains
       available.
-- [ ] In-scope editable `input`/`textarea` controls have computed font size
+- [x] In-scope editable `input`/`textarea` controls have computed font size
       `>=16px` as an owner-approved mobile exception to the frozen 15px field
       value. The viewport meta keeps `initial-scale=1` and does not add
       `maximum-scale` or `user-scalable=no`.
 - [ ] Every recorded core-mobile preview P2/P3 is enumerated; all core-mobile
       P0–P2 are resolved before this task is accepted.
-- [ ] Fixes are mobile-bounded and do not change backend or invent desktop UI.
+- [x] Fixes are mobile-bounded and do not change backend or invent desktop UI.
 
 ## Touches
 
@@ -141,6 +141,62 @@ Append the bounded independent implementation review following the protocol.
 >
 > Verdict: **READY**. Exact reviewed task-file commit: `36fa32a3676cf66ecb8e5c5588cd6bcbfae62756`.
 
+### Bounded implementation review — 2026-08-13
+
+- Reviewer: `/root/t030a_core_impl_review`, Codex GPT-5 fresh same-vendor
+  fallback; cross-vendor review was unavailable. Read-only; no repository files
+  or Git state changed.
+- Reviewed range: base `ac95842f` plus the uncommitted implementation manifest
+  in `app/static/`, `docs/design/DESIGN-NOTES.md`, and the focused frontend
+  tests named by this task.
+- Initial verdict: changes requested; no P0/P3 findings. Findings, transcribed
+  verbatim from the reviewer handoff:
+
+> (1) P1 desktop/out-of-scope regression: index.html moves `#primary-nav` from inside `#app-shell` before views to a sibling after all views (index.html 220-228), while desktop CSS keeps `.primary-nav` static (style.css 126-130). At >640px nav therefore renders after the page content, materially changing/breaking desktop/Plan/Analytics despite explicit no-desktop/no-Plan/Analytics-change scope. Must preserve desktop DOM/layout while isolating mobile fixed-nav remedy.
+>
+> (2) P1 cross-domain overlay exclusion: default `coverTabBar` derives from `state.activeView` (app.js 553-570, 646-650). `openMobileRateSettings` has no `coverTabBar:false` (2731ff), and Accounts missing-rate warning opens it directly without Profile parent (1852ff), so this Settings/Rate sheet now inherits core/full-bottom geometry, violating explicit Profile/Settings/Plan prior-geometry requirement.
+>
+> (3) P2 missing meaningful pagination test: new tests only substring-inspect helper (tests/test_phase15_mobile_acceptance.py 48-67 and test_mobile_transactions...), but task explicitly requires plan-heavy multi-page and corrected-financial-date/cursor coverage. No executable/mock/API-sequence test proves request limits/cursors, 50 persisted collection, source exhaustion, append continuity/order, or explicit Planned unchanged.
+
+- Resolution: restored the original desktop nav DOM position and introduced
+  mobile-only runtime reparenting; added explicit non-covering geometry to the
+  Profile, Categories, Rate and Plan root/confirmation paths; and added an
+  executable Node test of the real feed helper covering plan-heavy `50 -> 48 ->
+  1` requests, opaque cursors, 50-row stable order, append continuity, source
+  exhaustion and explicit Planned pass-through.
+- Final limited re-review, transcribed verbatim:
+
+> Limited re-review complete: all three prior findings are closed; no residual P0–P3. Desktop P1 closed by restoring nav to original DOM location and mobile-only runtime reparenting, with desktop restoration before page-loading. Settings/Rate P1 closed: Profile, Categories, Rate root sheets and post-close Rate Saved confirmations explicitly retain coverTabBar:false; nested flows inherit it. Pagination P2 closed by executable Node test covering plan-heavy 50→48→1 requests, opaque cursors, 50 persisted/order, append continuity, explicit Planned pass-through, and exhaustion. Re-ran focused gate: 72 passed; node --check and git diff --check pass. Verdict READY for this bounded implementation block; actual iPhone/WebKit acceptance remains separate.
+
+## Verification evidence — 2026-08-13
+
+The automated and scratch-browser implementation gates pass. The browser
+evidence below used a disposable migrated SQLite database in
+`/private/tmp/finapp-t030a.DWLtA1/finapp.db`; `finapp.db` was not touched.
+
+| Evidence | Expected | Observed | Method / evidence name |
+|---|---|---|---|
+| Focused gate | all focused suites pass | `72 passed in 0.29s` | exact task pytest command, `focused-72` |
+| JavaScript / diff | syntax and whitespace clean | both passed | `node-check`, `diff-check` |
+| Accounts shell | fixed tab bar; no horizontal overflow | nav `796..852`; overflow `0` | 393×852 IAB, `accounts-shell-393` |
+| Core Purpose sheet | full width and covers tab bar | width `393`; bottom `852`; nav begins `796`; covered | `accounts-purpose-core-sheet-393` |
+| Account text focus | 16px; viewport scale remains 1 | `16px`; scale `1 -> 1`; width `393 -> 393` | `account-name-focus-393` |
+| Transactions long feed | 50 persisted All rows; no Planned; fixed nav throughout | 50 rows, 0 planned; nav `796..852` at scroll `0`, `1700`, `2598` | 60 persisted spends plus one plan occurrence, `transactions-top-mid-end-393` |
+| Explicit Planned | planned occurrence remains accessible only in Planned | one row, one Planned pill, title `Should only be Planned` | `transactions-planned-explicit-393` |
+| Operations | both cards are 96px; no horizontal/page overflow | `96`, `96`; shell `796/796`; overflow `0` | `operations-shell-393` |
+| Operations textarea focus | 16px; viewport scale remains 1 | `16px`; scale `1 -> 1`; width `393 -> 393` | `operations-note-focus-393` |
+| 390×844 compatibility | same bounded shell geometry | cards `96`, `96`; nav `788..844`; shell `788/788`; overflow `0` | `operations-compat-390` |
+| Browser console | no unexplained warnings/errors in exercised flows | `0` warnings/errors | `console-final` |
+
+The available in-app browser was used for deterministic layout and behavior
+checks, but it is not recorded as WebKit and therefore does not replace the
+task's required actual iPhone 15 Safari evidence. Repository-owner device
+acceptance remains pending for: visual/layout viewport scale before and after
+text, numeric, date and textarea focus; keyboard dismissal; user pinch zoom;
+expanded/collapsed Safari toolbar; and tab-bar bounds at the top, middle and end
+of the long Transactions feed. Until that evidence exists, the unchecked full
+matrix and real-Safari acceptance items above are intentionally not claimed.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-030; not claimed.
@@ -155,3 +211,8 @@ Append the bounded independent implementation review following the protocol.
   accepted integration `867f87e`; `/root`, Codex GPT-5 atomically claimed
   `task/T-030A-mobile-acceptance` from that exact base and started only the
   owner-scoped core iPhone 15 fast-track.
+- 2026-08-13 `/root`, Codex GPT-5: implemented and independently re-reviewed
+  the bounded core fixes. The focused 72-test, JavaScript and diff gates pass;
+  disposable 393×852 and 390×844 browser checks pass for the reported bugs,
+  geometry, focus scale and console. T-030A is in review with no P0–P3 code
+  finding; actual iPhone 15 Safari/device evidence remains for owner acceptance.

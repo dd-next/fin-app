@@ -774,6 +774,7 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-sheet-safe-band { height: var(--mobile-safe-bottom); min-height: var(--mobile-safe-bottom); }
   body.overlay-active .mobile-sheet-safe-band { height: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); min-height: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); }
   .mobile-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 48px; padding: 0; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--mobile-hairline); border-radius: 0; background: transparent; color: var(--mobile-text); }
+  .mobile-option-list, .mobile-option { width: 100%; }
   .mobile-option[aria-disabled="true"] { color: var(--mobile-hint); }
   .mobile-option-current { color: var(--mobile-accent); }
   .mobile-sheet-message { padding: 8px 0; color: var(--mobile-muted); font-size: 14px; line-height: 1.5; }
@@ -787,6 +788,11 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-sheet-toggle { display: flex; min-height: 44px; padding: 0 2px; align-items: center; justify-content: space-between; color: var(--mobile-secondary); font-size: 14px; }
   .mobile-sheet-toggle input { width: 22px; min-height: 22px; }
   .mobile-sheet-hint { margin: 0; color: var(--mobile-muted); font-size: 12px; line-height: 1.45; }
+  #view-accounts input:not([type="checkbox"]), #view-accounts textarea,
+  #view-transactions input:not([type="checkbox"]), #view-transactions textarea,
+  #view-operations input:not([type="checkbox"]), #view-operations textarea,
+  .mobile-overlay-root.core-overlay input:not([type="checkbox"]),
+  .mobile-overlay-root.core-overlay textarea { font-size: 16px; }
   .mobile-account-detail { display: grid; gap: 14px; }
   .mobile-readonly-list { display: grid; margin: 0; border-top: 1px solid var(--mobile-hairline); }
   .mobile-readonly-list > div { display: flex; min-height: 44px; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--mobile-hairline); }
@@ -895,4 +901,5 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   }
   body.overlay-active .mobile-sheet-safe-band { height: var(--mobile-safe-bottom); min-height: var(--mobile-safe-bottom); }
   body.overlay-active .mobile-confirm { bottom: var(--mobile-safe-bottom); }
+  .mobile-overlay-root.core-overlay { bottom: 0; }
 }

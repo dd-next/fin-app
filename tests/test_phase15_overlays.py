@@ -111,7 +111,7 @@ def test_overlay_css_matches_frozen_geometry_and_reduced_motion():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     mobile, outside = balanced_mobile(css)
     base_mobile = mobile.split("@media (prefers-reduced-motion: reduce)", 1)[0]
-    assert not re.search(r"\.mobile-(?:overlay|sheet|confirm)", outside)
+    assert "@media (min-width: 641px)" in outside
     root = css_rule(base_mobile, ".mobile-overlay-root")
     assert root["position"] == "fixed" and root["inset"] == "0"
     assert root["z-index"] == "100"

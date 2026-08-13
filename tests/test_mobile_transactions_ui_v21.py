@@ -32,9 +32,15 @@ def test_mobile_transactions_header_chips_and_empty_copy_are_frozen():
 def test_mobile_top_chips_use_real_feed_and_opaque_cursor():
     javascript = source("app.js")
 
-    assert 'new URLSearchParams({ filter: state.transactionFeedFilter, limit: "50" })' in javascript
-    assert 'query.set("cursor", state.transactionFeedCursor)' in javascript
+    drain_start = javascript.index("async function fetchMobileTransactionFeedPage")
+    drain_end = javascript.index("async function loadMobileTransactionFeed", drain_start)
+    drain = javascript[drain_start:drain_end]
+    assert 'new URLSearchParams({ filter, limit: String(remaining) })' in drain
+    assert 'query.set("cursor", sourceCursor)' in drain
     assert 'api(`/api/v1/transaction-feed?${query}`)' in javascript
+    assert 'page.items.filter((item) => item.kind === "transaction")' in drain
+    assert 'sourceCursor = page.next_cursor' in drain
+    assert 'persisted.length < visibleLimit' in drain
     assert "state.transactionFeedCursor = page.next_cursor" in javascript
     filter_start = javascript.index("async function setMobileTransactionFeedFilter")
     filter_end = javascript.index("function openTransactionDetails", filter_start)
@@ -66,11 +72,11 @@ def test_discriminated_feed_details_preserve_redaction_and_plan_sheet_flow():
     assert "openMobilePlannedDetail(detail, opener)" in javascript
     assert "openMobileTransactionDetails(detail.transaction, opener)" in javascript
     assert "Some movements are hidden because you only have access to part of this transaction." in javascript
-    planned_start = javascript.index("function openMobilePlannedDetail")
-    planned_end = javascript.index("function eligiblePlanOccurrences", planned_start)
+    planned_start = javascript.index("function openMobilePlanItem")
+    planned_end = javascript.index("async function archivePlanRule", planned_start)
     planned_flow = javascript[planned_start:planned_end]
     assert 'kicker: "PLAN"' in planned_flow
-    assert 'primaryLabel: detail.available_actions.includes("link_transaction") ? "Link transaction"' in planned_flow
+    assert 'coverTabBar: false' in planned_flow
     assert "switchView(" not in planned_flow
 
 

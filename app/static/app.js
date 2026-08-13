@@ -326,9 +326,20 @@ function showAuth() {
   state.context = null;
   $("auth-card").classList.remove("hidden");
   $("app-shell").classList.add("hidden");
+  $("primary-nav").hidden = true;
   if (pendingInvite) {
     document.querySelector(".auth-copy").textContent = "Log in or create an account to accept your account invitation.";
   }
+}
+
+function placePrimaryNavForViewport() {
+  const nav = $("primary-nav");
+  const shell = $("app-shell");
+  if (isMobileViewport()) {
+    if (nav.parentElement === shell) shell.after(nav);
+    return;
+  }
+  if (nav.parentElement !== shell) shell.insertBefore(nav, $("page-loading"));
 }
 
 async function categoriesFor(workspaceId) {
@@ -389,6 +400,8 @@ async function showApp(context) {
   state.context = context;
   $("auth-card").classList.add("hidden");
   $("app-shell").classList.remove("hidden");
+  placePrimaryNavForViewport();
+  $("primary-nav").hidden = false;
   $("workspace-name").textContent = context.workspace.name;
   $("profile-summary").textContent = context.user.display_name;
   $("profile-name").textContent = context.user.display_name;
@@ -409,7 +422,9 @@ async function refreshAll() {
     const [summary, page, feedPage, planRules, planOccurrences] = await Promise.all([
       api("/api/v1/accounts/summary"),
       api(transactionUrl),
-      api(`/api/v1/transaction-feed?filter=${encodeURIComponent(state.transactionFeedFilter)}&limit=50`),
+      isMobileViewport()
+        ? fetchMobileTransactionFeedPage(state.transactionFeedFilter)
+        : api(`/api/v1/transaction-feed?filter=${encodeURIComponent(state.transactionFeedFilter)}&limit=50`),
       api(`/api/v1/workspaces/${workspaceId}/plan-rules`),
       api(`/api/v1/workspaces/${workspaceId}/plan-occurrences`),
     ]);
@@ -476,6 +491,7 @@ function renderMobileOverlay() {
   const sheet = $("mobile-sheet");
   const confirmation = $("mobile-confirm");
   document.body.classList.toggle("overlay-active", active);
+  root.classList.toggle("core-overlay", Boolean(active && entry.coverTabBar));
   if (active) {
     root.hidden = false;
     if (!root.matches(":popover-open")) root.showPopover();
@@ -547,7 +563,8 @@ function renderMobileOverlay() {
 
 function openMobileSheet(config, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const parentContext = mobileOverlayState.stack.at(-1)?.context || null;
+  const parent = mobileOverlayState.stack.at(-1) || null;
+  const parentContext = parent?.context || null;
   mobileOverlayState.stack.push({
     kind: "sheet",
     kicker: String(config.kicker || ""),
@@ -560,6 +577,7 @@ function openMobileSheet(config, opener = document.activeElement) {
     onPrimary: config.onPrimary,
     onClose: config.onClose,
     context: config.context || parentContext,
+    coverTabBar: config.coverTabBar ?? parent?.coverTabBar ?? ["accounts", "transactions", "operations"].includes(state.activeView),
     returnFocusSelector: config.returnFocusSelector || "",
     opener,
     openerId: opener?.id || "",
@@ -636,9 +654,10 @@ function openMobileChoose({ title, options, onSelect, onClose, returnFocusSelect
   }, opener);
 }
 
-function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
+function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0, coverTabBar }, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: mobileOverlayState.stack.at(-1)?.context || null };
+  const parent = mobileOverlayState.stack.at(-1) || null;
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: parent?.context || null, coverTabBar: coverTabBar ?? parent?.coverTabBar ?? ["accounts", "transactions", "operations"].includes(state.activeView) };
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
@@ -2480,6 +2499,7 @@ function openMobileProfile(opener = document.activeElement) {
     kicker: "ACCOUNT",
     title: state.context.user.username,
     buildBody: mobileProfileBody,
+    coverTabBar: false,
   }, opener);
 }
 
@@ -2533,6 +2553,7 @@ async function openMobileCategories(opener = document.activeElement) {
   openMobileSheet({
     kicker: "SETTINGS",
     title: "Categories",
+    coverTabBar: false,
     buildBody: mobileCategoriesBody,
     primaryLabel: "Add category",
     onPrimary: () => openMobileCategoryForm(null, document.activeElement),
@@ -2699,7 +2720,7 @@ function buildMobileRateBody(draft) {
         await refreshAll();
         await loadManualRates();
         closeAllMobileOverlays();
-        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was deleted.`, variant: "saved" }, draft.opener);
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was deleted.`, variant: "saved", coverTabBar: false }, draft.opener);
       },
     }, remove));
     body.append(remove);
@@ -2722,6 +2743,7 @@ async function openMobileRateSettings(opener = document.activeElement, preferred
   openMobileSheet({
     kicker: "EXCHANGE",
     title: "Set a rate",
+    coverTabBar: false,
     secondaryLabel: "Cancel",
     primaryLabel: "Save rate",
     buildBody: () => buildMobileRateBody(draft),
@@ -2740,7 +2762,7 @@ async function openMobileRateSettings(opener = document.activeElement, preferred
         await refreshAll();
         await loadManualRates();
         closeAllMobileOverlays();
-        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was saved.`, variant: "saved" }, opener);
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was saved.`, variant: "saved", coverTabBar: false }, opener);
       } catch (error) {
         draft.error = error.message;
         renderMobileOverlay();
@@ -3813,6 +3835,7 @@ function openMobilePlanItem(
     kicker: "PLAN",
     title: occurrence.rule.name,
     buildBody: () => buildMobilePlanItemBody(occurrence, actions),
+    coverTabBar: false,
   }, opener);
 }
 
@@ -3999,14 +4022,34 @@ function canLinkTransactionToPlan(transaction) {
     && ["expense", "income", "transfer"].includes(transaction.type);
 }
 
+async function fetchMobileTransactionFeedPage(filter, cursor = null, visibleLimit = 50) {
+  let sourceCursor = cursor;
+  const persisted = [];
+  do {
+    const remaining = visibleLimit - persisted.length;
+    const query = new URLSearchParams({ filter, limit: String(remaining) });
+    if (sourceCursor) query.set("cursor", sourceCursor);
+    const page = await api(`/api/v1/transaction-feed?${query}`);
+    if (filter !== "all") return page;
+    persisted.push(...page.items.filter((item) => item.kind === "transaction"));
+    if (!page.next_cursor || page.next_cursor === sourceCursor) {
+      sourceCursor = null;
+      break;
+    }
+    sourceCursor = page.next_cursor;
+  } while (persisted.length < visibleLimit);
+  return { items: persisted, next_cursor: sourceCursor };
+}
+
 async function loadMobileTransactionFeed(append = false) {
   if (state.transactionFeedLoading) return false;
   state.transactionFeedLoading = true;
   setLoading(true);
   try {
-    const query = new URLSearchParams({ filter: state.transactionFeedFilter, limit: "50" });
-    if (append && state.transactionFeedCursor) query.set("cursor", state.transactionFeedCursor);
-    const page = await api(`/api/v1/transaction-feed?${query}`);
+    const page = await fetchMobileTransactionFeedPage(
+      state.transactionFeedFilter,
+      append ? state.transactionFeedCursor : null,
+    );
     state.transactionFeedItems = append ? [...state.transactionFeedItems, ...page.items] : page.items;
     state.transactionFeedCursor = page.next_cursor;
     renderTransactions();
@@ -4358,6 +4401,7 @@ async function openMobilePlanLink(transaction = null, opener = document.activeEl
     kicker: "PLAN VS ACTUAL",
     title: "Link transaction",
     buildBody: bodyBuilder,
+    coverTabBar: false,
     secondaryLabel: "Cancel",
     primaryLabel: "Link transaction",
     primaryDisabled: () => !draft.occurrenceId || !draft.transactionId,
@@ -4374,7 +4418,7 @@ async function openMobilePlanLink(transaction = null, opener = document.activeEl
         });
         closeAllMobileOverlays();
         await refreshAll();
-        openMobileConfirmation({ title: "Saved", body: "The transaction was linked to the Plan item.", variant: "saved" }, opener);
+        openMobileConfirmation({ title: "Saved", body: "The transaction was linked to the Plan item.", variant: "saved", coverTabBar: false }, opener);
       } catch (error) {
         draft.error = error.message;
         renderMobileOverlay();
@@ -5115,6 +5159,9 @@ $("mobile-overlay-root").addEventListener("focusin", (event) => {
   }
 });
 document.querySelectorAll(".primary-nav button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+window.addEventListener("resize", () => {
+  if (state.context) placePrimaryNavForViewport();
+});
 document.querySelectorAll("[data-operation-action]").forEach((button) => {
   button.addEventListener("click", () => setOperationsAction(button.dataset.operationAction));
   button.addEventListener("keydown", (event) => {

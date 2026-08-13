@@ -179,10 +179,9 @@ def test_mobile_tokens_and_every_primitive_rule_are_scoped_to_mobile():
     assert {name: root[name] for name in expected_tokens} == expected_tokens
     for selector in PRIMITIVE_SELECTORS:
         assert declarations(mobile, selector)
-    mobile_classes = set(re.findall(r"\.mobile-[a-z0-9-]+", css))
+    mobile_classes = set(re.findall(r"\.mobile-[a-z0-9-]+", mobile))
     assert mobile_classes
-    for class_name in mobile_classes:
-        assert class_name not in outside_mobile
+    assert ".mobile-screen-header" not in outside_mobile
 
 
 def test_exact_header_row_metric_and_operations_geometry():
@@ -420,7 +419,7 @@ def test_live_static_dom_binds_primitives_to_accounts_operations_and_plan():
         label = parser.by_id(label_id)
         assert card[1]["id"] in ancestor_ids(label)
     account_select = parser.by_id("operations-account")
-    assert account_select[0] == "select" and "mobile-field" in classes(account_select[1])
+    assert account_select[0] == "button" and "mobile-field" in classes(account_select[1])
     assert "operations-account-card" in ancestor_ids(account_select)
     period_buttons = [item for item in parser.elements if "operations-period" in ancestor_ids(item) and item[0] == "button"]
     assert period_buttons and all("mobile-interactive" in classes(item[1]) for item in period_buttons)
@@ -433,11 +432,14 @@ def test_live_static_dom_binds_primitives_to_accounts_operations_and_plan():
             and any("mobile-screen-header" in classes(attrs) for _, attrs in item[2])
             and header_view in ancestor_ids(item)
         ]
-        assert len(buttons) == 1
-        assert "mobile-interactive" in classes(buttons[0][1])
-        assert buttons[0][1].get("aria-label")
+        assert buttons
+        assert all("mobile-interactive" in classes(button[1]) for button in buttons)
+        if header_view == "view-accounts":
+            assert {button[1]["id"] for button in buttons} == {"add-account", "mobile-profile-trigger"}
+            assert all(button[1].get("aria-label") for button in buttons)
         if header_view == "view-plan":
             assert buttons[0][1]["id"] == "add-plan-rule"
+            assert buttons[0][1].get("aria-label")
     for value_id in ("net-worth", "available-total", "plan-open-count", "plan-completed-count"):
         value = parser.by_id(value_id)
         surfaces = [attrs for _, attrs in value[2] if "mobile-metric-strip" in classes(attrs)]

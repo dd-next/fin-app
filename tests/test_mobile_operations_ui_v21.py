@@ -173,7 +173,7 @@ def test_mobile_no_period_host_and_success_reset_are_stable():
     assert done_action.index("clearMobileOperationsDraft(kind)") < done_action.index("await refreshAll()")
     start = javascript.index('$("operations-add-period-mobile").addEventListener')
     mobile_period_listener = javascript[start:javascript.index('$("operations-edit-period").addEventListener', start)]
-    assert "if (!isMobileViewport()) openPeriodDialog()" in mobile_period_listener
+    assert "else openPeriodDialog()" in mobile_period_listener
     assert '$("operations-period-retry-mobile").addEventListener("click", loadOperationsPeriods)' in mobile_period_listener
 
 
@@ -183,7 +183,7 @@ def test_mobile_period_day_count_uses_dst_safe_calendar_arithmetic():
     helper = javascript[javascript.index("function calendarDayNumber"):javascript.index("function renderOperationsPeriodHistory")]
     assert "Date.UTC(year, month - 1, day) / 86400000" in helper
     period = javascript[javascript.index("function renderOperationsPeriod"):javascript.index("async function loadOperationsPeriods")]
-    assert "calendarDayNumber(current.end_date) - calendarDayNumber(todayValue()) + 1" in period
+    assert "calendarDayNumber(current.end_date) - calendarDayNumber(workspaceTodayValue()) + 1" in period
     assert "T00:00:00" not in period
 
 
@@ -204,7 +204,8 @@ def test_desktop_exchange_fee_undo_and_richer_forms_remain():
     assert 'route = "/api/v1/operations/exchange"' in javascript
     assert "body.to_amount" in javascript
     assert "body.fee" in javascript
-    assert '!window.confirm(`Undo your latest' in javascript
+    assert 'title: "Undo this operation?"' in javascript
+    assert "window.confirm" not in javascript
     assert '? "Mobile Transfer is available only to the account owner."' in javascript
     assert ': "You cannot transfer from this account."' in javascript
-    assert ".mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix { display: none; }" in css
+    assert ".mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix, .mobile-period-card-trigger { display: none; }" in css

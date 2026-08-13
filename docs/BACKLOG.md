@@ -75,7 +75,7 @@ rows remain blocked until their accepted dependencies land.
 | [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | done | M | design §03.3, §04–§05 | T-027A |
 | [T-028](tasks/T-028-mobile-plan-analytics.md) | Plan rule/occurrence flows and Analytics placeholder | done | M | spec §8, design §03.4–§03.5 | T-019, T-024B |
 | [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | done | M | design §05, §08 | T-025B, T-026, T-027B, T-028 |
-| [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the core iPhone 15 mobile acceptance matrix | in-progress | M | design §01–§08, core scope | T-029 |
+| [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the core iPhone 15 mobile acceptance matrix | review | M | design §01–§08, core scope | T-029 |
 | [T-030B](tasks/T-030B-desktop-regression.md) | Preserve desktop and run the Phase 15 regression gate | backlog | M | build plan Phase 15 | T-030A |
 | [T-031](tasks/T-031-phase15-close.md) | Assemble Phase 15 closure evidence | backlog | S | all Phase 15 | T-030B |
 
