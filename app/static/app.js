@@ -393,6 +393,9 @@ function renderMobileOverlay() {
       primary.type = "button";
       primary.className = "mobile-button-sheet-primary";
       primary.textContent = entry.primaryLabel;
+      primary.disabled = typeof entry.primaryDisabled === "function"
+        ? Boolean(entry.primaryDisabled())
+        : Boolean(entry.primaryDisabled);
       primary.addEventListener("click", async () => {
         if (entry.actionTaken) return;
         entry.actionTaken = true;
@@ -426,6 +429,7 @@ function openMobileSheet(config, opener = document.activeElement) {
     secondaryLabel: config.secondaryLabel || "",
     onSecondary: config.onSecondary,
     primaryLabel: config.primaryLabel || "",
+    primaryDisabled: config.primaryDisabled || false,
     onPrimary: config.onPrimary,
     context: config.context || parentContext,
     returnFocusSelector: config.returnFocusSelector || "",
@@ -2954,8 +2958,48 @@ function planKindLabel(kind) {
   }[kind] || kind;
 }
 
+function planMobileKind(kind) {
+  return {
+    income: "expectedIncome",
+    required_expense: "requiredExpense",
+    subscription: "subscription",
+    reserve_transfer: "reserveTransfer",
+    other_expense: "otherExpense",
+  }[kind] || kind;
+}
+
+function planStoredKind(mobileKind) {
+  return {
+    expectedIncome: "income",
+    requiredExpense: "required_expense",
+    subscription: "subscription",
+    reserveTransfer: "reserve_transfer",
+    otherExpense: "other_expense",
+  }[mobileKind] || mobileKind;
+}
+
 function planKindIcon(kind) {
   return { income: "↑", required_expense: "!", subscription: "↻", reserve_transfer: "◇", other_expense: "↓" }[kind] || "·";
+}
+
+function planRuleAccountId(rule) {
+  return rule.account_id ?? (rule.kind === "income" ? rule.default_to_account_id : rule.default_from_account_id);
+}
+
+function planRuleAccountLabel(rule) {
+  return rule.kind === "income" ? "To account" : "From account";
+}
+
+function planAmountMarkup(occurrence) {
+  const kind = occurrence.rule.kind;
+  const sign = kind === "income" ? "+" : kind === "reserve_transfer" ? "±" : "−";
+  return signedMoneyMarkup(occurrence.planned_amount, occurrence.rule.asset.code, sign);
+}
+
+function mobilePlanStatus(occurrence) {
+  if (occurrence.status === "overdue") return "overdue";
+  if (occurrence.status === "planned" && occurrence.rule.is_required) return "required";
+  return occurrence.status;
 }
 
 function planOccurrenceById(id) {
@@ -3012,7 +3056,56 @@ function nearestRuleOccurrences(rule) {
   return { nearestOverdue: overdue[0] ?? null, overdueCount: overdue.length, nearestFuture: future[0] ?? null };
 }
 
+function mobilePlanOccurrenceNode(occurrence, { overdueCount = 0 } = {}) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = `mobile-plan-occurrence mobile-interactive ${occurrence.rule.kind}`;
+  const status = mobilePlanStatus(occurrence);
+  const statusText = status === "overdue" && overdueCount > 1 ? `${overdueCount} overdue` : status;
+  row.innerHTML = `
+    <span class="mobile-plan-icon" aria-hidden="true">${escapeHtml(planKindIcon(occurrence.rule.kind))}</span>
+    <span class="mobile-plan-row-main"><strong>${escapeHtml(occurrence.rule.name)}</strong><span>${escapeHtml(localDate(occurrence.due_date))} · ${escapeHtml(occurrence.rule.recurrence)} <span class="mobile-plan-status ${escapeHtml(status)}">${escapeHtml(statusText)}</span></span></span>
+    <span class="mobile-plan-amount">${planAmountMarkup(occurrence)}</span>`;
+  row.addEventListener("click", () => openMobilePlanItem(occurrence, row));
+  return row;
+}
+
+function mobilePlanRuleCardNode(rule) {
+  const card = document.createElement("article");
+  card.className = "mobile-plan-rule-card mobile-surface";
+  const head = document.createElement("div");
+  head.className = "mobile-plan-card-head";
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = `mobile-plan-rule-main mobile-interactive ${rule.kind}`;
+  edit.innerHTML = `
+    <span class="mobile-plan-icon" aria-hidden="true">${escapeHtml(planKindIcon(rule.kind))}</span>
+    <span><strong>${escapeHtml(rule.name)}</strong><small>${escapeHtml(planKindLabel(rule.kind))} · ${moneyMarkup(rule.amount, rule.asset.code)} · ${escapeHtml(rule.recurrence)}</small></span>`;
+  edit.addEventListener("click", () => openMobilePlanRuleForm(rule, edit));
+  const show = document.createElement("button");
+  show.type = "button";
+  show.className = "mobile-plan-show mobile-interactive";
+  show.textContent = "Show";
+  show.setAttribute("aria-label", `Show ${rule.name} history`);
+  show.addEventListener("click", () => openMobilePlanRuleHistory(rule, show));
+  head.append(edit, show);
+  const rows = document.createElement("div");
+  rows.className = "mobile-plan-card-rows";
+  const { nearestOverdue, overdueCount, nearestFuture } = nearestRuleOccurrences(rule);
+  if (nearestOverdue) rows.append(mobilePlanOccurrenceNode(nearestOverdue, { overdueCount }));
+  if (nearestFuture) rows.append(mobilePlanOccurrenceNode(nearestFuture));
+  if (!nearestOverdue && !nearestFuture) {
+    const empty = document.createElement("p");
+    empty.className = "mobile-plan-card-empty";
+    empty.textContent = "No open occurrences";
+    rows.append(empty);
+  }
+  card.append(head, rows);
+  return card;
+}
+
 function planRuleCardNode(rule) {
+  if (isMobileViewport()) return mobilePlanRuleCardNode(rule);
   const card = document.createElement("article");
   card.className = "rule-card plan-rule-card mobile-surface";
   card.innerHTML = `
@@ -3070,6 +3163,10 @@ function renderPlan() {
 let planDetailRuleId = null;
 
 function openPlanRuleDetail(rule) {
+  if (isMobileViewport()) {
+    openMobilePlanRuleHistory(rule, document.activeElement);
+    return;
+  }
   planDetailRuleId = rule.id;
   $("plan-rule-detail-title").textContent = rule.name;
   $("plan-rule-detail-summary").textContent = `${planKindLabel(rule.kind)} · ${formatMoney(rule.amount, rule.asset.code)} · ${rule.recurrence} · from ${localDate(rule.first_due_date)}`;
@@ -3094,6 +3191,63 @@ function renderPlanRuleDetail() {
     return;
   }
   $("plan-rule-detail-list").replaceChildren(...items.map((item) => planOccurrenceNode(item)));
+}
+
+function mobilePlanHistoryItems(rule, filter) {
+  let items = ruleOccurrences(rule);
+  if (filter === "open") items = items.filter((item) => ["planned", "overdue"].includes(item.status));
+  if (filter === "completed") items = items.filter((item) => item.status === "completed");
+  if (filter === "skipped") items = items.filter((item) => item.status === "skipped");
+  return items.sort((a, b) => (a.due_date > b.due_date ? 1 : a.due_date < b.due_date ? -1 : a.id - b.id));
+}
+
+function buildMobilePlanRuleHistoryBody(rule, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-plan-history";
+  const filterLabels = { all: "All occurrences", open: "Open", completed: "Completed", skipped: "Skipped" };
+  body.append(mobileChoiceField({
+    label: "Show",
+    value: filterLabels[draft.filter],
+    id: "mobile-plan-history-filter",
+    onOpen: () => openMobileChoose({
+      title: "Show",
+      returnFocusSelector: "#mobile-plan-history-filter",
+      options: Object.entries(filterLabels).map(([value, label]) => ({ value, label, current: draft.filter === value })),
+      onSelect: (value) => { draft.filter = value; },
+    }, document.activeElement),
+  }));
+  const list = document.createElement("div");
+  list.className = "mobile-plan-history-list";
+  const items = mobilePlanHistoryItems(rule, draft.filter);
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No occurrences for this filter";
+    list.append(empty);
+  }
+  for (const occurrence of items) {
+    if (["planned", "overdue"].includes(occurrence.status)) {
+      list.append(mobilePlanOccurrenceNode(occurrence));
+      continue;
+    }
+    const row = document.createElement("article");
+    row.className = "mobile-plan-history-row";
+    row.innerHTML = `<span><strong>${escapeHtml(localDate(occurrence.due_date))}</strong><small>${escapeHtml(occurrence.status)}</small></span><span>${planAmountMarkup(occurrence)}</span>`;
+    list.append(row);
+  }
+  body.append(list);
+  return body;
+}
+
+function openMobilePlanRuleHistory(rule, opener = document.activeElement) {
+  const draft = { filter: "all" };
+  openMobileSheet({
+    kicker: "PLAN RULE",
+    title: rule.name,
+    buildBody: () => buildMobilePlanRuleHistoryBody(rule, draft),
+    secondaryLabel: "Edit rule",
+    onSecondary: () => openMobilePlanRuleForm(rule, document.activeElement),
+  }, opener);
 }
 
 async function apiCommand(path, method, body) {
@@ -3158,7 +3312,231 @@ async function updatePlanRuleFields(rule = null) {
   $("plan-rule-to-field").classList.toggle("hidden", !["income", "reserve_transfer"].includes(kind));
 }
 
+function mobilePlanCategoryOptions(draft) {
+  const storedKind = planStoredKind(draft.mobileKind);
+  if (storedKind === "reserve_transfer") return [];
+  const expected = storedKind === "income" ? "income" : "expense";
+  return (state.categories.get(state.context.workspace.id) || []).filter((category) => (
+    category.id === Number(draft.categoryId)
+    || (!category.archived_at && [expected, "both"].includes(category.kind))
+  ));
+}
+
+function mobilePlanAccountOptions(draft) {
+  return ownedPlanAccounts(draft.assetCode);
+}
+
+function buildMobilePlanRuleFormBody(rule, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-plan-rule-form";
+  const kindOptions = [
+    ["expectedIncome", "Expected income"],
+    ["requiredExpense", "Required expense"],
+    ["subscription", "Subscription"],
+    ["reserveTransfer", "Reserve transfer"],
+    ["otherExpense", "Other expense"],
+  ];
+  body.append(mobileChoiceField({
+    label: "Kind",
+    value: kindOptions.find(([value]) => value === draft.mobileKind)?.[1] || draft.mobileKind,
+    id: "mobile-plan-rule-kind",
+    onOpen: () => openMobileChoose({
+      title: "Kind",
+      returnFocusSelector: "#mobile-plan-rule-kind",
+      options: kindOptions.map(([value, label]) => ({ value, label, current: draft.mobileKind === value })),
+      onSelect: (value) => {
+        draft.mobileKind = value;
+        const allowedCategories = mobilePlanCategoryOptions(draft);
+        if (!allowedCategories.some((category) => category.id === Number(draft.categoryId))) draft.categoryId = null;
+      },
+    }, document.activeElement),
+  }));
+
+  const textField = (label, id, value, onInput, attributes = "") => {
+    const field = document.createElement("label");
+    field.className = "mobile-sheet-field";
+    field.innerHTML = `<span class="mobile-sheet-field-label">${escapeHtml(label)}</span><input id="${escapeHtml(id)}" class="mobile-field" ${attributes}>`;
+    const input = field.querySelector("input");
+    input.value = value;
+    input.addEventListener("input", () => onInput(input.value));
+    body.append(field);
+  };
+  textField("Name", "mobile-plan-rule-name", draft.name, (value) => { draft.name = value; }, 'maxlength="120" autocomplete="off"');
+  textField("Amount", "mobile-plan-rule-amount", draft.amount, (value) => { draft.amount = value; }, 'inputmode="decimal"');
+
+  const asset = assetByCode(draft.assetCode);
+  body.append(mobileChoiceField({
+    label: "Asset",
+    value: asset ? `${asset.code} · ${asset.name}` : draft.assetCode,
+    id: "mobile-plan-rule-asset",
+    onOpen: () => openMobileChoose({
+      title: "Asset",
+      returnFocusSelector: "#mobile-plan-rule-asset",
+      options: state.assets.map((item) => ({ value: item.code, label: `${item.code} · ${item.name}`, current: draft.assetCode === item.code })),
+      onSelect: (value) => {
+        draft.assetCode = value;
+        if (!mobilePlanAccountOptions(draft).some((account) => account.id === Number(draft.accountId))) draft.accountId = null;
+      },
+    }, document.activeElement),
+  }));
+
+  const recurrenceLabels = { once: "Once", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly" };
+  body.append(mobileChoiceField({
+    label: "Repeats",
+    value: recurrenceLabels[draft.recurrence],
+    id: "mobile-plan-rule-repeats",
+    onOpen: () => openMobileChoose({
+      title: "Repeats",
+      returnFocusSelector: "#mobile-plan-rule-repeats",
+      options: Object.entries(recurrenceLabels).map(([value, label]) => ({ value, label, current: draft.recurrence === value })),
+      onSelect: (value) => { draft.recurrence = value; },
+    }, document.activeElement),
+  }));
+  body.append(mobileChoiceField({
+    label: "First due",
+    value: localDate(draft.firstDueDate),
+    id: "mobile-plan-rule-first-due",
+    onOpen: () => openMobileDateChoose({
+      label: "First due",
+      value: draft.firstDueDate,
+      returnFocusSelector: "#mobile-plan-rule-first-due",
+      onSelect: (value) => { draft.firstDueDate = value; },
+    }, document.activeElement),
+  }));
+
+  const categories = mobilePlanCategoryOptions(draft);
+  if (planStoredKind(draft.mobileKind) !== "reserve_transfer") {
+    const selectedCategory = categories.find((category) => category.id === Number(draft.categoryId));
+    body.append(mobileChoiceField({
+      label: "Category",
+      value: selectedCategory?.name || "Uncategorized",
+      id: "mobile-plan-rule-category",
+      onOpen: () => openMobileChoose({
+        title: "Category",
+        returnFocusSelector: "#mobile-plan-rule-category",
+        options: [
+          { value: "", label: "Uncategorized", current: !draft.categoryId },
+          ...categories.map((category) => ({
+            value: category.id,
+            label: `${category.name}${category.archived_at ? " (archived)" : ""}`,
+            current: category.id === Number(draft.categoryId),
+            disabled: Boolean(category.archived_at),
+          })),
+        ],
+        onSelect: (value) => { draft.categoryId = value ? Number(value) : null; },
+      }, document.activeElement),
+    }));
+  }
+
+  const accounts = mobilePlanAccountOptions(draft);
+  const selectedAccount = accounts.find((account) => account.id === Number(draft.accountId));
+  const accountLabel = draft.mobileKind === "expectedIncome" ? "To account" : "From account";
+  body.append(mobileChoiceField({
+    label: accountLabel,
+    value: selectedAccount ? `${selectedAccount.name} · ${selectedAccount.asset.code}` : "Not selected",
+    id: "mobile-plan-rule-account",
+    onOpen: () => openMobileChoose({
+      title: accountLabel,
+      returnFocusSelector: "#mobile-plan-rule-account",
+      options: [
+        { value: "", label: "Not selected", current: !draft.accountId },
+        ...accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}`, current: account.id === Number(draft.accountId) })),
+      ],
+      onSelect: (value) => { draft.accountId = value ? Number(value) : null; },
+    }, document.activeElement),
+  }));
+
+  const toggle = document.createElement("label");
+  toggle.className = "mobile-sheet-toggle";
+  toggle.innerHTML = '<span>Mark as required spending</span><input id="mobile-plan-rule-required" type="checkbox">';
+  const checkbox = toggle.querySelector("input");
+  checkbox.checked = draft.isRequired;
+  checkbox.addEventListener("change", () => { draft.isRequired = checkbox.checked; });
+  body.append(toggle);
+
+  if (rule) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "mobile-button-destructive-inline mobile-interactive";
+    remove.textContent = "Delete rule";
+    remove.addEventListener("click", () => openMobileDeletePlanRule(rule, remove));
+    body.append(remove);
+  }
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(error);
+  return body;
+}
+
+function openMobilePlanRuleForm(rule = null, opener = document.activeElement) {
+  const draft = {
+    mobileKind: rule?.mobile_kind || planMobileKind(rule?.kind || "required_expense"),
+    name: rule?.name || "",
+    amount: rule?.amount || "",
+    assetCode: rule?.asset.code || state.context.workspace.base_asset.code,
+    recurrence: rule?.recurrence || "monthly",
+    firstDueDate: rule?.first_due_date || workspaceTodayValue(),
+    categoryId: rule?.category_id || null,
+    accountId: rule ? planRuleAccountId(rule) : null,
+    isRequired: rule?.is_required ?? true,
+    error: "",
+  };
+  openMobileSheet({
+    kicker: "PLAN RULE",
+    title: rule ? "Edit rule" : "Add rule",
+    secondaryLabel: "Cancel",
+    primaryLabel: rule ? "Save changes" : "Save rule",
+    buildBody: () => buildMobilePlanRuleFormBody(rule, draft),
+    onPrimary: async () => {
+      draft.error = "";
+      if (!draft.name.trim()) draft.error = "Name is required.";
+      else if (!draft.amount.trim()) draft.error = "Amount is required.";
+      else if (!draft.firstDueDate) draft.error = "First due is required.";
+      if (draft.error) {
+        renderMobileOverlay();
+        return;
+      }
+      const payload = {
+        kind: draft.mobileKind,
+        name: draft.name.trim(),
+        amount: draft.amount.trim(),
+        asset_code: draft.assetCode,
+        recurrence: draft.recurrence,
+        first_due_date: draft.firstDueDate,
+        category_id: planStoredKind(draft.mobileKind) === "reserve_transfer" ? null : draft.categoryId,
+        account_id: draft.accountId,
+        is_required: draft.isRequired,
+      };
+      try {
+        await api(rule
+          ? `/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}`
+          : `/api/v1/workspaces/${state.context.workspace.id}/plan-rules`, {
+          method: rule ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshAll();
+        const savedOpener = mobileOverlayState.rootOpener || opener;
+        closeAllMobileOverlays();
+        openMobileConfirmation({
+          title: "Saved",
+          body: rule ? `${draft.name.trim()} was updated.` : `${draft.name.trim()} was added to Plan.`,
+          variant: "saved",
+        }, savedOpener);
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
 async function openPlanRule(rule = null) {
+  if (isMobileViewport()) {
+    openMobilePlanRuleForm(rule, document.activeElement);
+    return;
+  }
   $("plan-rule-form").reset();
   $("plan-rule-error").textContent = "";
   $("plan-rule-id").value = rule ? rule.id : "";
@@ -3203,6 +3581,92 @@ async function savePlanRule(event) {
     await refreshAll();
     switchView("plan");
   } catch (error) { $("plan-rule-error").textContent = error.message; }
+}
+
+function openMobileDeletePlanRule(rule, opener = document.activeElement) {
+  openMobileConfirmation({
+    title: "Delete this rule?",
+    body: "Upcoming items generated by it disappear from Plan. Already linked transactions stay untouched.",
+    actionLabel: "Delete",
+    variant: "destructive",
+    onAction: async () => {
+      await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
+      await refreshAll();
+      closeAllMobileOverlays();
+      toast("Plan rule deleted");
+    },
+  }, opener);
+}
+
+async function skipMobilePlanOccurrence(occurrence, opener = document.activeElement) {
+  const action = opener;
+  if (action?.disabled) return;
+  if (action) action.disabled = true;
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/skip`, { method: "POST" });
+    await refreshAll();
+    const savedOpener = mobileOverlayState.rootOpener || opener;
+    closeAllMobileOverlays();
+    openMobileConfirmation({
+      title: "Saved",
+      body: `${occurrence.rule.name} on ${localDate(occurrence.due_date)} was skipped.`,
+      variant: "saved",
+    }, savedOpener);
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    if (action?.isConnected) action.disabled = false;
+  }
+}
+
+function buildMobilePlanItemBody(occurrence, actions) {
+  const rule = occurrence.rule;
+  const account = accountById(planRuleAccountId(rule));
+  const body = document.createElement("div");
+  body.className = "mobile-plan-item-detail";
+  const details = document.createElement("dl");
+  details.className = "mobile-readonly-list";
+  details.innerHTML = `
+    <div><dt>Status</dt><dd>${escapeHtml(mobilePlanStatus(occurrence))}</dd></div>
+    <div><dt>Due</dt><dd>${escapeHtml(localDate(occurrence.due_date))}</dd></div>
+    <div><dt>Amount</dt><dd>${planAmountMarkup(occurrence)}</dd></div>
+    <div><dt>${escapeHtml(planRuleAccountLabel(rule))}</dt><dd>${escapeHtml(account ? `${account.name} · ${account.asset.code}` : "Not selected")}</dd></div>
+    <div><dt>Repeats</dt><dd>${escapeHtml(rule.recurrence)}</dd></div>
+    <div><dt>Matched transaction</dt><dd>${occurrence.transaction_id ? `#${occurrence.transaction_id}` : "None yet"}</dd></div>`;
+  body.append(details);
+  const hint = document.createElement("p");
+  hint.className = "mobile-sheet-hint";
+  hint.textContent = "Plan items never change real balances until a transaction is linked.";
+  body.append(hint);
+  if (["planned", "overdue"].includes(occurrence.status)) {
+    const actionRow = document.createElement("div");
+    actionRow.className = "mobile-plan-item-actions";
+    const addAction = (label, className, onClick) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `${className} mobile-interactive`;
+      button.textContent = label;
+      button.addEventListener("click", onClick);
+      actionRow.append(button);
+    };
+    if (actions.includes("edit_rule")) addAction("Edit rule", "mobile-button-inline", () => openMobilePlanRuleForm(rule, document.activeElement));
+    if (actions.includes("skip")) addAction("Skip", "mobile-button-inline", () => skipMobilePlanOccurrence(occurrence, document.activeElement));
+    if (actions.includes("link_transaction")) addAction("Link transaction", "mobile-button-inline", () => void openMobilePlanLink(null, document.activeElement, occurrence));
+    body.append(actionRow);
+  }
+  return body;
+}
+
+function openMobilePlanItem(
+  occurrence,
+  opener = document.activeElement,
+  actions = ["edit_rule", "skip", "link_transaction"],
+) {
+  openMobileSheet({
+    kicker: "PLAN",
+    title: occurrence.rule.name,
+    buildBody: () => buildMobilePlanItemBody(occurrence, actions),
+  }, opener);
 }
 
 async function archivePlanRule(rule) {
@@ -3644,38 +4108,11 @@ function openMobileAssignTransaction(transaction, opener = document.activeElemen
 }
 
 function mobilePlannedDetailBody(detail) {
-  const occurrence = detail.occurrence;
-  const rule = occurrence.rule;
-  const body = document.createElement("div");
-  body.className = "mobile-transaction-detail";
-  const accountId = rule.kind === "income" ? rule.default_to_account_id : rule.default_from_account_id;
-  const account = accountById(accountId);
-  const label = rule.kind === "income" ? "To account" : "From account";
-  const details = document.createElement("dl");
-  details.className = "mobile-readonly-list";
-  details.innerHTML = `
-    <div><dt>Status</dt><dd>${escapeHtml(detail.mobile_status)}</dd></div>
-    <div><dt>Due</dt><dd>${escapeHtml(localDate(occurrence.due_date))}</dd></div>
-    <div><dt>Amount</dt><dd>${moneyMarkup(occurrence.planned_amount, rule.asset.code)}</dd></div>
-    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(account?.name || "Not selected")}</dd></div>
-    <div><dt>Repeats</dt><dd>${escapeHtml(rule.recurrence)}</dd></div>
-    <div><dt>Matched transaction</dt><dd>${occurrence.transaction_id ? `#${occurrence.transaction_id}` : "—"}</dd></div>`;
-  body.append(details);
-  const hint = document.createElement("p");
-  hint.className = "mobile-sheet-hint";
-  hint.textContent = "Plan items never change real balances until a transaction is linked.";
-  body.append(hint);
-  return body;
+  return buildMobilePlanItemBody(detail.occurrence, detail.available_actions);
 }
 
 function openMobilePlannedDetail(detail, opener = document.activeElement) {
-  openMobileSheet({
-    kicker: "PLAN",
-    title: detail.occurrence.rule.name,
-    buildBody: () => mobilePlannedDetailBody(detail),
-    primaryLabel: detail.available_actions.includes("link_transaction") ? "Link transaction" : "",
-    onPrimary: () => openMobilePlanLink(null, document.activeElement, detail.occurrence),
-  }, opener);
+  openMobilePlanItem(detail.occurrence, opener, detail.available_actions);
 }
 
 function eligiblePlanOccurrences(transaction) {
@@ -3692,12 +4129,37 @@ function eligiblePlanTransactions(occurrence) {
   ));
 }
 
-function openMobilePlanLink(transaction = null, opener = document.activeElement, occurrence = null) {
+async function openMobilePlanLink(transaction = null, opener = document.activeElement, occurrence = null) {
+  const requestContext = {
+    workspaceId: state.context.workspace.id,
+    view: state.activeView,
+    opener,
+  };
+  const requestIsCurrent = () => (
+    state.context?.workspace?.id === requestContext.workspaceId
+    && state.activeView === requestContext.view
+    && requestContext.opener?.isConnected
+  );
   const occurrences = transaction ? eligiblePlanOccurrences(transaction) : state.planOccurrences.filter((item) => ["planned", "overdue"].includes(item.status));
-  const transactions = occurrence ? eligiblePlanTransactions(occurrence) : state.transactions.filter((item) => canLinkTransactionToPlan(item));
+  let transactionPool = state.transactions;
+  if (occurrence) {
+    try {
+      const page = await api(`/api/v1/transactions?workspace_id=${requestContext.workspaceId}&status=posted&limit=100`);
+      if (!requestIsCurrent()) return;
+      transactionPool = page.items;
+      state.planLinkTransactions = page.items;
+    } catch (error) {
+      if (!requestIsCurrent()) return;
+      toast(error.message);
+      return;
+    }
+  }
+  const transactions = occurrence
+    ? transactionPool.filter((item) => transactionMatchesOccurrence(item, occurrence) && !item.plan_occurrence_id)
+    : transactionPool.filter((item) => canLinkTransactionToPlan(item));
   const draft = {
-    occurrenceId: occurrence?.id || occurrences[0]?.id || null,
-    transactionId: transaction?.id || transactions[0]?.id || null,
+    occurrenceId: occurrence?.id || null,
+    transactionId: transaction?.id || null,
     error: "",
   };
   const bodyBuilder = () => {
@@ -3741,6 +4203,7 @@ function openMobilePlanLink(transaction = null, opener = document.activeElement,
     buildBody: bodyBuilder,
     secondaryLabel: "Cancel",
     primaryLabel: "Link transaction",
+    primaryDisabled: () => !draft.occurrenceId || !draft.transactionId,
     onPrimary: async () => {
       if (!draft.occurrenceId || !draft.transactionId) {
         draft.error = "Choose both a plan item and a transaction";
@@ -4571,6 +5034,7 @@ $("logout").addEventListener("click", async () => {
 $("manage-categories").addEventListener("click", openCategories);
 $("manage-rates").addEventListener("click", (event) => openRateSettings(event.currentTarget));
 $("mobile-profile-trigger").addEventListener("click", (event) => openMobileProfile(event.currentTarget));
+$("analytics-profile-trigger").addEventListener("click", (event) => openMobileProfile(event.currentTarget));
 $("category-form").addEventListener("submit", createCategory);
 $("rate-asset").addEventListener("change", renderDesktopRateValue);
 $("rate-form").addEventListener("submit", saveDesktopRate);

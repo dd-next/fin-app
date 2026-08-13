@@ -211,19 +211,19 @@
       </section>
 
       <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
-        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title" class="mobile-screen-title">Plan</h2></div><button id="add-plan-rule" class="mobile-interactive" aria-label="Add plan rule">＋ Add rule</button></div>
+        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title" class="mobile-screen-title">Plan</h2></div><button id="add-plan-rule" class="mobile-plan-add mobile-interactive" aria-label="Add plan rule"><span class="mobile-plan-add-icon" aria-hidden="true">+</span><span class="mobile-plan-add-label">Add rule</span></button></div>
         <div class="plan-summary summary-grid mobile-metric-strip mobile-surface">
           <article class="metric-card mobile-metric"><span class="mobile-metric-label">Open items</span><strong id="plan-open-count" class="mobile-metric-value">0</strong><small>Planned and overdue</small></article>
           <article class="metric-card mobile-metric"><span class="mobile-metric-label">Completed</span><strong id="plan-completed-count" class="mobile-metric-value">0</strong><small>Linked to real transactions</small></article>
         </div>
         <div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div>
         <div id="plan-rule-cards" class="plan-rule-cards"></div>
-        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Add expected income, required expenses, subscriptions, and reserve transfers. Plan never changes real balances; link a posted transaction when it happens.</p><button id="empty-add-plan-rule">Add rule</button></div>
+        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Expected income, required expenses, subscriptions. Plan never changes real balances.</p><button id="empty-add-plan-rule" class="mobile-empty-primary mobile-interactive" type="button">Add rule</button></div>
       </section>
 
       <section id="view-analytics" class="app-view hidden" aria-labelledby="analytics-title">
-        <div class="view-heading"><div><p class="eyebrow">Insights</p><h2 id="analytics-title">Analytics</h2></div></div>
-        <div class="placeholder panel"><span>⌁</span><h3>Coming soon</h3><p>Income, spending, and trends will be designed after the core financial data is established.</p></div>
+        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Insights</p><h2 id="analytics-title" class="mobile-screen-title">Analytics</h2></div><button id="analytics-profile-trigger" class="mobile-avatar-trigger mobile-interactive" type="button" aria-label="Open profile"><span aria-hidden="true">●</span></button></div>
+        <div class="placeholder panel analytics-placeholder"><span>⚡</span><h3>Coming soon</h3><p>Income, spending, and trends arrive once the core ledger is stable.</p></div>
       </section>
     </section>
   </main>

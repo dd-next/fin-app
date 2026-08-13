@@ -223,3 +223,6 @@ One line per landed design change: date, what changed, why.
 - 2026-08-13 — composed T-025A mobile Accounts, summary-only group/value rules,
   account lifecycle sheets, Saved/error states and filtered history while
   retaining desktop dialogs and the accepted backend contract.
+- 2026-08-13 — composed T-028 mobile Plan as bounded rule cards with nearest
+  occurrences, adapter-backed rule/item/link sheets and archive consequences;
+  shipped the exact data-free Analytics placeholder and retained desktop Plan.

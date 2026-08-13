@@ -472,6 +472,56 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-metric + .mobile-metric { border-left: 1px solid var(--mobile-hairline); }
   .accounts-metrics .mobile-metric { padding: 14px 16px; }
   .plan-summary.mobile-metric-strip .mobile-metric { min-height: 0; padding: 12px 14px; }
+  #view-plan .mobile-plan-add { display: flex; width: auto; min-width: 44px; justify-content: flex-end; border: 0; background: transparent; color: var(--mobile-text); }
+  #view-plan .mobile-plan-add-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 10px; background: var(--mobile-accent); color: var(--mobile-bg); font-size: 19px; font-weight: 600; }
+  #view-plan .mobile-plan-add-label { display: none; }
+  #view-plan > .group-heading { height: 24px; margin: 0; align-items: center; }
+  #view-plan > .group-heading h3 { color: var(--mobile-muted); font: 600 11px ui-monospace, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; }
+  #view-plan > .group-heading span { color: var(--mobile-muted); font-size: 11px; }
+  #view-plan .plan-rule-cards { display: grid; gap: 10px; margin: 0; }
+  #view-plan .plan-rule-cards.hidden { display: none; }
+  .mobile-plan-rule-card { overflow: hidden; border-radius: 16px; }
+  .mobile-plan-card-head { display: grid; min-height: 64px; grid-template-columns: minmax(0, 1fr) 52px; align-items: stretch; }
+  .mobile-plan-rule-main { display: grid; min-width: 0; padding: 0 4px 0 12px; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; text-align: left; border: 0; background: transparent; color: var(--mobile-text); }
+  .mobile-plan-rule-main > span:last-child { display: grid; min-width: 0; gap: 3px; }
+  .mobile-plan-rule-main strong, .mobile-plan-rule-main small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-plan-rule-main strong { font-size: 15px; font-weight: 600; }
+  .mobile-plan-rule-main small { color: var(--mobile-muted); font-size: 11px; }
+  .mobile-plan-rule-main small .mobile-money { gap: 2px; }
+  .mobile-plan-show { width: 52px; padding: 0 8px; border: 0; background: transparent; color: var(--mobile-secondary); font-size: 12px; font-weight: 600; }
+  .mobile-plan-card-rows { display: grid; border-top: 1px solid var(--mobile-hairline); }
+  .mobile-plan-occurrence { display: grid; width: 100%; height: 64px; min-height: 64px; max-height: 64px; padding: 0 12px; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; border: 0; border-bottom: 1px solid var(--mobile-hairline); border-radius: 0; background: transparent; color: var(--mobile-text); }
+  .mobile-plan-occurrence:last-child { border-bottom: 0; }
+  .mobile-plan-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--mobile-neutral); color: var(--mobile-muted); font-size: 14px; font-weight: 700; }
+  .mobile-plan-occurrence.income .mobile-plan-icon, .mobile-plan-rule-main.income .mobile-plan-icon { background: rgba(110,231,168,.1); color: var(--mobile-positive); }
+  .mobile-plan-occurrence.required_expense .mobile-plan-icon, .mobile-plan-occurrence.subscription .mobile-plan-icon, .mobile-plan-occurrence.other_expense .mobile-plan-icon, .mobile-plan-rule-main.required_expense .mobile-plan-icon, .mobile-plan-rule-main.subscription .mobile-plan-icon, .mobile-plan-rule-main.other_expense .mobile-plan-icon { background: var(--mobile-danger-bg); color: var(--mobile-negative); }
+  .mobile-plan-row-main { display: grid; min-width: 0; gap: 3px; }
+  .mobile-plan-row-main strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-plan-row-main > span { display: flex; min-width: 0; gap: 5px; align-items: center; color: var(--mobile-muted); font-size: 11px; white-space: nowrap; }
+  .mobile-plan-status { display: inline-flex; height: 18px; padding: 0 6px; align-items: center; border: 1px solid rgba(255,162,75,.35); border-radius: 5px; color: var(--mobile-accent); font-size: 10px; font-weight: 600; }
+  .mobile-plan-status.overdue { border-color: rgba(255,123,123,.35); color: var(--mobile-negative); }
+  .mobile-plan-amount { color: var(--mobile-negative); font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .mobile-plan-occurrence.income .mobile-plan-amount { color: var(--mobile-positive); }
+  .mobile-plan-card-empty { display: flex; height: 44px; margin: 0; padding: 0 12px; align-items: center; color: var(--mobile-muted); font-size: 12px; }
+  #view-plan .empty-state { padding: 96px 20px 20px; }
+  #view-plan .empty-state .empty-icon { width: 52px; height: 52px; margin-bottom: 16px; border-radius: 14px; }
+  #view-plan .empty-state h3 { margin-bottom: 8px; font-size: 17px; font-weight: 600; letter-spacing: normal; }
+  #view-plan .empty-state p { max-width: 306px; margin-bottom: 18px; font-size: 13px; line-height: 1.5; }
+  .mobile-plan-rule-form, .mobile-plan-item-detail, .mobile-plan-history { display: grid; gap: 10px; }
+  .mobile-plan-item-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .mobile-plan-item-actions button { min-width: 0; padding: 0 6px; font-size: 12px; }
+  .mobile-plan-item-actions button:last-child { background: var(--mobile-accent); color: var(--mobile-bg); }
+  .mobile-plan-history-list { display: grid; }
+  .mobile-plan-history .mobile-plan-occurrence { padding: 0; }
+  .mobile-plan-history-row { display: flex; height: 48px; min-height: 48px; max-height: 48px; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--mobile-hairline); }
+  .mobile-plan-history-row > span:first-child { display: grid; gap: 3px; }
+  .mobile-plan-history-row strong { font-size: 13px; }
+  .mobile-plan-history-row small { color: var(--mobile-muted); font-size: 11px; text-transform: capitalize; }
+  .mobile-plan-history-row > span:last-child { font-size: 13px; font-weight: 600; }
+  #view-analytics .analytics-placeholder { min-height: calc(100% - 44px); padding: 0 32px 60px; border: 0; background: transparent; box-shadow: none; }
+  #view-analytics .analytics-placeholder > span { width: 52px; height: 52px; margin-bottom: 10px; border-radius: 14px; background: var(--mobile-surface); font-size: 22px; }
+  #view-analytics .analytics-placeholder h3 { margin: 0 0 10px; font-size: 17px; font-weight: 600; }
+  #view-analytics .analytics-placeholder p { max-width: 310px; font-size: 13px; line-height: 1.5; text-wrap: pretty; }
   .mobile-metric small { display: none; }
   .mobile-metric-label { font-size: 11px; font-weight: 500; color: var(--mobile-muted); }
   .mobile-metric-value { font-size: 20px; font-weight: 600; white-space: nowrap; }
