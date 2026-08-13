@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-029 navigation/accessibility is implementation-review clean on `task/T-029-navigation-accessibility` |
-| Next | Local owner acceptance of reviewed T-029; T-030A remains backlog |
+| Active work | None claimed — T-029 accepted; `finapp-v2-develop` pushed to `origin` |
+| Next | Claim T-030A mobile acceptance matrix |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -51,10 +51,17 @@ T-027B's reviewed implementation `283215f` and T-028's reviewed implementation
 35-test target, syntax/diff, isolated 390×844 browser matrix and retained
 1280×900 Plan regression passed; both Link-safety P2 findings are closed and no
 P0–P3 finding remains. T-029's shared picker/confirmation navigation layer is
-implementation-review clean after its sole P2 desktop-logout finding was
-closed. Its exact 11-test target, syntax/diff and forbidden-native-API checks,
-plus isolated 390×844 and preserved 1280×900 browser smokes pass. Phase 15
-remains incomplete and T-030A has not been claimed.
+now locally accepted: reviewed implementation `0ac4693` was fast-forwarded into
+`finapp-v2-develop` after its sole P2 desktop-logout finding was closed. Its
+exact 11-test target, diff and forbidden-native-API checks were re-run at
+acceptance and pass; the syntax gate stands on the implementation session's
+bundled-Node run because no Node runtime exists in the acceptance environment.
+The preview is usable under ADR-0011. Phase 15 remains incomplete and
+unaccepted, and T-030A has not been claimed.
+
+`finapp-v2-develop` has been pushed to `origin` on owner instruction, so the
+remote integration branch now matches local accepted state. `finapp-v2` was not
+deployed and no task branch was pushed.
 
 Phase 15 authority and constraints:
 
@@ -76,8 +83,9 @@ Phase 15 authority and constraints:
 - [`ADR-0011`](decisions/ADR-0011-phase15-usable-preview-fast-track.md) permits
   targeted per-task gates and a local preview checkpoint; final P0–P2 closure,
   full tests, mobile acceptance, and desktop regression remain mandatory.
-- Origin is intentionally not the task base. Local accepted
-  `finapp-v2-develop` is authoritative until the owner later pushes/deploys.
+- Local accepted `finapp-v2-develop` is authoritative. As of T-029 acceptance
+  the owner has pushed it to `origin`; deployment to `finapp-v2` is still a
+  separate, later owner decision.
 
 ## Last verified gates — Phase 14 (2026-08-12)
 

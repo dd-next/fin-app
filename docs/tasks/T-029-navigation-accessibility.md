@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: Integrate navigation, keyboard, motion, and accessibility
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/05-interactions.md; spec/08-acceptance.md
 blocked-by: [T-025B, T-026, T-027B, T-028]
@@ -114,6 +114,22 @@ Verification evidence:
   `finapp-t029-79cc9e5adc5842fb9449ace283989e6a/finapp.db`; it was stopped after
   verification.
 
+Local acceptance: performed directly by the repository owner, without a
+separate acceptance-lifecycle reviewer sub-agent. The owner re-ran the task
+verification gates on the reviewed manifest before accepting:
+
+- `pytest -q tests/test_frontend_v2.py tests/test_phase15_interactions.py`:
+  `11 passed`.
+- `git diff --check`: passed; LF→CRLF notices only.
+- Forbidden runtime search over `app/static` for native `<select>` and
+  `window.alert/confirm/prompt`: clean.
+- `node --check app/static/app.js` was **not** re-run at acceptance: no Node
+  runtime is available in the owner's acceptance environment. The gate stands on
+  the implementation session's bundled-Node result recorded above.
+- Ancestry verified: `9d40b9f` → `844ea6c` → `ade1541` → `0ac4693`;
+  `finapp-v2-develop` fast-forwarded to reviewed implementation `0ac4693` with
+  no merge commit.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: integration task specified for batch readiness; not
@@ -136,3 +152,9 @@ Verification evidence:
   preserved 1280×900 browser smokes passed. Independent same-vendor fallback
   review closed its sole P2 desktop-logout finding; T-029 is ready for local
   owner acceptance. T-030A was not started.
+- 2026-08-13 repository owner, assisted by Claude Opus 5: committed the reviewed
+  T-029 manifest as `0ac4693`, fast-forwarded `finapp-v2-develop` onto it, and
+  accepted T-029; task and backlog moved `review` → `done`. On owner
+  instruction, `finapp-v2-develop` was then pushed to `origin`, so origin is no
+  longer behind local accepted integration. No phase close, no deploy to
+  `finapp-v2`, and no T-030A claim were performed.
