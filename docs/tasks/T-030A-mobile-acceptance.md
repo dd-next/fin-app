@@ -1,13 +1,13 @@
 ---
 id: T-030A
 title: Pass the core iPhone 15 mobile acceptance matrix
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md through spec/06-content.md; spec/08-acceptance.md scoped to Accounts, Transactions, and Operations
 blocked-by: [T-029]
 branch: task/T-030A-mobile-acceptance
-base-commit:
-implementer:
+base-commit: 867f87e3282300c76989ccf25ab23c0cda62966e
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/t030a_core_readiness, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: 36fa32a3676cf66ecb8e5c5588cd6bcbfae62756
 readiness-verdict: ready
@@ -151,3 +151,7 @@ Append the bounded independent implementation review following the protocol.
   Analytics, and desktop verification. Supplied Safari evidence records a
   missing tab bar on the long Transactions feed, planned rows in `All`, clipped
   sheets, and focus-triggered page zoom.
+- 2026-08-13 repository owner promoted the readiness-clean task to `todo` on
+  accepted integration `867f87e`; `/root`, Codex GPT-5 atomically claimed
+  `task/T-030A-mobile-acceptance` from that exact base and started only the
+  owner-scoped core iPhone 15 fast-track.
