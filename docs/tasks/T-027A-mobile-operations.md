@@ -1,7 +1,7 @@
 ---
 id: T-027A
 title: Implement the mobile Operations action surface
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.3; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-024B]
@@ -90,3 +90,7 @@ Append the bounded independent implementation review following the protocol.
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-027; not claimed.
 - 2026-08-12 Codex GPT-5: readiness findings added mobile Undo and shared-role
   quote checks; limited re-review verdict `ready`; remains blocked by T-024B.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  accepted readiness evidence and promoted T-027A from `backlog` to `todo` on
+  accepted integration after T-026 local acceptance; no task branch was claimed
+  in this checkpoint.
