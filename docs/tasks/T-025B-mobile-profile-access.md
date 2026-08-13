@@ -1,7 +1,7 @@
 ---
 id: T-025B
 title: Implement mobile Profile, settings, access, and logout
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/04-sheets.md Profile/Categories/Rate/Share; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-025A]
@@ -205,3 +205,51 @@ preserved 1280×900 settings/access behavior.
   footer issues were fixed; all reviewer P2 sharing-race findings are closed. Targeted
   67-test, JavaScript, diff and scratch-browser gates pass. Task is `review`,
   awaiting owner-authorized local acceptance; no open questions.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  locally accepted reviewed implementation commit `34850e2` by fast-forward
+  into `finapp-v2-develop`; T-025B is `done`. No successor task was promoted
+  or claimed in this acceptance checkpoint; no push, deploy, archive, or
+  Phase 15 commit was created.
+
+### Local acceptance lifecycle review
+
+- Reviewer: `/root/t025b_acceptance_review`, fresh Codex GPT-5 same-vendor
+  fallback; cross-vendor review was unavailable. Read-only; no files or Git
+  state were changed.
+- Verbatim result:
+
+  > No P0–P3 findings.
+  >
+  > Verdict: **PASS — suitable to commit the local T-025B acceptance.**
+  >
+  > Review evidence:
+  >
+  > - Current branch is `finapp-v2-develop` at implementation commit `34850e24dbf11705a1640897820d968f30e6a9d9`.
+  > - Exact linear ancestry is valid:
+  >   - base/promotion `7443d2772ce7bcc13b369a092aa7943eb72f0ab0`
+  >   - claim `d2265dc23c05b92e1457515191dbc74b867fe36c`
+  >   - implementation `34850e24dbf11705a1640897820d968f30e6a9d9`
+  > - Each commit has exactly the preceding commit as its sole parent. Both ancestry checks passed.
+  > - Reflog confirms `finapp-v2-develop` was advanced from `7443d27` to `34850e2` by `merge task/T-025B-mobile-profile-access: Fast-forward`.
+  > - `task/T-025B-mobile-profile-access` remains at the exact implementation commit.
+  > - The current uncommitted manifest contains only:
+  >   - `docs/tasks/T-025B-mobile-profile-access.md`
+  >   - `docs/BACKLOG.md`
+  >   - `docs/PROGRESS.md`
+  > - The acceptance diff is appropriately bounded:
+  >   - task status `review` → `done`
+  >   - matching backlog row `review` → `done`
+  >   - append-only acceptance session-log entry
+  >   - progress state updated from acceptance pending to locally accepted
+  > - The session entry accurately states the implementation commit, fast-forward integration, task completion, absence of a successor claim, and absence of push, deploy, archive, or Phase 15 commit.
+  > - `T-026` remains `backlog`; its `base-commit` and `implementer` fields are blank, and no `task/T-026-mobile-transactions` branch exists.
+  > - Phase 15 is still explicitly described as incomplete.
+  > - The task file remains under `docs/tasks/`; it has not been archived.
+  > - Origin remains at `71e3396`; local integration is ahead and no push is represented.
+  > - The implementation commit manifest is the expected seven files: the three SPA files, the new focused test, and task/backlog/progress evidence.
+  > - Recorded verification is accurate. I independently reran the exact targeted suite: `67 passed in 22.64s`.
+  > - Bundled Node syntax checking passed.
+  > - `git diff --check` passed.
+  > - Running the review checks introduced no additional working-tree changes.
+  >
+  > Cross-vendor review was unavailable; this was a fresh independent same-vendor Codex fallback.

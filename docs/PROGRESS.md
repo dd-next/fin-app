@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-025B implementation is independently reviewed; all P0–P2 closed |
-| Next | Owner-authorized local acceptance of T-025B |
+| Active work | None; T-025B is locally accepted and `done` |
+| Next | Owner-authorized promotion and claim of T-026 |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -34,10 +34,11 @@ readiness review closed all P0–P2 findings. T-023, T-024A and T-024B are
 locally accepted and `done`. T-025A mobile Accounts and account lifecycle are
 also locally accepted after targeted tests, independent bounded review,
 390×844 scratch-browser smoke and preserved desktop smoke passed with all
-P0–P2 findings closed. T-025B Profile/categories/rates/sharing/logout is on its
-exact task branch in `review`: targeted 67-test, syntax/diff, isolated 390×844
-browser and preserved 1280×900 checks pass, and all reviewer P2 sharing-race
-findings are closed. Phase 15 remains incomplete.
+P0–P2 findings closed. T-025B Profile/categories/rates/sharing/logout is also
+locally accepted after targeted 67-test, syntax/diff, isolated 390×844 browser
+and preserved 1280×900 checks passed, with all reviewer P2 sharing-race
+findings closed. No successor task is claimed in this checkpoint. Phase 15
+remains incomplete.
 
 Phase 15 authority and constraints:
 
