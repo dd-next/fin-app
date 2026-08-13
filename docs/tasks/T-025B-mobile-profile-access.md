@@ -1,13 +1,13 @@
 ---
 id: T-025B
 title: Implement mobile Profile, settings, access, and logout
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/04-sheets.md Profile/Categories/Rate/Share; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-025A]
 branch: task/T-025B-mobile-profile-access
-base-commit:
-implementer:
+base-commit: 7443d2772ce7bcc13b369a092aa7943eb72f0ab0
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
