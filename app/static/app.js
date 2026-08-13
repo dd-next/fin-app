@@ -10,6 +10,13 @@ const state = {
   manualRates: [],
   categories: new Map(),
   transactions: [],
+  transactionFeedItems: [],
+  transactionFeedCursor: null,
+  transactionFeedFilter: "all",
+  transactionAdvancedActive: false,
+  transactionAdvancedCount: 0,
+  transactionFeedLoading: false,
+  transactionSwipeKey: null,
   transactionPeriods: [],
   nextCursor: null,
   planRules: [],
@@ -223,6 +230,11 @@ async function showApp(context) {
     state.categories.clear();
     state.accounts = [];
     state.transactions = [];
+    state.transactionFeedItems = [];
+    state.transactionFeedCursor = null;
+    state.transactionFeedFilter = "all";
+    state.transactionAdvancedActive = false;
+    state.transactionAdvancedCount = 0;
     state.transactionPeriods = [];
     state.planRules = [];
     state.planOccurrences = [];
@@ -253,9 +265,13 @@ async function refreshAll() {
   try {
     if (!state.assets.length) state.assets = await api("/api/v1/assets");
     const workspaceId = state.context.workspace.id;
-    const [summary, page, planRules, planOccurrences] = await Promise.all([
+    const transactionUrl = isMobileViewport() && state.transactionAdvancedActive
+      ? `/api/v1/transactions?${transactionQuery()}`
+      : "/api/v1/transactions?limit=50";
+    const [summary, page, feedPage, planRules, planOccurrences] = await Promise.all([
       api("/api/v1/accounts/summary"),
-      api("/api/v1/transactions?limit=50"),
+      api(transactionUrl),
+      api(`/api/v1/transaction-feed?filter=${encodeURIComponent(state.transactionFeedFilter)}&limit=50`),
       api(`/api/v1/workspaces/${workspaceId}/plan-rules`),
       api(`/api/v1/workspaces/${workspaceId}/plan-occurrences`),
     ]);
@@ -263,6 +279,8 @@ async function refreshAll() {
     state.accounts = summary.accounts;
     state.transactions = page.items;
     state.nextCursor = page.next_cursor;
+    state.transactionFeedItems = feedPage.items;
+    state.transactionFeedCursor = feedPage.next_cursor;
     state.planRules = planRules;
     state.planOccurrences = planOccurrences;
     const workspaceIds = [...new Set(state.accounts.map((account) => account.workspace_id))];
@@ -1625,10 +1643,16 @@ async function openAccountHistory(account) {
   const previousPeriod = $("filter-period").value;
   $("filter-account").value = String(account.id);
   syncTransactionFilterPair("account");
+  if (isMobileViewport()) {
+    state.transactionAdvancedActive = true;
+    state.transactionAdvancedCount = 1;
+  }
   const loaded = await loadTransactions(false);
   if (!loaded) {
     $("filter-account").value = previousAccount;
     $("filter-period").value = previousPeriod;
+    state.transactionAdvancedActive = false;
+    state.transactionAdvancedCount = 0;
     return;
   }
   closeAllMobileOverlays();
@@ -2775,7 +2799,848 @@ function canEditTransaction(transaction) {
   });
 }
 
+function transactionDisplayType(transaction) {
+  return transaction.type === "exchange"
+    ? "Transfer"
+    : `${transaction.type[0].toUpperCase()}${transaction.type.slice(1)}`;
+}
+
+function transactionCategoryName(transaction) {
+  const category = [...state.categories.values()].flat().find((item) => item.id === transaction.category_id);
+  return category ? `${category.name}${category.archived_at ? " (archived)" : ""}` : "Uncategorized";
+}
+
+function feedTransactionItem(transaction) {
+  return {
+    kind: "transaction",
+    key: `transaction:${transaction.id}`,
+    financial_date: transaction.local_date,
+    mobile_type: transaction.type === "exchange" ? "transfer" : transaction.type,
+    transaction_type: transaction.type,
+    transaction,
+  };
+}
+
+function feedItemTitle(item) {
+  return item.kind === "planned" ? item.occurrence.rule.name : transactionTitle(item.transaction);
+}
+
+function feedItemStatus(item) {
+  if (item.kind === "planned") return "Planned";
+  return item.transaction.status === "deleted" ? "Deleted" : "";
+}
+
+function signedMoneyMarkup(value, code, sign = "") {
+  const raw = String(value).replace(/^[+−-]/, "");
+  return moneyMarkup(`${sign}${raw}`, code);
+}
+
+function feedItemAmountMarkup(item) {
+  if (item.kind === "planned") {
+    const occurrence = item.occurrence;
+    const kind = occurrence.rule.kind;
+    const sign = kind === "income" ? "+" : kind === "reserve_transfer" ? "±" : "−";
+    if (sign === "±") {
+      const parts = moneyParts(occurrence.planned_amount, occurrence.rule.asset.code);
+      return `<span class="mobile-money"><span class="mobile-money-value">±${escapeHtml(parts.value)}</span><span class="mobile-money-code">${escapeHtml(parts.code)}</span></span>`;
+    }
+    return signedMoneyMarkup(occurrence.planned_amount, occurrence.rule.asset.code, sign);
+  }
+  const transaction = item.transaction;
+  const legs = transaction.legs;
+  if (!legs.length) return '<span class="mobile-money-value">Hidden</span>';
+  if (["transfer", "exchange"].includes(transaction.type)) {
+    const leg = legs.find((candidate) => String(candidate.amount).startsWith("-")) || legs[0];
+    const parts = moneyParts(String(leg.amount).replace("-", ""), leg.asset.code);
+    return `<span class="mobile-money"><span class="mobile-money-value">±${escapeHtml(parts.value)}</span><span class="mobile-money-code">${escapeHtml(parts.code)}</span></span>`;
+  }
+  const leg = legs[0];
+  const sign = transaction.type === "income"
+    || (transaction.type === "adjustment" && !String(leg.amount).startsWith("-"))
+    ? "+"
+    : "−";
+  return signedMoneyMarkup(leg.amount, leg.asset.code, sign);
+}
+
+function feedGroupLabel(value) {
+  const today = todayValue();
+  const yesterdayDate = new Date(`${today}T12:00:00`);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth() + 1).padStart(2, "0")}-${String(yesterdayDate.getDate()).padStart(2, "0")}`;
+  if (value === today) return "TODAY";
+  if (value === yesterday) return "YESTERDAY";
+  return localDate(value).toUpperCase();
+}
+
+function canLinkTransactionToPlan(transaction) {
+  return transaction.workspace_id === state.context.workspace.id
+    && transaction.status === "posted"
+    && !transaction.plan_occurrence_id
+    && ["expense", "income", "transfer"].includes(transaction.type);
+}
+
+async function loadMobileTransactionFeed(append = false) {
+  if (state.transactionFeedLoading) return false;
+  state.transactionFeedLoading = true;
+  setLoading(true);
+  try {
+    const query = new URLSearchParams({ filter: state.transactionFeedFilter, limit: "50" });
+    if (append && state.transactionFeedCursor) query.set("cursor", state.transactionFeedCursor);
+    const page = await api(`/api/v1/transaction-feed?${query}`);
+    state.transactionFeedItems = append ? [...state.transactionFeedItems, ...page.items] : page.items;
+    state.transactionFeedCursor = page.next_cursor;
+    renderTransactions();
+    return true;
+  } catch (error) {
+    toast(error.message);
+    return false;
+  } finally {
+    state.transactionFeedLoading = false;
+    setLoading(false);
+  }
+}
+
+function closeTransactionSwipes(except = null) {
+  document.querySelectorAll(".mobile-transaction-row.is-swiped").forEach((row) => {
+    if (row !== except) row.classList.remove("is-swiped");
+  });
+}
+
+function enableTransactionSwipe(row, body) {
+  let startX = null;
+  body.addEventListener("pointerdown", (event) => { startX = event.clientX; });
+  body.addEventListener("pointerup", (event) => {
+    if (startX === null) return;
+    const delta = event.clientX - startX;
+    startX = null;
+    if (delta < -32) {
+      closeTransactionSwipes(row);
+      row.classList.add("is-swiped");
+    } else if (delta > 24) row.classList.remove("is-swiped");
+  });
+  body.addEventListener("pointercancel", () => { startX = null; });
+  row.addEventListener("focusin", (event) => {
+    if (event.target.closest(".mobile-swipe-actions")) {
+      closeTransactionSwipes(row);
+      row.classList.add("is-swiped");
+    }
+  });
+}
+
+function mobileFeedRow(item) {
+  const row = document.createElement("article");
+  row.className = `mobile-transaction-row ${item.mobile_type}`;
+  row.dataset.feedKey = item.key;
+  const actions = document.createElement("div");
+  actions.className = "mobile-swipe-actions";
+  const transaction = item.kind === "transaction" ? item.transaction : null;
+  if (transaction && canLinkTransactionToPlan(transaction)) {
+    const plan = document.createElement("button");
+    plan.type = "button";
+    plan.className = "mobile-swipe-plan mobile-interactive";
+    plan.textContent = "Plan";
+    plan.addEventListener("click", () => openMobilePlanLink(transaction, plan));
+    actions.append(plan);
+  }
+  if (transaction && canEditTransaction(transaction)) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "mobile-swipe-delete mobile-interactive";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", () => openMobileDeleteTransaction(transaction, remove));
+    actions.append(remove);
+  }
+  const body = document.createElement("button");
+  body.type = "button";
+  body.className = "mobile-transaction-body mobile-interactive";
+  const status = feedItemStatus(item);
+  const author = item.kind === "planned"
+    ? "Plan"
+    : item.transaction.created_by_user_id === state.context.user.id ? "You" : `User #${item.transaction.created_by_user_id}`;
+  const icon = item.mobile_type === "income" ? "↑" : item.mobile_type === "expense" ? "↓" : "±";
+  body.innerHTML = `
+    <span class="mobile-transaction-icon" aria-hidden="true">${icon}</span>
+    <span class="mobile-transaction-main"><strong>${escapeHtml(feedItemTitle(item))}</strong><span>${escapeHtml(author)}${status ? `<span class="mobile-status-pill ${status.toLowerCase()}">${escapeHtml(status)}</span>` : ""}</span></span>
+    <span class="mobile-transaction-amount">${feedItemAmountMarkup(item)}</span>`;
+  body.addEventListener("click", () => {
+    if (row.classList.contains("is-swiped")) {
+      row.classList.remove("is-swiped");
+      return;
+    }
+    void openFeedItemDetail(item, body);
+  });
+  row.append(actions, body);
+  enableTransactionSwipe(row, body);
+  return row;
+}
+
+function renderMobileTransactions() {
+  const items = state.transactionAdvancedActive
+    ? state.transactions.map(feedTransactionItem).sort((left, right) => (
+      right.financial_date.localeCompare(left.financial_date)
+      || String(right.transaction.occurred_at).localeCompare(String(left.transaction.occurred_at))
+      || right.transaction.id - left.transaction.id
+    ))
+    : state.transactionFeedItems;
+  const fragment = document.createDocumentFragment();
+  let currentDate = null;
+  let group = null;
+  for (const item of items) {
+    if (item.financial_date !== currentDate) {
+      currentDate = item.financial_date;
+      group = document.createElement("section");
+      group.className = "mobile-transaction-group";
+      const heading = document.createElement("h3");
+      heading.className = "mobile-transaction-date";
+      heading.textContent = feedGroupLabel(currentDate);
+      group.append(heading);
+      fragment.append(group);
+    }
+    group.append(mobileFeedRow(item));
+  }
+  $("transaction-list").replaceChildren(fragment);
+  $("transactions-empty").classList.toggle("hidden", items.length > 0);
+  const cursor = state.transactionAdvancedActive ? state.nextCursor : state.transactionFeedCursor;
+  $("load-more").classList.toggle("hidden", !cursor);
+  document.querySelectorAll("[data-feed-filter]").forEach((button) => {
+    const active = !state.transactionAdvancedActive && button.dataset.feedFilter === state.transactionFeedFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  $("transaction-filter-count").textContent = String(state.transactionAdvancedCount);
+  $("transaction-filter-count").setAttribute("aria-label", `${state.transactionAdvancedCount} active filters`);
+  $("transaction-filter-count").classList.toggle("hidden", !state.transactionAdvancedActive || !state.transactionAdvancedCount);
+}
+
+async function openFeedItemDetail(item, opener = document.activeElement) {
+  try {
+    if (item.kind === "planned") {
+      const id = item.occurrence.id;
+      const detail = await api(`/api/v1/transaction-feed/planned/${id}`);
+      openMobilePlannedDetail(detail, opener);
+      return;
+    }
+    const detail = await api(`/api/v1/transaction-feed/transaction/${item.transaction.id}`);
+    openMobileTransactionDetails(detail.transaction, opener);
+  } catch (error) { toast(error.message); }
+}
+
+function mobileTransactionDetailBody(transaction) {
+  const body = document.createElement("div");
+  body.className = "mobile-transaction-detail";
+  const author = transaction.created_by_user_id === state.context.user.id ? "You" : `User #${transaction.created_by_user_id}`;
+  const details = document.createElement("dl");
+  details.className = "mobile-readonly-list";
+  details.innerHTML = `
+    <div><dt>Status</dt><dd>${escapeHtml(`${transaction.status[0].toUpperCase()}${transaction.status.slice(1)}`)}</dd></div>
+    <div><dt>Type</dt><dd>${escapeHtml(transactionDisplayType(transaction))}</dd></div>
+    <div><dt>Amount</dt><dd>${feedItemAmountMarkup(feedTransactionItem(transaction))}</dd></div>
+    <div><dt>Financial date</dt><dd>${escapeHtml(localDate(transaction.local_date))}</dd></div>
+    <div><dt>Category</dt><dd>${escapeHtml(transactionCategoryName(transaction))}</dd></div>
+    <div><dt>Created by</dt><dd>${escapeHtml(author)}</dd></div>`;
+  body.append(details);
+  if (transaction.status === "unassigned" && transaction.created_by_user_id === state.context.user.id) {
+    const assign = document.createElement("button");
+    assign.type = "button";
+    assign.className = "mobile-button-inline mobile-interactive";
+    assign.textContent = "Assign account";
+    assign.addEventListener("click", () => openMobileAssignTransaction(transaction, assign));
+    body.append(assign);
+  }
+  const heading = document.createElement("h3");
+  heading.className = "mobile-sheet-section-title";
+  heading.textContent = "VISIBLE MOVEMENTS";
+  body.append(heading);
+  const movements = document.createElement("div");
+  movements.className = "mobile-transaction-movements";
+  if (!transaction.legs.length) movements.innerHTML = '<p class="muted">No visible movements.</p>';
+  for (const leg of transaction.legs) {
+    const row = document.createElement("div");
+    const account = accountById(leg.account_id);
+    row.innerHTML = `<span>${escapeHtml(account ? account.name : leg.account_id === null ? "Unassigned" : "Accessible account")}</span><strong>${moneyMarkup(leg.amount, leg.asset.code)}</strong>`;
+    movements.append(row);
+  }
+  body.append(movements);
+  if (transaction.has_hidden_legs) {
+    const hidden = document.createElement("p");
+    hidden.className = "mobile-sheet-hint";
+    hidden.textContent = "Some movements are hidden because you only have access to part of this transaction.";
+    body.append(hidden);
+  }
+  return body;
+}
+
+function openMobileTransactionDetails(transaction, opener = document.activeElement) {
+  state.viewingTransaction = transaction;
+  const editable = canEditTransaction(transaction);
+  openMobileSheet({
+    kicker: "LEDGER ENTRY",
+    title: transactionTitle(transaction),
+    buildBody: () => mobileTransactionDetailBody(transaction),
+    secondaryLabel: editable ? "Delete" : "",
+    onSecondary: () => openMobileDeleteTransaction(transaction, document.activeElement),
+    primaryLabel: editable ? "Edit" : "",
+    onPrimary: () => openMobileTransactionEdit(transaction, document.activeElement),
+  }, opener);
+}
+
+function openMobileDeleteTransaction(transaction, opener = document.activeElement) {
+  const label = transactionDisplayType(transaction).toLowerCase();
+  openMobileConfirmation({
+    title: `Delete this ${label}?`,
+    body: "It stays in history as Deleted but no longer affects balances or periods.",
+    actionLabel: "Delete",
+    variant: "destructive",
+    closeParentsOnSuccess: mobileOverlayState.stack.at(-1)?.kind === "sheet" ? 1 : 0,
+    onAction: async () => {
+      await api(`/api/v1/transactions/${transaction.id}/delete`, {
+        method: "POST",
+        body: JSON.stringify({ confirm_ended_period: true }),
+      });
+      await refreshAll();
+      toast("Transaction deleted");
+    },
+  }, opener);
+}
+
+function openMobileAssignTransaction(transaction, opener = document.activeElement) {
+  const leg = transaction.legs[0];
+  const action = transaction.type === "expense" ? "expense" : "income";
+  const choices = state.accounts.filter((account) => account.asset.code === leg.asset.code && canUseAccount(account, action));
+  if (!choices.length) return toast(`No accessible ${leg.asset.code} account`);
+  openMobileChoose({
+    title: "Account",
+    options: choices.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` })),
+    onSelect: async (value) => {
+      try {
+        await api(`/api/v1/transactions/${transaction.id}/assign-account`, {
+          method: "POST",
+          body: JSON.stringify({ account_id: Number(value) }),
+        });
+        closeAllMobileOverlays();
+        await refreshAll();
+        openMobileConfirmation({ title: "Saved", body: "The transaction was assigned to an account.", variant: "saved" }, opener);
+      } catch (error) {
+        if (error.status === 409 && String(error.message).includes("explicit confirmation")) {
+          openMobileConfirmation({
+            title: "Assign this transaction?",
+            body: "Assigning it changes an ended account period and recalculates its history.",
+            actionLabel: "Assign account",
+            onAction: async () => {
+              await api(`/api/v1/transactions/${transaction.id}/assign-account`, {
+                method: "POST",
+                body: JSON.stringify({ account_id: Number(value), confirm_ended_period: true }),
+              });
+              closeAllMobileOverlays();
+              await refreshAll();
+              openMobileConfirmation({ title: "Saved", body: "The transaction was assigned to an account.", variant: "saved" }, opener);
+            },
+          }, opener);
+          return;
+        }
+        toast(error.message);
+      }
+    },
+  }, opener);
+}
+
+function mobilePlannedDetailBody(detail) {
+  const occurrence = detail.occurrence;
+  const rule = occurrence.rule;
+  const body = document.createElement("div");
+  body.className = "mobile-transaction-detail";
+  const accountId = rule.kind === "income" ? rule.default_to_account_id : rule.default_from_account_id;
+  const account = accountById(accountId);
+  const label = rule.kind === "income" ? "To account" : "From account";
+  const details = document.createElement("dl");
+  details.className = "mobile-readonly-list";
+  details.innerHTML = `
+    <div><dt>Status</dt><dd>${escapeHtml(detail.mobile_status)}</dd></div>
+    <div><dt>Due</dt><dd>${escapeHtml(localDate(occurrence.due_date))}</dd></div>
+    <div><dt>Amount</dt><dd>${moneyMarkup(occurrence.planned_amount, rule.asset.code)}</dd></div>
+    <div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(account?.name || "Not selected")}</dd></div>
+    <div><dt>Repeats</dt><dd>${escapeHtml(rule.recurrence)}</dd></div>
+    <div><dt>Matched transaction</dt><dd>${occurrence.transaction_id ? `#${occurrence.transaction_id}` : "—"}</dd></div>`;
+  body.append(details);
+  const hint = document.createElement("p");
+  hint.className = "mobile-sheet-hint";
+  hint.textContent = "Plan items never change real balances until a transaction is linked.";
+  body.append(hint);
+  return body;
+}
+
+function openMobilePlannedDetail(detail, opener = document.activeElement) {
+  openMobileSheet({
+    kicker: "PLAN",
+    title: detail.occurrence.rule.name,
+    buildBody: () => mobilePlannedDetailBody(detail),
+    primaryLabel: detail.available_actions.includes("link_transaction") ? "Link transaction" : "",
+    onPrimary: () => openMobilePlanLink(null, document.activeElement, detail.occurrence),
+  }, opener);
+}
+
+function eligiblePlanOccurrences(transaction) {
+  return state.planOccurrences.filter((occurrence) => (
+    ["planned", "overdue"].includes(occurrence.status)
+    && transactionMatchesOccurrence(transaction, occurrence)
+  ));
+}
+
+function eligiblePlanTransactions(occurrence) {
+  return state.transactions.filter((transaction) => (
+    transactionMatchesOccurrence(transaction, occurrence)
+    && !transaction.plan_occurrence_id
+  ));
+}
+
+function openMobilePlanLink(transaction = null, opener = document.activeElement, occurrence = null) {
+  const occurrences = transaction ? eligiblePlanOccurrences(transaction) : state.planOccurrences.filter((item) => ["planned", "overdue"].includes(item.status));
+  const transactions = occurrence ? eligiblePlanTransactions(occurrence) : state.transactions.filter((item) => canLinkTransactionToPlan(item));
+  const draft = {
+    occurrenceId: occurrence?.id || occurrences[0]?.id || null,
+    transactionId: transaction?.id || transactions[0]?.id || null,
+    error: "",
+  };
+  const bodyBuilder = () => {
+    const body = document.createElement("div");
+    body.className = "mobile-account-form";
+    body.append(mobileChoiceField({
+      label: "Plan item",
+      value: occurrences.find((item) => item.id === Number(draft.occurrenceId))?.rule.name || "Choose plan item",
+      id: "mobile-plan-link-occurrence",
+      onOpen: () => openMobileChoose({
+        title: "Plan item",
+        returnFocusSelector: "#mobile-plan-link-occurrence",
+        options: occurrences.map((item) => ({ value: item.id, label: `${item.rule.name} · ${localDate(item.due_date)}`, current: item.id === Number(draft.occurrenceId) })),
+        onSelect: (value) => { draft.occurrenceId = Number(value); },
+      }, document.activeElement),
+    }));
+    body.append(mobileChoiceField({
+      label: "Transaction",
+      value: transactions.find((item) => item.id === Number(draft.transactionId)) ? transactionTitle(transactions.find((item) => item.id === Number(draft.transactionId))) : "Choose transaction",
+      id: "mobile-plan-link-transaction",
+      onOpen: () => openMobileChoose({
+        title: "Transaction",
+        returnFocusSelector: "#mobile-plan-link-transaction",
+        options: transactions.map((item) => ({ value: item.id, label: `${transactionTitle(item)} · ${localDate(item.local_date)}`, current: item.id === Number(draft.transactionId) })),
+        onSelect: (value) => { draft.transactionId = Number(value); },
+      }, document.activeElement),
+    }));
+    const hint = document.createElement("p");
+    hint.className = "mobile-sheet-hint";
+    hint.textContent = "Only eligible posted transactions are shown.";
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    error.textContent = draft.error;
+    body.append(hint, error);
+    return body;
+  };
+  openMobileSheet({
+    kicker: "PLAN VS ACTUAL",
+    title: "Link transaction",
+    buildBody: bodyBuilder,
+    secondaryLabel: "Cancel",
+    primaryLabel: "Link transaction",
+    onPrimary: async () => {
+      if (!draft.occurrenceId || !draft.transactionId) {
+        draft.error = "Choose both a plan item and a transaction";
+        renderMobileOverlay();
+        return;
+      }
+      try {
+        await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${draft.occurrenceId}/link-transaction`, {
+          method: "POST",
+          body: JSON.stringify({ transaction_id: Number(draft.transactionId) }),
+        });
+        closeAllMobileOverlays();
+        await refreshAll();
+        openMobileConfirmation({ title: "Saved", body: "The transaction was linked to the Plan item.", variant: "saved" }, opener);
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+function transactionEditAccountChoices(transaction, action = null) {
+  const requiredAction = action || (transaction.type === "expense" ? "expense" : transaction.type === "income" ? "income" : transaction.type === "adjustment" ? "owner" : "edit");
+  return state.accounts.filter((account) => canUseAccount(account, requiredAction));
+}
+
+function mobileEditChoice(label, value, id, options, onSelect) {
+  return mobileChoiceField({
+    label,
+    value,
+    id,
+    onOpen: () => openMobileChoose({
+      title: label,
+      returnFocusSelector: `#${id}`,
+      options,
+      onSelect,
+    }, document.activeElement),
+  });
+}
+
+function mobileEditInput(label, id, value, draft, key, { inputmode = "text", multiline = false } = {}) {
+  const field = document.createElement("label");
+  field.className = "mobile-sheet-field";
+  const tag = multiline ? "textarea" : "input";
+  field.innerHTML = `<span class="mobile-sheet-field-label">${escapeHtml(label)}</span><${tag} id="${id}" class="mobile-field" inputmode="${inputmode}"></${tag}>`;
+  const input = field.querySelector(tag);
+  input.value = value || "";
+  input.addEventListener("input", (event) => { draft[key] = event.target.value; });
+  return field;
+}
+
+function monthStartValue(value) {
+  const date = new Date(`${value || todayValue()}T00:00:00Z`);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function shiftedMonthValue(value, offset) {
+  const date = new Date(`${monthStartValue(value)}T00:00:00Z`);
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-01`;
+}
+
+function mobileCalendarDates(month) {
+  const first = new Date(`${monthStartValue(month)}T00:00:00Z`);
+  first.setUTCDate(first.getUTCDate() - first.getUTCDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(first);
+    date.setUTCDate(first.getUTCDate() + index);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+  });
+}
+
+function openMobileDateChoose({ label, value, allowAny = false, onSelect, returnFocusSelector }, opener = document.activeElement) {
+  const picker = { month: monthStartValue(value) };
+  openMobileSheet({
+    kicker: "CHOOSE",
+    title: label,
+    returnFocusSelector,
+    buildBody: () => {
+      const body = document.createElement("div");
+      body.className = "mobile-date-picker";
+      if (allowAny) {
+        const any = document.createElement("button");
+        any.type = "button";
+        any.className = "mobile-option mobile-date-any";
+        any.innerHTML = `<span>Any</span><span class="mobile-option-current" aria-hidden="true">${value ? "" : "✓"}</span>`;
+        any.addEventListener("click", () => { onSelect(""); closeMobileOverlay(); });
+        body.append(any);
+      }
+      const toolbar = document.createElement("div");
+      toolbar.className = "mobile-date-toolbar";
+      const previous = document.createElement("button");
+      previous.type = "button";
+      previous.className = "mobile-date-nav mobile-interactive";
+      previous.setAttribute("aria-label", "Previous month");
+      previous.textContent = "‹";
+      const heading = document.createElement("strong");
+      heading.textContent = new Intl.DateTimeFormat("en", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${picker.month}T00:00:00Z`));
+      const next = document.createElement("button");
+      next.type = "button";
+      next.className = "mobile-date-nav mobile-interactive";
+      next.setAttribute("aria-label", "Next month");
+      next.textContent = "›";
+      previous.addEventListener("click", () => { picker.month = shiftedMonthValue(picker.month, -1); renderMobileOverlay(); });
+      next.addEventListener("click", () => { picker.month = shiftedMonthValue(picker.month, 1); renderMobileOverlay(); });
+      toolbar.append(previous, heading, next);
+      body.append(toolbar);
+      const weekdays = document.createElement("div");
+      weekdays.className = "mobile-date-weekdays";
+      for (const day of ["S", "M", "T", "W", "T", "F", "S"]) {
+        const cell = document.createElement("span");
+        cell.textContent = day;
+        weekdays.append(cell);
+      }
+      body.append(weekdays);
+      const grid = document.createElement("div");
+      grid.className = "mobile-date-grid";
+      const monthPrefix = picker.month.slice(0, 7);
+      for (const date of mobileCalendarDates(picker.month)) {
+        const day = document.createElement("button");
+        day.type = "button";
+        day.className = "mobile-date-day mobile-interactive";
+        day.classList.toggle("outside", !date.startsWith(monthPrefix));
+        day.classList.toggle("current", date === value);
+        day.textContent = String(Number(date.slice(-2)));
+        day.setAttribute("aria-label", localDate(date));
+        day.setAttribute("aria-pressed", String(date === value));
+        day.addEventListener("click", () => { onSelect(date); closeMobileOverlay(); });
+        grid.append(day);
+      }
+      body.append(grid);
+      return body;
+    },
+  }, opener);
+}
+
+function mobileDateChoice(label, id, value, draft, key, { allowAny = false } = {}) {
+  return mobileChoiceField({
+    label,
+    value: value ? localDate(value) : "Any",
+    id,
+    onOpen: () => openMobileDateChoose({
+      label,
+      value,
+      allowAny,
+      returnFocusSelector: `#${id}`,
+      onSelect: (selected) => { draft[key] = selected; },
+    }, document.activeElement),
+  });
+}
+
+function mobileTransactionEditBody(transaction, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-form";
+  const type = document.createElement("dl");
+  type.className = "mobile-readonly-list";
+  type.innerHTML = `<div><dt>Type</dt><dd>${escapeHtml(transactionDisplayType(transaction))}</dd></div>`;
+  body.append(type);
+  const single = ["expense", "income", "adjustment"].includes(transaction.type);
+  if (single) {
+    const accounts = transactionEditAccountChoices(transaction);
+    const selected = accountById(draft.accountId);
+    body.append(mobileEditChoice(
+      "Account",
+      selected ? `${selected.name} · ${selected.asset.code}` : "Unassigned",
+      "mobile-transaction-account",
+      [
+        ...(transaction.type === "adjustment" ? [] : [{ value: "", label: "Unassigned", current: !draft.accountId }]),
+        ...accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}`, current: account.id === Number(draft.accountId) })),
+      ],
+      (value) => { draft.accountId = value ? Number(value) : null; },
+    ));
+    body.append(mobileEditInput(transaction.type === "adjustment" ? "Delta" : "Amount", "mobile-transaction-amount", draft.amount, draft, "amount", { inputmode: "decimal" }));
+  } else {
+    const accounts = transactionEditAccountChoices(transaction, "edit");
+    const from = accountById(draft.fromAccountId);
+    const to = accountById(draft.toAccountId);
+    body.append(mobileEditChoice("From account", from ? `${from.name} · ${from.asset.code}` : "Choose account", "mobile-transaction-from", accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}`, current: account.id === Number(draft.fromAccountId) })), (value) => { draft.fromAccountId = Number(value); }));
+    body.append(mobileEditChoice("To account", to ? `${to.name} · ${to.asset.code}` : "Choose account", "mobile-transaction-to", accounts.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}`, current: account.id === Number(draft.toAccountId) })), (value) => { draft.toAccountId = Number(value); }));
+    body.append(mobileEditInput(transaction.type === "transfer" ? "Amount" : "From amount", "mobile-transaction-from-amount", draft.fromAmount, draft, "fromAmount", { inputmode: "decimal" }));
+    if (transaction.type === "exchange") body.append(mobileEditInput("To amount", "mobile-transaction-to-amount", draft.toAmount, draft, "toAmount", { inputmode: "decimal" }));
+  }
+  if (["expense", "income"].includes(transaction.type)) {
+    const workspaceId = accountById(draft.accountId)?.workspace_id || state.context.workspace.id;
+    const categories = (state.categories.get(workspaceId) || []).filter((category) => (
+      category.id === Number(draft.categoryId)
+      || (!category.archived_at && [transaction.type, "both"].includes(category.kind))
+    ));
+    const selectedCategory = categories.find((category) => category.id === Number(draft.categoryId));
+    body.append(mobileEditChoice("Category", selectedCategory?.name || "Uncategorized", "mobile-transaction-category", [
+      { value: "", label: "Uncategorized", current: !draft.categoryId },
+      ...categories.map((category) => ({ value: category.id, label: category.name, current: category.id === Number(draft.categoryId), disabled: Boolean(category.archived_at) })),
+    ], (value) => { draft.categoryId = value ? Number(value) : null; }));
+  }
+  body.append(mobileDateChoice("Financial date", "mobile-transaction-date", draft.localDate, draft, "localDate"));
+  body.append(mobileEditInput("Note", "mobile-transaction-note", draft.note, draft, "note", { multiline: true }));
+  const hint = document.createElement("p");
+  hint.className = "mobile-sheet-hint";
+  hint.textContent = "Editing rewrites the movement. Balances and the active period are recalculated on save.";
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(hint, error);
+  return body;
+}
+
+function mobileTransactionPatchBody(transaction, draft, confirmed = false) {
+  const body = {
+    local_date: draft.localDate || null,
+    note: draft.note.trim() || null,
+    counterparty: transaction.counterparty,
+  };
+  if (["expense", "income"].includes(transaction.type)) {
+    body.account_id = draft.accountId;
+    if (!draft.accountId) body.asset_code = transaction.legs[0].asset.code;
+    body.amount = draft.amount.trim();
+    body.category_id = draft.categoryId;
+  } else if (transaction.type === "adjustment") {
+    body.account_id = draft.accountId;
+    body.delta = draft.amount.trim();
+  } else {
+    body.from_account_id = draft.fromAccountId;
+    body.to_account_id = draft.toAccountId;
+    body.from_amount = draft.fromAmount.trim();
+    body.to_amount = transaction.type === "transfer" ? draft.fromAmount.trim() : draft.toAmount.trim();
+  }
+  if (confirmed) body.confirm_ended_period = true;
+  return body;
+}
+
+async function finishMobileTransactionCorrection(transaction, opener, body) {
+  await api(`/api/v1/transactions/${transaction.id}`, { method: "PATCH", body: JSON.stringify(body) });
+  closeAllMobileOverlays();
+  await refreshAll();
+  openMobileConfirmation({
+    title: "Saved",
+    body: "The transaction was updated. Balances and the active period were recalculated.",
+    variant: "saved",
+  }, opener);
+}
+
+function openMobileTransactionEdit(transaction, opener = document.activeElement) {
+  const negative = transaction.legs.find((leg) => String(leg.amount).startsWith("-"));
+  const positive = transaction.legs.find((leg) => !String(leg.amount).startsWith("-"));
+  const leg = transaction.legs[0];
+  const draft = {
+    accountId: leg?.account_id || null,
+    fromAccountId: negative?.account_id || null,
+    toAccountId: positive?.account_id || null,
+    amount: leg ? (transaction.type === "expense" ? String(leg.amount).replace("-", "") : String(leg.amount)) : "",
+    fromAmount: negative ? String(negative.amount).replace("-", "") : "",
+    toAmount: positive ? String(positive.amount) : "",
+    categoryId: transaction.category_id,
+    localDate: transaction.local_date,
+    note: transaction.note || "",
+    error: "",
+  };
+  openMobileSheet({
+    kicker: "LEDGER ENTRY",
+    title: "Edit transaction",
+    buildBody: () => mobileTransactionEditBody(transaction, draft),
+    secondaryLabel: "Cancel",
+    primaryLabel: "Save changes",
+    onPrimary: async () => {
+      draft.error = "";
+      const body = mobileTransactionPatchBody(transaction, draft);
+      try {
+        await finishMobileTransactionCorrection(transaction, opener, body);
+      } catch (error) {
+        if (error.status === 409 && String(error.message).includes("explicit confirmation")) {
+          openMobileConfirmation({
+            title: "Save this correction?",
+            body: "Balances and ended period history will be recalculated from the corrected movement.",
+            actionLabel: "Save changes",
+            onAction: () => finishMobileTransactionCorrection(transaction, opener, mobileTransactionPatchBody(transaction, draft, true)),
+          }, document.activeElement);
+          return;
+        }
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+function transactionAdvancedDraft() {
+  return {
+    accountId: $("filter-account").value,
+    periodId: $("filter-period").value,
+    type: $("filter-type").value,
+    categoryId: $("filter-category").value,
+    dateFrom: $("filter-from").value,
+    dateTo: $("filter-to").value,
+  };
+}
+
+function advancedFilterCount(draft) {
+  return Object.values(draft).filter(Boolean).length;
+}
+
+function mobileTransactionFiltersBody(draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-form";
+  const account = accountById(draft.accountId);
+  body.append(mobileEditChoice("Account", account?.name || "All accounts", "mobile-filter-account", [
+    { value: "", label: "All accounts", current: !draft.accountId },
+    ...state.accounts.map((item) => ({ value: item.id, label: `${item.name} · ${item.asset.code}`, current: item.id === Number(draft.accountId) })),
+  ], (value) => {
+    draft.accountId = value;
+    const period = state.transactionPeriods.find((item) => item.id === Number(draft.periodId));
+    if (period && value && period.account_id !== Number(value)) draft.periodId = "";
+  }));
+  const period = state.transactionPeriods.find((item) => item.id === Number(draft.periodId));
+  const periods = state.transactionPeriods.filter((item) => !draft.accountId || item.account_id === Number(draft.accountId));
+  body.append(mobileEditChoice("Period", period ? `${period.account.name} · ${localDate(period.start_date)}` : "All periods", "mobile-filter-period", [
+    { value: "", label: "All periods", current: !draft.periodId },
+    ...periods.map((item) => ({ value: item.id, label: `${item.account.name} · ${localDate(item.start_date)} — ${localDate(item.end_date)}`, current: item.id === Number(draft.periodId) })),
+  ], (value) => {
+    draft.periodId = value;
+    const selected = state.transactionPeriods.find((item) => item.id === Number(value));
+    if (selected) draft.accountId = String(selected.account_id);
+  }));
+  const typeLabels = { expense: "Expense", income: "Income", transfer: "Transfer", exchange: "Exchange", adjustment: "Adjustment" };
+  body.append(mobileEditChoice("Type", typeLabels[draft.type] || "All types", "mobile-filter-type", [
+    { value: "", label: "All types", current: !draft.type },
+    ...Object.entries(typeLabels).map(([value, label]) => ({ value, label, current: draft.type === value })),
+  ], (value) => { draft.type = value; }));
+  const categories = [...state.categories.values()].flat().filter((category, index, all) => all.findIndex((item) => item.id === category.id) === index);
+  const category = categories.find((item) => item.id === Number(draft.categoryId));
+  body.append(mobileEditChoice("Category", category?.name || "All categories", "mobile-filter-category", [
+    { value: "", label: "All categories", current: !draft.categoryId },
+    ...categories.map((item) => ({ value: item.id, label: item.name, current: item.id === Number(draft.categoryId), disabled: Boolean(item.archived_at) })),
+  ], (value) => { draft.categoryId = value; }));
+  body.append(mobileDateChoice("From", "mobile-filter-from", draft.dateFrom, draft, "dateFrom", { allowAny: true }));
+  body.append(mobileDateChoice("To", "mobile-filter-to", draft.dateTo, draft, "dateTo", { allowAny: true }));
+  return body;
+}
+
+function writeAdvancedFilters(draft) {
+  $("filter-account").value = draft.accountId;
+  $("filter-period").value = draft.periodId;
+  $("filter-type").value = draft.type;
+  $("filter-category").value = draft.categoryId;
+  $("filter-status").value = "";
+  $("filter-from").value = draft.dateFrom;
+  $("filter-to").value = draft.dateTo;
+}
+
+function openMobileTransactionFilters(opener = document.activeElement) {
+  const draft = transactionAdvancedDraft();
+  openMobileSheet({
+    kicker: "LEDGER",
+    title: "Filters",
+    buildBody: () => mobileTransactionFiltersBody(draft),
+    secondaryLabel: "Clear",
+    onSecondary: async () => {
+      $("transaction-filters").reset();
+      state.transactionAdvancedActive = false;
+      state.transactionAdvancedCount = 0;
+      const entry = mobileOverlayState.stack.at(-1);
+      if (entry) entry.actionTaken = false;
+      closeMobileOverlay({ restoreFocus: false });
+      await loadMobileTransactionFeed(false);
+    },
+    primaryLabel: "Apply",
+    onPrimary: async () => {
+      writeAdvancedFilters(draft);
+      state.transactionAdvancedActive = true;
+      state.transactionAdvancedCount = advancedFilterCount(draft);
+      const loaded = await loadTransactions(false);
+      if (!loaded) return;
+      const entry = mobileOverlayState.stack.at(-1);
+      if (entry) entry.actionTaken = false;
+      closeMobileOverlay({ restoreFocus: false });
+    },
+  }, opener);
+}
+
+async function setMobileTransactionFeedFilter(filter) {
+  if (state.transactionFeedLoading) return;
+  $("transaction-filters").reset();
+  state.transactionAdvancedActive = false;
+  state.transactionAdvancedCount = 0;
+  state.transactionFeedFilter = filter;
+  state.transactionFeedCursor = null;
+  state.transactionFeedItems = [];
+  renderTransactions();
+  await loadMobileTransactionFeed(false);
+}
+
 function openTransactionDetails(transaction) {
+  if (isMobileViewport()) {
+    void api(`/api/v1/transaction-feed/transaction/${transaction.id}`)
+      .then((detail) => openMobileTransactionDetails(detail.transaction, document.activeElement))
+      .catch((error) => toast(error.message));
+    return;
+  }
   state.viewingTransaction = transaction;
   const author = transaction.created_by_user_id === state.context.user.id
     ? "You"
@@ -2805,6 +3670,10 @@ function openTransactionDetails(transaction) {
 }
 
 function renderTransactions() {
+  if (isMobileViewport()) {
+    renderMobileTransactions();
+    return;
+  }
   const nodes = state.transactions.map((transaction) => {
     const row = document.createElement("article");
     row.className = `transaction-row ${transaction.type}`;
@@ -3210,6 +4079,10 @@ $("reconcile-form").addEventListener("submit", saveReconcile);
 $("invitation-form").addEventListener("submit", createInvitation);
 $("copy-invite").addEventListener("click", copyInvitation);
 $("empty-open-operations").addEventListener("click", () => switchView("operations"));
+$("transaction-filter-trigger").addEventListener("click", (event) => openMobileTransactionFilters(event.currentTarget));
+document.querySelectorAll("[data-feed-filter]").forEach((button) => {
+  button.addEventListener("click", () => void setMobileTransactionFeedFilter(button.dataset.feedFilter));
+});
 $("transaction-type").addEventListener("change", () => updateTransactionFields({ preserve: false }));
 $("transaction-account").addEventListener("change", async () => {
   $("single-asset-field").classList.toggle("hidden", Boolean($("transaction-account").value) || $("transaction-type").value === "adjustment");
@@ -3227,7 +4100,10 @@ $("transaction-filters").addEventListener("submit", (event) => { event.preventDe
 $("filter-account").addEventListener("change", () => syncTransactionFilterPair("account"));
 $("filter-period").addEventListener("change", () => syncTransactionFilterPair("period"));
 $("clear-filters").addEventListener("click", () => { $("transaction-filters").reset(); loadTransactions(false); });
-$("load-more").addEventListener("click", () => loadTransactions(true));
+$("load-more").addEventListener("click", () => {
+  if (isMobileViewport() && !state.transactionAdvancedActive) void loadMobileTransactionFeed(true);
+  else void loadTransactions(true);
+});
 
 window.addEventListener("popstate", () => switchView(new URLSearchParams(window.location.search).get("view") || "accounts", false));
 api("/api/v1/auth/me").then(showApp).catch(showAuth);

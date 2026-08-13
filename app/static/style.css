@@ -183,6 +183,7 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .transaction-detail-legs { display: grid; gap: 8px; padding: 0; list-style: none; }
 .transaction-detail-legs li { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; }
 .load-more { display: block; margin: 18px auto 0; }
+.mobile-transaction-filter, #transaction-chips { display: none; }
 
 .empty-state { padding: 64px 20px; text-align: center; color: var(--muted); }
 .empty-state h3 { color: var(--text); }
@@ -549,9 +550,73 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   }
   .mobile-segmented > button { flex: 1; min-width: 0; border-radius: 9px; background: transparent; color: var(--mobile-muted); font-size: 13px; font-weight: 600; }
   .mobile-segmented > button.active { background: var(--mobile-neutral); color: var(--mobile-text); }
-  .mobile-chip-lane { display: flex; height: 44px; min-height: 44px; max-height: 44px; gap: 8px; padding: 0 16px; overflow-x: auto; flex-wrap: nowrap; border-radius: 0; }
+  .mobile-chip-lane { display: flex; height: 44px; min-height: 44px; max-height: 44px; gap: 8px; padding: 0 16px; overflow-x: auto; flex-wrap: nowrap; border-radius: 0; scrollbar-width: none; }
+  .mobile-chip-lane::-webkit-scrollbar { display: none; }
   .mobile-chip { height: 36px; min-height: 36px; max-height: 36px; padding: 0 14px; border: 1px solid var(--mobile-field-border); border-radius: 6px; background: transparent; color: #9AA3B0; font-size: 13px; font-weight: 600; }
   .mobile-chip.active { background: var(--mobile-accent); color: var(--mobile-bg); }
+  #view-transactions > .mobile-screen-header { margin-bottom: 0; }
+  #view-transactions .mobile-screen-title, #transactions-title { font-size: 17px; font-weight: 600; letter-spacing: normal; }
+  #view-transactions #transaction-filters { display: none; }
+  #view-transactions #transaction-chips { display: flex; margin: 0 -16px; }
+  #view-transactions .mobile-transaction-filter {
+    display: inline-flex;
+    width: auto;
+    min-width: 72px;
+    padding: 0 2px;
+    gap: 5px;
+    align-items: center;
+    justify-content: flex-end;
+    border: 0;
+    background: transparent;
+    color: var(--mobile-secondary);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .mobile-filter-count { display: inline-grid; min-width: 18px; height: 18px; padding: 0 5px; place-items: center; border-radius: 9px; background: var(--mobile-accent); color: var(--mobile-bg); font-size: 10px; font-weight: 700; }
+  #view-transactions .transaction-list { display: grid; gap: 0; }
+  .mobile-transaction-group { display: grid; }
+  .mobile-transaction-date { display: flex; height: 24px; margin: 0; align-items: center; color: var(--mobile-muted); font: 600 11px ui-monospace, Menlo, monospace; letter-spacing: .1em; }
+  .mobile-transaction-row { position: relative; height: 64px; min-height: 64px; max-height: 64px; overflow: hidden; border-bottom: 1px solid var(--mobile-hairline); background: var(--mobile-bg); }
+  .mobile-swipe-actions { position: absolute; z-index: 0; top: 0; right: 0; bottom: 0; display: flex; justify-content: flex-end; }
+  .mobile-swipe-actions:empty { display: none; }
+  .mobile-swipe-actions button { width: 64px; min-width: 64px; height: 64px; min-height: 64px; padding: 0; border: 0; border-radius: 0; font-size: 12px; font-weight: 700; }
+  .mobile-swipe-plan { background: #232A33; color: var(--mobile-secondary); }
+  .mobile-swipe-delete { background: var(--mobile-destructive); color: var(--mobile-on-destructive); }
+  .mobile-transaction-body { position: relative; z-index: 1; display: grid; width: 100%; height: 64px; padding: 0; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; border: 0; border-radius: 0; background: var(--mobile-bg); color: var(--mobile-text); transition: transform 160ms ease-out; touch-action: pan-y; }
+  .mobile-transaction-row.is-swiped .mobile-transaction-body { transform: translateX(-112px); }
+  .mobile-transaction-icon { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; background: var(--mobile-neutral); color: var(--mobile-muted); font-size: 14px; font-weight: 700; }
+  .mobile-transaction-row.income .mobile-transaction-icon { background: rgba(110,231,168,.1); color: var(--mobile-positive); }
+  .mobile-transaction-row.expense .mobile-transaction-icon { background: var(--mobile-danger-bg); color: var(--mobile-negative); }
+  .mobile-transaction-main { display: grid; min-width: 0; gap: 3px; }
+  .mobile-transaction-main strong { overflow: hidden; color: var(--mobile-text); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-transaction-main > span { display: flex; min-width: 0; gap: 6px; align-items: center; color: var(--mobile-muted); font-size: 11px; white-space: nowrap; }
+  .mobile-status-pill { display: inline-flex; height: 18px; padding: 0 6px; align-items: center; border-radius: 9px; font-size: 10px; font-weight: 600; }
+  .mobile-status-pill.planned { background: var(--mobile-accent-tint); color: var(--mobile-accent); }
+  .mobile-status-pill.deleted { background: var(--mobile-danger-bg); color: var(--mobile-negative); }
+  .mobile-transaction-amount { justify-self: end; font-size: 14px; font-weight: 600; white-space: nowrap; }
+  .mobile-transaction-row.income .mobile-transaction-amount { color: var(--mobile-positive); }
+  .mobile-transaction-row.expense .mobile-transaction-amount { color: var(--mobile-negative); }
+  .mobile-transaction-amount .mobile-money { gap: 3px; }
+  #view-transactions .empty-state { padding: 110px 20px 20px; }
+  #view-transactions .empty-state .empty-icon { width: 52px; height: 52px; margin-bottom: 16px; border-radius: 14px; }
+  #view-transactions .empty-state h3 { margin-bottom: 8px; font-size: 17px; font-weight: 600; letter-spacing: normal; }
+  #view-transactions .empty-state p { max-width: 310px; margin-bottom: 18px; font-size: 13px; line-height: 1.45; }
+  #view-transactions .load-more { width: 100%; height: 44px; margin: 12px 0 0; }
+  .mobile-transaction-detail { display: grid; gap: 12px; }
+  .mobile-transaction-movements { display: grid; }
+  .mobile-transaction-movements > div { display: flex; min-height: 48px; gap: 12px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--mobile-hairline); font-size: 13px; }
+  .mobile-transaction-movements strong { white-space: nowrap; }
+  .mobile-sheet-field textarea.mobile-field { height: 64px; min-height: 64px; max-height: 64px; padding-top: 11px; resize: none; }
+  .mobile-date-picker { display: grid; gap: 8px; }
+  .mobile-date-any { width: 100%; }
+  .mobile-date-toolbar { display: grid; height: 44px; grid-template-columns: 44px 1fr 44px; align-items: center; text-align: center; }
+  .mobile-date-toolbar strong { font-size: 14px; font-weight: 600; }
+  .mobile-date-nav { width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--mobile-secondary); font-size: 26px; }
+  .mobile-date-weekdays, .mobile-date-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .mobile-date-weekdays span { display: grid; height: 24px; place-items: center; color: var(--mobile-muted); font: 600 10px ui-monospace, Menlo, monospace; }
+  .mobile-date-day { min-width: 0; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--mobile-text); font-size: 13px; }
+  .mobile-date-day.outside { color: var(--mobile-muted); opacity: .55; }
+  .mobile-date-day.current { background: var(--mobile-accent); color: var(--mobile-bg); font-weight: 700; opacity: 1; }
   .mobile-field { height: 44px; min-height: 44px; max-height: 44px; padding: 0 14px; border: 1px solid var(--mobile-field-border); border-radius: 12px; background: var(--mobile-field); }
   .mobile-field:focus { border-color: var(--mobile-accent-focus); }
   .mobile-field-sheet { display: flex; height: 44px; min-height: 44px; max-height: 44px; align-items: center; border: 1px solid var(--mobile-field-border); border-radius: 10px; background: var(--mobile-field); }
@@ -662,6 +727,7 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-confirm-actions > button { flex: 1; }
   @media (prefers-reduced-motion: reduce) {
     .mobile-sheet { transform: none; transition: none; }
+    .mobile-transaction-body { transition: none; }
   }
 }
 

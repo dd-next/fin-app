@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-026 mobile Transactions on `task/T-026-mobile-transactions` |
-| Next | Implement the readiness-reviewed T-026 acceptance criteria |
+| Active work | T-026 mobile Transactions in review on `task/T-026-mobile-transactions` |
+| Next | Commit and locally accept the reviewed T-026 implementation |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -38,8 +38,10 @@ P0–P2 findings closed. T-025B Profile/categories/rates/sharing/logout is also
 locally accepted after targeted 67-test, syntax/diff, isolated 390×844 browser
 and preserved 1280×900 checks passed, with all reviewer P2 sharing-race
 findings closed. T-026 is now the sole claimed task from accepted integration
-`f3f747b`; implementation is in progress on its exact task branch. Phase 15
-remains incomplete.
+`f3f747b`; its 33-test targeted gate, JavaScript/diff checks, isolated 390×844
+browser smoke and retained 1280×900 check pass. Independent bounded review
+closed all P0–P3 findings after limited re-review, so T-026 is ready for its
+task implementation commit and local acceptance. Phase 15 remains incomplete.
 
 Phase 15 authority and constraints:
 

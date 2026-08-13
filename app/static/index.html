@@ -86,8 +86,16 @@
       </section>
 
       <section id="view-transactions" class="app-view hidden" aria-labelledby="transactions-title">
-        <div class="view-heading">
+        <div class="view-heading mobile-screen-header">
           <div><p class="eyebrow">Ledger</p><h2 id="transactions-title">Transactions</h2></div>
+          <button id="transaction-filter-trigger" class="mobile-transaction-filter mobile-interactive" type="button" aria-haspopup="dialog" aria-controls="mobile-sheet">Filters <span id="transaction-filter-count" class="mobile-filter-count hidden" aria-label="0 active filters">0</span></button>
+        </div>
+        <div id="transaction-chips" class="mobile-chip-lane" role="group" aria-label="Transaction type">
+          <button class="mobile-chip active" type="button" data-feed-filter="all" aria-pressed="true">All</button>
+          <button class="mobile-chip" type="button" data-feed-filter="income" aria-pressed="false">Income</button>
+          <button class="mobile-chip" type="button" data-feed-filter="expense" aria-pressed="false">Expense</button>
+          <button class="mobile-chip" type="button" data-feed-filter="transfer" aria-pressed="false">Transfer</button>
+          <button class="mobile-chip" type="button" data-feed-filter="planned" aria-pressed="false">Planned</button>
         </div>
         <form id="transaction-filters" class="filter-bar panel-subtle">
           <label>Account<select id="filter-account"><option value="">All accounts</option></select></label>
@@ -103,8 +111,8 @@
         <div id="transaction-list" class="transaction-list"></div>
         <div id="transactions-empty" class="empty-state hidden">
           <div class="empty-icon">⇄</div><h3>No transactions yet</h3>
-          <p>Create financial events from Operations. They will appear here.</p>
-          <button id="empty-open-operations">Open Operations</button>
+          <p>Create financial events from Operations — they appear here.</p>
+          <button id="empty-open-operations" class="mobile-empty-primary mobile-interactive">Open Operations</button>
         </div>
         <button id="load-more" class="button-secondary load-more hidden">Load more</button>
       </section>
@@ -423,6 +431,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=phase15-t025b-1" defer></script>
+  <script src="/app.js?v=phase15-t026-1" defer></script>
 </body>
 </html>
