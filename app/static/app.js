@@ -7,6 +7,7 @@ const state = {
   assets: [],
   accounts: [],
   summary: null,
+  manualRates: [],
   categories: new Map(),
   transactions: [],
   transactionPeriods: [],
@@ -31,6 +32,10 @@ const state = {
   activeAccountPage: null,
   activeAccountError: null,
   sharingAccount: null,
+  sharingRows: [],
+  sharingError: "",
+  invitationRole: "viewer",
+  invitationUrl: "",
   viewingTransaction: null,
   editingTransaction: null,
   transactionDeleteLoading: false,
@@ -153,6 +158,10 @@ function canUseAccount(account, action) {
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 640px)").matches;
+}
+
+function roleLabel(role) {
+  return `${role[0].toUpperCase()}${role.slice(1)}`;
 }
 
 function selectOptions(select, items, { placeholder = null, selected = null } = {}) {
@@ -327,7 +336,17 @@ function renderMobileOverlay() {
       secondary.type = "button";
       secondary.className = "mobile-button-secondary";
       secondary.textContent = entry.secondaryLabel;
-      secondary.addEventListener("click", () => closeMobileOverlay());
+      secondary.addEventListener("click", async () => {
+        if (!entry.onSecondary) {
+          closeMobileOverlay();
+          return;
+        }
+        if (entry.actionTaken) return;
+        entry.actionTaken = true;
+        secondary.disabled = true;
+        try { await entry.onSecondary(); }
+        finally { entry.actionTaken = false; secondary.disabled = false; }
+      });
       footer.append(secondary);
     }
     if (entry.primaryLabel) {
@@ -349,6 +368,7 @@ function renderMobileOverlay() {
   }
 
   requestAnimationFrame(() => {
+    if (mobileOverlayState.stack.at(-1) !== entry) return;
     const focusables = mobileOverlayFocusable(panel);
     (panel.querySelector("[autofocus]") || focusables[0] || panel).focus();
     setMobileOverlayBackground(active);
@@ -358,14 +378,17 @@ function renderMobileOverlay() {
 function openMobileSheet(config, opener = document.activeElement) {
   if (!window.matchMedia("(max-width: 640px)").matches) return;
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
+  const parentContext = mobileOverlayState.stack.at(-1)?.context || null;
   mobileOverlayState.stack.push({
     kind: "sheet",
     kicker: String(config.kicker || ""),
     title: String(config.title || ""),
     buildBody: config.buildBody,
     secondaryLabel: config.secondaryLabel || "",
+    onSecondary: config.onSecondary,
     primaryLabel: config.primaryLabel || "",
     onPrimary: config.onPrimary,
+    context: config.context || parentContext,
     returnFocusSelector: config.returnFocusSelector || "",
     opener,
     openerId: opener?.id || "",
@@ -430,10 +453,10 @@ function openMobileChoose({ title, options, onSelect, returnFocusSelector = "" }
   }, opener);
 }
 
-function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction }, opener = document.activeElement) {
+function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
   if (!window.matchMedia("(max-width: 640px)").matches) return;
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, opener, openerId: opener?.id || "" };
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: mobileOverlayState.stack.at(-1)?.context || null };
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
@@ -453,7 +476,12 @@ function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "
     try {
       await onAction?.();
       entry.actionTaken = false;
-      closeMobileOverlay({ restoreFocus: variant !== "saved" });
+      if (mobileOverlayState.stack.at(-1) === entry) {
+        closeMobileOverlay({ restoreFocus: variant !== "saved" });
+        for (let index = 0; index < entry.closeParentsOnSuccess; index += 1) {
+          closeMobileOverlay({ restoreFocus: false });
+        }
+      }
     } catch (error) {
       $("mobile-confirm-error").textContent = error.message;
       $("mobile-confirm-error").classList.remove("hidden");
@@ -1152,20 +1180,7 @@ function openSetRateEntry(opener = document.activeElement) {
     detail: { opener },
   });
   if (!document.dispatchEvent(event)) return;
-  if (!isMobileViewport()) {
-    toast("Set a manual rate from Profile · Exchange rates");
-    return;
-  }
-  openMobileSheet({
-    kicker: "EXCHANGE",
-    title: "Set a rate",
-    buildBody: () => {
-      const body = document.createElement("div");
-      body.className = "mobile-sheet-message";
-      body.innerHTML = "<p>Manual exchange rates are managed from Profile · Exchange rates.</p>";
-      return body;
-    },
-  }, opener);
+  void openRateSettings(opener, state.summary?.unvalued[0]?.asset.code || null);
 }
 
 function renderAccounts() {
@@ -1373,6 +1388,8 @@ function openMobileAccountDetail(account, opener) {
     kicker: "ACCOUNT",
     title: account.name,
     buildBody: () => mobileAccountDetailBody(account),
+    secondaryLabel: canUseAccount(account, "owner") ? "Share" : "",
+    onSecondary: () => openSharing(account, document.activeElement),
     primaryLabel: canUseAccount(account, "edit") ? "Edit details" : "",
     onPrimary: () => openMobileAccountForm(account, document.activeElement),
   }, opener);
@@ -1754,8 +1771,512 @@ async function saveReconcile(event) {
   } catch (error) { $("reconcile-error").textContent = error.message; }
 }
 
-async function openSharing(account) {
+function mobileProfileBody() {
+  const body = document.createElement("div");
+  body.className = "mobile-profile-body";
+  const identity = document.createElement("div");
+  identity.className = "mobile-profile-identity";
+  identity.innerHTML = `<strong>${escapeHtml(state.context.user.display_name)}</strong><span>@${escapeHtml(state.context.user.username)}</span>`;
+  body.append(identity);
+  const rows = document.createElement("div");
+  rows.className = "mobile-settings-list";
+  const addRow = (label, meta, action, { destructive = false } = {}) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `mobile-settings-row mobile-interactive${destructive ? " is-destructive" : ""}`;
+    button.innerHTML = `<span><strong>${escapeHtml(label)}</strong>${meta ? `<small>${escapeHtml(meta)}</small>` : ""}</span><span aria-hidden="true">›</span>`;
+    button.addEventListener("click", action);
+    rows.append(button);
+  };
+  addRow("Manage categories", "Create, rename, and archive", () => openCategories(document.activeElement));
+  addRow("Exchange rates", "Manual rates", () => openRateSettings(document.activeElement));
+  addRow("Workspace", state.context.workspace.name, () => {});
+  addRow("Log out", "This device", () => openLogoutConfirmation(document.activeElement), { destructive: true });
+  rows.lastElementChild.previousElementSibling.disabled = true;
+  body.append(rows);
+  return body;
+}
+
+function openMobileProfile(opener = document.activeElement) {
+  openMobileSheet({
+    kicker: "ACCOUNT",
+    title: state.context.user.username,
+    buildBody: mobileProfileBody,
+  }, opener);
+}
+
+function openLogoutConfirmation(opener = document.activeElement) {
+  openMobileConfirmation({
+    title: `Log out of ${state.context.user.username}?`,
+    body: "You will be signed out on this device. Your data stays safely in your workspace.",
+    actionLabel: "Log out",
+    variant: "destructive",
+    onAction: async () => {
+      await api("/api/v1/auth/logout", { method: "POST" });
+      closeAllMobileOverlays();
+      showAuth();
+    },
+  }, opener);
+}
+
+function categoryKindLabel(kind) {
+  return { expense: "Expense", income: "Income", both: "Both" }[kind] || kind;
+}
+
+function mobileCategoriesBody() {
+  const body = document.createElement("div");
+  body.className = "mobile-category-manager";
+  const heading = document.createElement("p");
+  heading.className = "mobile-sheet-section-title";
+  heading.textContent = "ALL CATEGORIES · TAP TO EDIT";
+  body.append(heading);
+  const categories = (state.categories.get(state.context.workspace.id) || [])
+    .filter((category) => !category.archived_at);
+  const list = document.createElement("div");
+  list.className = "mobile-settings-list";
+  for (const category of categories) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "mobile-settings-row mobile-interactive";
+    row.innerHTML = `<span><strong>${escapeHtml(category.name)}</strong><small>${escapeHtml(categoryKindLabel(category.kind))}</small></span><span aria-hidden="true">›</span>`;
+    row.addEventListener("click", () => openMobileCategoryForm(category, row));
+    list.append(row);
+  }
+  if (!categories.length) list.innerHTML = '<p class="muted">No categories yet.</p>';
+  body.append(list);
+  return body;
+}
+
+async function openMobileCategories(opener = document.activeElement) {
+  const workspaceId = state.context.workspace.id;
+  state.categories.delete(workspaceId);
+  try { await categoriesFor(workspaceId); }
+  catch (error) { toast(error.message); return; }
+  openMobileSheet({
+    kicker: "SETTINGS",
+    title: "Categories",
+    buildBody: mobileCategoriesBody,
+    primaryLabel: "Add category",
+    onPrimary: () => openMobileCategoryForm(null, document.activeElement),
+  }, opener);
+}
+
+function buildMobileCategoryForm(category, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-form";
+  const name = document.createElement("label");
+  name.className = "mobile-sheet-field";
+  name.innerHTML = '<span class="mobile-sheet-field-label">Name</span><input id="mobile-category-name" class="mobile-field" maxlength="100">';
+  name.querySelector("input").value = draft.name;
+  name.querySelector("input").addEventListener("input", (event) => { draft.name = event.target.value; });
+  body.append(name);
+  body.append(mobileChoiceField({
+    label: "Kind",
+    value: categoryKindLabel(draft.kind),
+    id: "mobile-category-kind",
+    onOpen: () => openMobileChoose({
+      title: "Kind",
+      returnFocusSelector: "#mobile-category-kind",
+      options: ["expense", "income", "both"].map((value) => ({ value, label: categoryKindLabel(value), current: draft.kind === value })),
+      onSelect: (value) => { draft.kind = value; },
+    }, document.activeElement),
+  }));
+  if (!category) {
+    const hint = document.createElement("p");
+    hint.className = "mobile-sheet-hint";
+    hint.textContent = "A category only groups transactions. Renaming it later keeps every past entry attached.";
+    body.append(hint);
+  } else {
+    const archive = document.createElement("button");
+    archive.type = "button";
+    archive.className = "mobile-button-destructive-inline mobile-interactive";
+    archive.textContent = "Archive category";
+    archive.addEventListener("click", () => openMobileConfirmation({
+      title: `Archive ${category.name}?`,
+      body: "Existing transactions keep their category and nothing is removed from balances.",
+      actionLabel: "Archive",
+      variant: "destructive",
+      closeParentsOnSuccess: 1,
+      onAction: async () => {
+        await api(`/api/v1/workspaces/${state.context.workspace.id}/categories/${category.id}/archive`, { method: "POST" });
+        state.categories.delete(state.context.workspace.id);
+        await categoriesFor(state.context.workspace.id);
+        renderFilterOptions();
+      },
+    }, archive));
+    body.append(archive);
+  }
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(error);
+  return body;
+}
+
+function openMobileCategoryForm(category = null, opener = document.activeElement) {
+  const draft = { name: category?.name || "", kind: category?.kind || "expense", error: "" };
+  openMobileSheet({
+    kicker: "SETTINGS",
+    title: category ? "Edit category" : "Add category",
+    secondaryLabel: "Cancel",
+    primaryLabel: category ? "Save changes" : "Add category",
+    buildBody: () => buildMobileCategoryForm(category, draft),
+    onPrimary: async () => {
+      draft.error = "";
+      if (!draft.name.trim()) {
+        draft.error = "Name is required.";
+        renderMobileOverlay();
+        return;
+      }
+      try {
+        const workspaceId = state.context.workspace.id;
+        await api(category
+          ? `/api/v1/workspaces/${workspaceId}/categories/${category.id}`
+          : `/api/v1/workspaces/${workspaceId}/categories`, {
+          method: category ? "PATCH" : "POST",
+          body: JSON.stringify({ name: draft.name.trim(), kind: draft.kind }),
+        });
+        state.categories.delete(workspaceId);
+        await categoriesFor(workspaceId);
+        const current = mobileOverlayState.stack.at(-1);
+        if (current) current.actionTaken = false;
+        closeMobileOverlay({ restoreFocus: false });
+        renderFilterOptions();
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+function rateForAsset(code) {
+  return state.manualRates.find((rate) => rate.from_asset.code === code) || null;
+}
+
+async function loadManualRates() {
+  state.manualRates = await api(`/api/v1/workspaces/${state.context.workspace.id}/valuation-rates`);
+  return state.manualRates;
+}
+
+function ratePairLabel(code) {
+  return `${code} → ${state.context.workspace.base_asset.code}`;
+}
+
+function buildMobileRateBody(draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-form";
+  const choices = state.assets.filter((asset) => asset.code !== state.context.workspace.base_asset.code);
+  body.append(mobileChoiceField({
+    label: "Pair",
+    value: ratePairLabel(draft.assetCode),
+    id: "mobile-rate-pair",
+    onOpen: () => openMobileChoose({
+      title: "Pair",
+      returnFocusSelector: "#mobile-rate-pair",
+      options: choices.map((asset) => ({ value: asset.code, label: ratePairLabel(asset.code), current: asset.code === draft.assetCode })),
+      onSelect: (value) => {
+        draft.assetCode = value;
+        draft.rate = rateForAsset(value)?.rate || "";
+      },
+    }, document.activeElement),
+  }));
+  body.append(mobileChoiceField({
+    label: "Source",
+    value: "Manual value",
+    id: "mobile-rate-source",
+    onOpen: () => openMobileChoose({
+      title: "Source",
+      returnFocusSelector: "#mobile-rate-source",
+      options: [
+        { value: "manual", label: "Manual value", current: true },
+        { value: "auto", label: "Auto · Coming soon", disabled: true },
+      ],
+      onSelect: () => {},
+    }, document.activeElement),
+  }));
+  const rate = document.createElement("label");
+  rate.className = "mobile-sheet-field";
+  rate.innerHTML = '<span class="mobile-sheet-field-label">Rate</span><input id="mobile-rate-value" class="mobile-field" inputmode="decimal" autocomplete="off">';
+  rate.querySelector("input").value = draft.rate;
+  rate.querySelector("input").addEventListener("input", (event) => { draft.rate = event.target.value; });
+  body.append(rate);
+  const hint = document.createElement("p");
+  hint.className = "mobile-sheet-hint";
+  hint.textContent = "Rates apply to Total capital and Available. Without a rate an asset shows as Not valued.";
+  body.append(hint);
+  if (rateForAsset(draft.assetCode)) {
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "mobile-button-destructive-inline mobile-interactive";
+    remove.textContent = "Delete rate";
+    remove.addEventListener("click", () => openMobileConfirmation({
+      title: `Delete ${ratePairLabel(draft.assetCode)} rate?`,
+      body: "The asset becomes Not valued until another manual rate or exchange supplies a value.",
+      actionLabel: "Delete",
+      variant: "destructive",
+      onAction: async () => {
+        await api(`/api/v1/workspaces/${state.context.workspace.id}/valuation-rates/${draft.assetCode}`, { method: "DELETE" });
+        await refreshAll();
+        await loadManualRates();
+        closeAllMobileOverlays();
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was deleted.`, variant: "saved" }, draft.opener);
+      },
+    }, remove));
+    body.append(remove);
+  }
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(error);
+  return body;
+}
+
+async function openMobileRateSettings(opener = document.activeElement, preferredAsset = null) {
+  try { await loadManualRates(); }
+  catch (error) { toast(error.message); return; }
+  const choices = state.assets.filter((asset) => asset.code !== state.context.workspace.base_asset.code);
+  if (!choices.length) return toast("No rate pairs are available");
+  const assetCode = choices.some((asset) => asset.code === preferredAsset) ? preferredAsset : choices[0].code;
+  const draft = { assetCode, rate: rateForAsset(assetCode)?.rate || "", error: "", opener };
+  openMobileSheet({
+    kicker: "EXCHANGE",
+    title: "Set a rate",
+    secondaryLabel: "Cancel",
+    primaryLabel: "Save rate",
+    buildBody: () => buildMobileRateBody(draft),
+    onPrimary: async () => {
+      draft.error = "";
+      if (!draft.rate.trim()) {
+        draft.error = "Rate is required.";
+        renderMobileOverlay();
+        return;
+      }
+      try {
+        await api(`/api/v1/workspaces/${state.context.workspace.id}/valuation-rates/${draft.assetCode}`, {
+          method: "PUT",
+          body: JSON.stringify({ rate: draft.rate.trim() }),
+        });
+        await refreshAll();
+        await loadManualRates();
+        closeAllMobileOverlays();
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was saved.`, variant: "saved" }, opener);
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+async function openRateSettings(opener = document.activeElement, preferredAsset = null) {
+  if (isMobileViewport()) return openMobileRateSettings(opener, preferredAsset);
+  document.querySelector(".profile-menu").removeAttribute("open");
+  try { await loadManualRates(); }
+  catch (error) { return toast(error.message); }
+  const choices = state.assets.filter((asset) => asset.code !== state.context.workspace.base_asset.code);
+  selectOptions($("rate-asset"), choices.map((asset) => ({ value: asset.code, label: ratePairLabel(asset.code) })), { selected: preferredAsset || choices[0]?.code });
+  renderDesktopRateValue();
+  $("rate-error").textContent = "";
+  $("rate-dialog").showModal();
+}
+
+function renderDesktopRateValue() {
+  const existing = rateForAsset($("rate-asset").value);
+  $("rate-value").value = existing?.rate || "";
+  $("delete-rate").classList.toggle("hidden", !existing);
+}
+
+async function saveDesktopRate(event) {
+  event.preventDefault();
+  $("rate-error").textContent = "";
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/valuation-rates/${$("rate-asset").value}`, {
+      method: "PUT",
+      body: JSON.stringify({ rate: $("rate-value").value.trim() }),
+    });
+    $("rate-dialog").close();
+    await refreshAll();
+    toast("Rate saved");
+  } catch (error) { $("rate-error").textContent = error.message; }
+}
+
+async function deleteDesktopRate() {
+  $("rate-error").textContent = "";
+  try {
+    await api(`/api/v1/workspaces/${state.context.workspace.id}/valuation-rates/${$("rate-asset").value}`, { method: "DELETE" });
+    $("rate-dialog").close();
+    await refreshAll();
+    toast("Rate deleted");
+  } catch (error) { $("rate-error").textContent = error.message; }
+}
+
+function isActiveSharingContext(context) {
+  return mobileOverlayState.stack.at(-1)?.context === context;
+}
+
+function mobileSharingBody(context) {
+  const sharingAccount = context.account;
+  const body = document.createElement("div");
+  body.className = "mobile-sharing-body";
+  body.append(mobileChoiceField({
+    label: "Role",
+    value: roleLabel(state.invitationRole),
+    id: "mobile-invitation-role",
+    onOpen: () => openMobileChoose({
+      title: "Role",
+      returnFocusSelector: "#mobile-invitation-role",
+      options: [
+        ...["viewer", "contributor", "editor"].map((value) => ({ value, label: roleLabel(value), current: state.invitationRole === value })),
+        { value: "owner", label: "Owner · Coming soon", disabled: true },
+      ],
+      onSelect: (value) => { state.invitationRole = value; },
+    }, document.activeElement),
+  }));
+  if (state.invitationUrl) {
+    const invite = document.createElement("div");
+    invite.className = "mobile-invite-result";
+    const value = document.createElement("input");
+    value.className = "mobile-field";
+    value.readOnly = true;
+    value.value = state.invitationUrl;
+    value.setAttribute("aria-label", "Invitation link");
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "mobile-button-inline mobile-interactive";
+    copy.textContent = "Copy link";
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(state.invitationUrl); }
+      catch (_error) { value.select(); document.execCommand("copy"); }
+      toast("Invite link copied");
+    });
+    invite.append(value, copy);
+    body.append(invite);
+  }
+  const heading = document.createElement("p");
+  heading.className = "mobile-sheet-section-title";
+  heading.textContent = "PEOPLE";
+  body.append(heading);
+  const people = document.createElement("div");
+  people.className = "mobile-people-list";
+  if (!state.sharingRows.length && !state.sharingError) {
+    people.innerHTML = '<p class="muted" role="status">Loading access…</p>';
+  }
+  for (const row of state.sharingRows) {
+    const item = document.createElement("div");
+    item.className = "mobile-person-row";
+    item.innerHTML = `<span><strong>${escapeHtml(row.user.display_name)}</strong><small>@${escapeHtml(row.user.username)}</small></span>`;
+    if (row.role === "owner") {
+      const owner = document.createElement("span");
+      owner.className = "mobile-role-label";
+      owner.textContent = "Owner · Coming soon";
+      item.append(owner);
+    } else {
+      const role = document.createElement("button");
+      role.type = "button";
+      role.className = "mobile-role-button mobile-interactive";
+      role.textContent = `${roleLabel(row.role)} ›`;
+      role.addEventListener("click", () => openMobileChoose({
+        title: "Role",
+        returnFocusSelector: ".mobile-role-button",
+        options: [
+          ...["viewer", "contributor", "editor"].map((value) => ({ value, label: roleLabel(value), current: row.role === value })),
+          { value: "owner", label: "Owner · Coming soon", disabled: true },
+        ],
+        onSelect: async (value) => {
+          try {
+            await api(`/api/v1/accounts/${sharingAccount.id}/access/${row.user.id}`, { method: "PATCH", body: JSON.stringify({ role: value }) });
+            await loadMobileAccess(context);
+          } catch (error) {
+            if (!isActiveSharingContext(context)) return;
+            state.sharingError = error.message;
+            renderMobileOverlay();
+          }
+        },
+      }, role));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "mobile-person-remove mobile-interactive";
+      remove.setAttribute("aria-label", `Remove ${row.user.display_name}`);
+      remove.textContent = "×";
+      remove.addEventListener("click", () => openMobileConfirmation({
+        title: `Remove ${row.user.display_name}?`,
+        body: `They will no longer see or use ${sharingAccount.name}. Existing transaction history is kept.`,
+        actionLabel: "Remove",
+        variant: "destructive",
+        onAction: async () => {
+          await api(`/api/v1/accounts/${sharingAccount.id}/access/${row.user.id}`, { method: "DELETE" });
+          await loadMobileAccess(context);
+        },
+      }, remove));
+      item.append(role, remove);
+    }
+    people.append(item);
+  }
+  body.append(people);
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = state.sharingError;
+  body.append(error);
+  return body;
+}
+
+async function loadMobileAccess(context) {
+  const accountId = context.account.id;
+  try {
+    const rows = await api(`/api/v1/accounts/${accountId}/access`);
+    if (!isActiveSharingContext(context)) return;
+    state.sharingRows = rows;
+    state.sharingError = "";
+  } catch (error) {
+    if (!isActiveSharingContext(context)) return;
+    state.sharingRows = [];
+    state.sharingError = error.message;
+  }
+  renderMobileOverlay();
+}
+
+function openMobileSharing(account, opener = document.activeElement) {
+  const context = { kind: "sharing", account };
   state.sharingAccount = account;
+  state.sharingRows = [];
+  state.sharingError = "";
+  state.invitationRole = "viewer";
+  state.invitationUrl = "";
+  openMobileSheet({
+    kicker: "ACCESS",
+    title: `Share ${account.name}`,
+    context,
+    buildBody: () => mobileSharingBody(context),
+    primaryLabel: "Create invite link",
+    onPrimary: async () => {
+      try {
+        const invitation = await api(`/api/v1/accounts/${account.id}/invitations`, {
+          method: "POST",
+          body: JSON.stringify({ role: state.invitationRole }),
+        });
+        const invite = new URL(window.location.origin);
+        invite.searchParams.set("invite", invitation.token);
+        state.invitationUrl = invite.toString();
+        renderMobileOverlay();
+      } catch (error) {
+        state.sharingError = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+  void loadMobileAccess(context);
+}
+
+async function openSharing(account, opener = document.activeElement) {
+  state.sharingAccount = account;
+  if (isMobileViewport()) {
+    openMobileSharing(account, opener);
+    return;
+  }
   $("sharing-title").textContent = `Share ${account.name}`;
   $("invite-result").classList.add("hidden");
   $("sharing-error").textContent = "";
@@ -1829,7 +2350,8 @@ async function copyInvitation() {
   }
 }
 
-async function openCategories() {
+async function openCategories(opener = document.activeElement) {
+  if (isMobileViewport()) return openMobileCategories(opener);
   document.querySelector(".profile-menu").removeAttribute("open");
   $("category-name").value = "";
   $("category-error").textContent = "";
@@ -2655,13 +3177,22 @@ $("auth-form").addEventListener("submit", async (event) => {
 });
 
 $("logout").addEventListener("click", async () => {
+  if (isMobileViewport()) {
+    openLogoutConfirmation(document.activeElement);
+    return;
+  }
   await api("/api/v1/auth/logout", { method: "POST" });
   document.querySelector(".profile-menu").removeAttribute("open");
   showAuth();
 });
 
 $("manage-categories").addEventListener("click", openCategories);
+$("manage-rates").addEventListener("click", (event) => openRateSettings(event.currentTarget));
+$("mobile-profile-trigger").addEventListener("click", (event) => openMobileProfile(event.currentTarget));
 $("category-form").addEventListener("submit", createCategory);
+$("rate-asset").addEventListener("change", renderDesktopRateValue);
+$("rate-form").addEventListener("submit", saveDesktopRate);
+$("delete-rate").addEventListener("click", deleteDesktopRate);
 $("add-plan-rule").addEventListener("click", () => openPlanRule());
 $("empty-add-plan-rule").addEventListener("click", () => openPlanRule());
 $("plan-rule-kind").addEventListener("change", () => updatePlanRuleFields());

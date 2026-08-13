@@ -136,6 +136,7 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .mobile-rate-warning-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-rate-warning-chevron { margin-left: auto; }
 .mobile-ghost-row { display: none; }
+.mobile-avatar-trigger { display: none; }
 .mobile-money { display: inline-flex; gap: .25em; align-items: baseline; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mobile-money-value, .mobile-money-code { display: inline; margin: 0; color: inherit; font: inherit; }
 
@@ -393,6 +394,9 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   }
   .mobile-screen-header .eyebrow { display: none; }
   .mobile-screen-header > button { width: 44px; height: 44px; min-height: 44px; padding: 0; }
+  #view-accounts #add-account { display: none; }
+  .mobile-avatar-trigger { display: grid; place-items: center; border: 0; background: transparent; color: var(--mobile-accent); font-size: 16px; }
+  .mobile-avatar-trigger span { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--mobile-surface-border); border-radius: 50%; background: var(--mobile-surface); }
   .mobile-screen-title { font-size: 17px; font-weight: 600; letter-spacing: normal; }
   .mobile-list-row {
     display: flex;
@@ -628,6 +632,27 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-account-history-row strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-account-history-row small { color: var(--mobile-muted); font-size: 11px; }
   .mobile-account-history-row > span:last-child { flex: 0 0 auto; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .mobile-profile-body, .mobile-category-manager, .mobile-sharing-body { display: grid; gap: 12px; }
+  .mobile-profile-identity { display: grid; gap: 3px; padding: 12px 0 16px; border-bottom: 1px solid var(--mobile-hairline); }
+  .mobile-profile-identity strong { font-size: 17px; font-weight: 600; }
+  .mobile-profile-identity span { color: var(--mobile-muted); font-size: 13px; }
+  .mobile-settings-list { display: grid; }
+  .mobile-settings-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 54px; padding: 0; gap: 12px; align-items: center; text-align: left; border: 0; border-bottom: 1px solid var(--mobile-hairline); border-radius: 0; background: transparent; color: var(--mobile-text); }
+  .mobile-settings-row > span:first-child { display: grid; gap: 3px; }
+  .mobile-settings-row strong { font-size: 14px; font-weight: 600; }
+  .mobile-settings-row small { color: var(--mobile-muted); font-size: 11px; }
+  .mobile-settings-row > span:last-child { color: var(--mobile-chevron); font-size: 20px; }
+  .mobile-settings-row.is-destructive strong { color: var(--mobile-negative); }
+  .mobile-settings-row:disabled { opacity: 1; }
+  .mobile-invite-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .mobile-people-list { display: grid; }
+  .mobile-person-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; min-height: 56px; gap: 8px; align-items: center; border-bottom: 1px solid var(--mobile-hairline); }
+  .mobile-person-row > span:first-child { display: grid; min-width: 0; gap: 3px; }
+  .mobile-person-row strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-person-row small { color: var(--mobile-muted); font-size: 11px; }
+  .mobile-role-label { color: var(--mobile-hint); font-size: 12px; }
+  .mobile-role-button, .mobile-person-remove { padding: 0 8px; border: 0; background: transparent; color: var(--mobile-secondary); font-size: 12px; }
+  .mobile-person-remove { width: 44px; padding: 0; color: var(--mobile-negative); font-size: 20px; }
   .mobile-confirm { position: absolute; right: 16px; bottom: var(--mobile-safe-bottom); left: 16px; display: grid; gap: 14px; padding: 20px 18px 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; background: #1B2028; }
   body.overlay-active .mobile-confirm { bottom: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); }
   .mobile-confirm h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: normal; }

@@ -41,6 +41,7 @@
             <strong id="profile-name">Profile</strong>
             <span id="profile-username" class="muted"></span>
             <button id="manage-categories" class="button-secondary">Manage categories</button>
+            <button id="manage-rates" class="button-secondary">Exchange rates</button>
             <button id="logout" class="button-secondary">Log out</button>
           </div>
         </details>
@@ -60,6 +61,7 @@
         <div class="view-heading mobile-screen-header">
           <div><p class="eyebrow">Overview</p><h2 id="accounts-title" class="mobile-screen-title">Accounts</h2></div>
           <button id="add-account" class="mobile-interactive" aria-label="Add account">＋ Add account</button>
+          <button id="mobile-profile-trigger" class="mobile-avatar-trigger mobile-interactive" type="button" aria-label="Open profile"><span aria-hidden="true">●</span></button>
         </div>
         <div class="summary-grid mobile-metric-strip mobile-surface accounts-metrics">
           <article class="metric-card capital-card mobile-metric">
@@ -366,6 +368,18 @@
     </div>
   </dialog>
 
+  <dialog id="rate-dialog" aria-labelledby="rate-dialog-title">
+    <form id="rate-form" class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Exchange</p><h2 id="rate-dialog-title">Set a rate</h2></div><button type="button" class="icon-button" data-close="rate-dialog" aria-label="Close">×</button></div>
+      <label>Pair<select id="rate-asset"></select></label>
+      <label>Source<select id="rate-source"><option value="manual">Manual value</option><option value="auto" disabled>Auto · Coming soon</option></select></label>
+      <label>Rate<input id="rate-value" inputmode="decimal" required></label>
+      <p class="muted">Rates apply to Total capital and Available. Without a rate an asset shows as Not valued.</p>
+      <p id="rate-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button id="delete-rate" type="button" class="button-danger hidden">Delete rate</button><button type="button" class="button-secondary" data-close="rate-dialog">Cancel</button><button type="submit">Save rate</button></div>
+    </form>
+  </dialog>
+
   <dialog id="plan-rule-dialog" class="wide-dialog" aria-labelledby="plan-rule-title">
     <form id="plan-rule-form" class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Plan rule</p><h2 id="plan-rule-title">Add rule</h2></div><button type="button" class="icon-button" data-close="plan-rule-dialog" aria-label="Close">×</button></div>
@@ -409,6 +423,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=phase15-t025a-1" defer></script>
+  <script src="/app.js?v=phase15-t025b-1" defer></script>
 </body>
 </html>
