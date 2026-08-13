@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None |
-| Next | Claim promoted T-027A mobile Operations from accepted integration |
+| Active work | T-027A mobile Operations on `task/T-027A-mobile-operations` |
+| Next | Implement the readiness-reviewed T-027A acceptance criteria |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -42,8 +42,8 @@ its reviewed implementation commit `de7cf41` is now locally accepted on
 `finapp-v2-develop`. Its 33-test targeted gate, JavaScript/diff checks,
 isolated 390×844 browser smoke and retained 1280×900 check passed, with all
 independent-review P0–P3 findings closed after limited re-review. T-027A is
-readiness-reviewed and now promoted to `todo` for an atomic claim; Phase 15
-remains incomplete.
+now the sole claimed task from accepted integration `7821bab`; implementation
+is in progress on its exact task branch. Phase 15 remains incomplete.
 
 Phase 15 authority and constraints:
 

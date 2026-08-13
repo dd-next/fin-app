@@ -1,13 +1,13 @@
 ---
 id: T-027A
 title: Implement the mobile Operations action surface
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.3; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-024B]
 branch: task/T-027A-mobile-operations
-base-commit:
-implementer:
+base-commit: 7821bab32d5bc931b977cd02499b2c01c7a124a4
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
@@ -94,3 +94,6 @@ Append the bounded independent implementation review following the protocol.
   accepted readiness evidence and promoted T-027A from `backlog` to `todo` on
   accepted integration after T-026 local acceptance; no task branch was claimed
   in this checkpoint.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  atomically claimed `task/T-027A-mobile-operations` from accepted integration
+  `7821bab`, recorded `/root` as implementer, and started only T-027A.
