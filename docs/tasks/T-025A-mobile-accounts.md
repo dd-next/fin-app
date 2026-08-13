@@ -1,7 +1,7 @@
 ---
 id: T-025A
 title: Implement mobile Accounts and account lifecycle
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.1; spec/04-sheets.md account catalogue
 blocked-by: [T-024B]
@@ -177,3 +177,39 @@ Use `verify` for normal/many/empty Accounts and all named lifecycle flows at
   P1/P2 findings are resolved; limited re-review has no findings. Targeted
   31-test, JavaScript, diff and scratch-browser gates pass. Task is `review`,
   awaiting authorised local acceptance; no open questions.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  locally accepted reviewed implementation commit `2b3af12` by fast-forward
+  into `finapp-v2-develop`; T-025A is `done`. No successor task was promoted or
+  claimed in this acceptance checkpoint; no push, deploy, archive, or Phase 15
+  commit was created.
+
+### Local acceptance lifecycle review
+
+- Reviewer: `/root/t025a_acceptance_review`, Codex GPT-5 same-vendor fallback;
+  cross-vendor review was unavailable. Read-only; no files or Git state changed.
+- Verbatim result:
+
+  > T-025A final read-only local-acceptance lifecycle review — same-vendor fallback; cross-vendor unavailable.
+  >
+  > No P0–P3 findings.
+  >
+  > Suitable to commit as the local acceptance checkpoint.
+  >
+  > Verified read-only:
+  > - `finapp-v2-develop` and `task/T-025A-mobile-accounts` both resolve to implementation commit `2b3af12eb6918a76e19a7d43b6d87cca48b685cd`.
+  > - Exact ancestry is integration base `27a80e97e71ea110197950025be5b06a67f8f51b` → claim `e8929e942fc742948b23639502f677e314041cee` → implementation `2b3af12`; `git merge-base --is-ancestor` passes, and the integration reflog records `merge task/T-025A-mobile-accounts: Fast-forward`.
+  > - The only uncommitted files are `docs/tasks/T-025A-mobile-accounts.md`, `docs/BACKLOG.md`, and `docs/PROGRESS.md`; no staged changes exist.
+  > - Task and backlog consistently transition `review` → `done`; the appended session log accurately states local fast-forward acceptance of `2b3af12` and preserves the prior append-only entries.
+  > - `PROGRESS.md` accurately reports no active task, T-025A locally accepted, T-025B next, and Phase 15 incomplete; it does not claim the usable-preview boundary or phase close.
+  > - T-025B remains `backlog`, has blank base/implementer, and no local T-025B branch exists; all later Phase 15 tasks remain backlog.
+  > - No task archive, phase-completion commit, push, or deploy is claimed. Origin remains at `71e3396`, while local integration is ahead by the expected promotion/claim/implementation chain.
+  > - Recorded targeted gate remains `31 passed`; bundled Node syntax and `git diff --check` are recorded passed. Current `git diff --check` also passes (only LF→CRLF informational warnings).
+  > - Worktree and Git state were not changed.
+  >
+  > My bounded review goal completed in 83 seconds with 28,042 tool-reported tokens used.
+
+- Initial transcription re-review found one P3 omission: the final usage
+  sentence above. It was appended without changing behavior or coverage.
+- Resolved-P3 re-review, verbatim:
+
+  > Resolved-P3 re-review: No P0–P3 findings. The exact omitted usage sentence is now appended, so the detailed response is fully verbatim. Only the expected three acceptance documents remain modified, and `git diff --check` exits 0 (LF→CRLF informational warnings only). Read-only; no state changed.
