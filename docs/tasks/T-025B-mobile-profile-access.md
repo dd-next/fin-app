@@ -1,7 +1,7 @@
 ---
 id: T-025B
 title: Implement mobile Profile, settings, access, and logout
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/04-sheets.md Profile/Categories/Rate/Share; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-025A]
