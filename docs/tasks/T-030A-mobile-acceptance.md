@@ -34,8 +34,14 @@ desktop verification out of this task without changing their current code.
       no fallback to an older transaction; shared roles and owner-only quote
       presentation are included.
 - [ ] Every concrete sheet, nested picker return, swipe state and branded
-      destructive/success confirmation reachable from these three sections
-      passes.
+      destructive/success confirmation in this catalogue passes: Add/Edit/
+      Account details, Reconcile, Share, Switch account, Filters, persisted
+      Transaction details/Edit/Assign/Delete, Start/Active/Edit period, Period
+      history, their nested Account/Storage/Purpose/Asset/Category/Date/
+      Destination choices, Close/Archive confirmations, and Saved.
+      Profile/Categories/Rates and Plan-item/Plan-link entry points are checked
+      only to remain present and unchanged; their downstream flows are not
+      exercised or modified.
 - [ ] Measurements prove 700px content, 96px cards, target/type minima,
       non-wrapping tabular money/separate currency, and only permitted scrolls.
 - [ ] Copy matches `spec/06`; `DESIGN-NOTES.md` and ADR-0010/0011 corrections
@@ -45,12 +51,24 @@ desktop verification out of this task without changing their current code.
 - [ ] Transactions keeps the bottom tab bar visible while the feed scrolls and
       excludes planned occurrences from All/Income/Expense/Transfer; planned
       rows appear only after explicitly selecting Planned.
-- [ ] Core-section sheets use the specified available sheet height, keep all
-      rows and actions readable, and do not appear vertically clipped above the
-      tab bar.
+- [ ] `All` is a lossless frontend adapter over the existing persisted
+      `/api/v1/transactions` endpoint and its opaque cursor; Income/Expense/
+      Transfer/Planned keep using their accepted feed filters. No mixed `all`
+      page is filtered client-side and no backend/API contract changes.
+- [ ] Core-section sheets span the viewport width, extend through the tab bar
+      to the bottom safe edge, and cover the tab bar while open. Option rows and
+      hairlines fill the available body width; long bodies scroll without
+      clipping the header, footer, or actions. Scrim, close, Escape and
+      programmatic tab switching still close the stack; a physical tab tap is
+      unavailable while a core sheet covers it. The shared Plan/Profile/
+      Settings overlay appearance remains unchanged.
 - [ ] Focusing text, numeric, date, or textarea controls in iPhone Safari does
       not trigger automatic page zoom; user-initiated pinch zoom remains
       available.
+- [ ] In-scope editable `input`/`textarea` controls have computed font size
+      `>=16px` as an owner-approved mobile exception to the frozen 15px field
+      value. The viewport meta keeps `initial-scale=1` and does not add
+      `maximum-scale` or `user-scalable=no`.
 - [ ] Every recorded core-mobile preview P2/P3 is enumerated; all core-mobile
       P0–P2 are resolved before this task is accepted.
 - [ ] Fixes are mobile-bounded and do not change backend or invent desktop UI.
@@ -58,8 +76,11 @@ desktop verification out of this task without changing their current code.
 ## Touches
 
 Frontend files only for bounded mobile corrections,
-`tests/test_phase15_mobile_acceptance.py`, `tests/test_frontend_v2.py`, this task
-and relevant progress evidence.
+`tests/test_phase15_mobile_acceptance.py`, focused existing frontend tests,
+`docs/design/DESIGN-NOTES.md`, this task and relevant progress evidence. Design
+notes may record only these owner-approved corrections: core overlays cover the
+tab bar, All adapts the persisted transaction endpoint, and in-scope editable
+controls use at least 16px to prevent iPhone Safari auto-zoom.
 
 ## Out of scope
 
@@ -69,18 +90,38 @@ Analytics, deferred product capabilities, phase acceptance or task archival.
 ## Verification
 
 ```bash
-.venv/bin/python -m pytest -q tests/test_frontend_v2.py tests/test_phase15_interactions.py tests/test_phase15_mobile_acceptance.py
+.venv/bin/python -m pytest -q tests/test_frontend_v2.py tests/test_phase15_interactions.py tests/test_phase15_mobile_acceptance.py tests/test_mobile_accounts_ui_v21.py tests/test_mobile_transactions_ui_v21.py tests/test_mobile_operations_ui_v21.py tests/test_mobile_periods_ui_v21.py tests/test_phase15_shell.py tests/test_phase15_primitives.py tests/test_phase15_overlays.py
 node --check app/static/app.js
 git diff --check
 ```
 
 Use `verify` with one fresh authenticated iPhone 15 `393×852` scratch matrix
 plus a bounded `390×844` compatibility smoke; a single happy-path screenshot
-is not sufficient evidence. Do not run a desktop matrix in this task.
+is not sufficient evidence. Use WebKit for the automated primary matrix. Final
+device evidence must come from actual iPhone 15 Safari and record visual/
+layout viewport scale before and after text, numeric, date and textarea focus,
+keyboard dismissal, pinch-zoom availability, and tab-bar bounds at the top,
+middle and end of a long Transactions feed with the Safari toolbar expanded
+and collapsed. Do not run a desktop matrix in this task.
 
 ## Review
 
 Append the bounded independent implementation review following the protocol.
+
+### Scope-reduction readiness review — 2026-08-13
+
+- Reviewer: `/root/t030a_core_readiness`, Codex GPT-5 fresh same-vendor
+  fallback; cross-vendor review was unavailable. Read-only; no files or Git
+  state changed.
+- Reviewed task-file commit: `6c9be0a4a9c1de9de293e708417f70dfba18edc5`.
+- Verdict: not ready; no P0/P3 findings, three P1 and two P2 findings.
+- Resolution: the task now explicitly authorizes and bounds the core-only
+  overlay design correction; defines the lossless persisted-All adapter without
+  backend/API changes; freezes the 16px editable-control exception and actual
+  iPhone Safari evidence; enumerates the in-scope sheet catalogue; and includes
+  all focused core mobile regression suites. Full findings are preserved in the
+  reviewer response for this session and will be transcribed verbatim into the
+  implementation evidence before task completion.
 
 ## Session log
 
