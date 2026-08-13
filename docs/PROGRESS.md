@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None — T-028 is locally accepted |
-| Next | Claim promoted T-029 navigation/accessibility |
+| Active work | T-029 navigation/accessibility on `task/T-029-navigation-accessibility` |
+| Next | Implement the readiness-reviewed T-029 acceptance criteria |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
