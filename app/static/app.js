@@ -127,6 +127,20 @@ function todayValue() {
   return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
 }
 
+function workspaceTodayValue() {
+  const timezone = state.context?.workspace?.timezone;
+  if (!timezone) return todayValue();
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date()).map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function dateValueAfter(start, days) {
   const value = new Date(`${start}T00:00:00Z`);
   value.setUTCDate(value.getUTCDate() + days);
@@ -1089,7 +1103,7 @@ function renderOperationsPeriodHistory() {
       <div><strong>${localDate(period.start_date)} – ${localDate(period.end_date)}</strong><span>${escapeHtml(period.status)} · ${escapeHtml(facts.join(" · "))}</span></div>
       <div class="period-actions"></div>`;
     const actions = row.querySelector(".period-actions");
-    if (period.status !== "closed") {
+    if (period.status === "current") {
       const edit = document.createElement("button");
       edit.type = "button";
       edit.className = "button-secondary";
@@ -1122,7 +1136,7 @@ function renderOperationsPeriod() {
   $("operations-period").classList.toggle("is-active", Boolean(current));
   $("operations-period").classList.toggle("is-absent", !current);
   const daysLeft = current
-    ? Math.max(0, calendarDayNumber(current.end_date) - calendarDayNumber(todayValue()) + 1)
+    ? Math.max(0, calendarDayNumber(current.end_date) - calendarDayNumber(workspaceTodayValue()) + 1)
     : 0;
   $("operations-period-card-title").textContent = current
     ? `Period · ${daysLeft}d`
@@ -1143,6 +1157,7 @@ function renderOperationsPeriod() {
       : "";
   $("operations-period-retry-mobile").classList.toggle("hidden", !state.operationsPeriodError);
   $("operations-period-retry-mobile").disabled = state.operationsPeriodLoading || state.periodCommandLoading;
+  $("operations-period-active-mobile").classList.toggle("hidden", !current || !owner);
   $("operations-period").setAttribute(
     "aria-busy",
     String(state.operationsPeriodLoading || state.periodCommandLoading),
@@ -1155,7 +1170,7 @@ function renderOperationsPeriod() {
     : formatMoney(current.current_balance, current.asset.code);
   $("operations-add-period").classList.toggle("hidden", !ready || Boolean(current));
   $("operations-add-period-mobile").classList.toggle("hidden", !ready || Boolean(current));
-  $("operations-add-period-mobile").disabled = isMobileViewport();
+  $("operations-add-period-mobile").disabled = !ready || Boolean(current);
   $("operations-edit-period").classList.toggle("hidden", !ready || !current);
   $("operations-close-period").classList.toggle("hidden", !ready || !current);
   $("operations-period-history").classList.toggle("hidden", !ready);
@@ -1210,6 +1225,208 @@ async function loadOperationsPeriods() {
       renderOperationsPeriod();
     }
   }
+}
+
+function buildMobilePeriodFormBody(account, period, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-period-form";
+  if (!period) {
+    const summary = document.createElement("dl");
+    summary.className = "mobile-readonly-list";
+    summary.innerHTML = `
+      <div><dt>Account</dt><dd>${escapeHtml(`${account.name} · ${account.asset.code}`)}</dd></div>
+      <div><dt>Current balance</dt><dd>${moneyMarkup(account.balance, account.asset.code)}</dd></div>`;
+    body.append(summary);
+  }
+  const addDate = (kind, label) => {
+    body.append(mobileChoiceField({
+      label,
+      value: localDate(draft[`${kind}_date`]),
+      id: `mobile-period-${kind}-date`,
+      onOpen: () => openMobileDateChoose({
+        label,
+        value: draft[`${kind}_date`],
+        returnFocusSelector: `#mobile-period-${kind}-date`,
+        onSelect: (value) => { draft[`${kind}_date`] = value; },
+      }, document.activeElement),
+    }));
+  };
+  addDate("start", "Start date");
+  addDate("end", "End date");
+  const toggle = document.createElement("label");
+  toggle.className = "mobile-sheet-toggle";
+  toggle.innerHTML = '<span>Redistribute remaining days</span><input id="mobile-period-redistribute" type="checkbox">';
+  const checkbox = toggle.querySelector("input");
+  checkbox.checked = draft.redistribute;
+  checkbox.addEventListener("change", () => { draft.redistribute = checkbox.checked; });
+  body.append(toggle);
+  const hint = document.createElement("p");
+  hint.className = "mobile-sheet-hint";
+  hint.textContent = period
+    ? "The daily allowance is recalculated from the account balance at the moment the period started."
+    : "Your current account balance will be used to calculate the daily allowance.";
+  body.append(hint);
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(error);
+  return body;
+}
+
+function openMobilePeriodForm(period = null, opener = document.activeElement) {
+  const account = selectedOperationsAccount();
+  if (!account || !canUseAccount(account, "owner") || state.periodCommandLoading) return;
+  if (period && period.status !== "current") return;
+  const accountId = account.id;
+  const draft = {
+    start_date: period?.start_date || workspaceTodayValue(),
+    end_date: period?.end_date || dateValueAfter(workspaceTodayValue(), 29),
+    redistribute: (period?.rollover_policy || "redistribute_remaining_days") === "redistribute_remaining_days",
+    error: "",
+  };
+  openMobileSheet({
+    kicker: "SPENDING PERIOD",
+    title: period ? "Edit period" : "Start spending period",
+    secondaryLabel: "Cancel",
+    primaryLabel: period ? "Save period" : "Start period",
+    context: { accountId, periodId: period?.id || null },
+    buildBody: () => buildMobilePeriodFormBody(account, period, draft),
+    onPrimary: async () => {
+      draft.error = "";
+      if (selectedOperationsAccount()?.id !== accountId) {
+        draft.error = "Selected account changed.";
+        renderMobileOverlay();
+        return;
+      }
+      if (draft.start_date > draft.end_date) {
+        draft.error = "End date must be on or after Start date.";
+        renderMobileOverlay();
+        return;
+      }
+      state.periodCommandLoading = true;
+      renderOperationsPeriod();
+      try {
+        const payload = {
+          start_date: draft.start_date,
+          end_date: draft.end_date,
+          rollover_policy: draft.redistribute ? "redistribute_remaining_days" : "carry_next_day",
+        };
+        const saved = period
+          ? await api(`/api/v1/account-periods/${period.id}`, { method: "PATCH", body: JSON.stringify(payload) })
+          : await api(`/api/v1/accounts/${accountId}/periods`, { method: "POST", body: JSON.stringify(payload) });
+        if (selectedOperationsAccount()?.id !== accountId) return;
+        state.operationsPeriods = [saved, ...state.operationsPeriods.filter((item) => item.id !== saved.id)];
+        state.operationsPeriodError = null;
+        renderOperationsPeriod();
+        closeAllMobileOverlays();
+        switchView("operations");
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      } finally {
+        state.periodCommandLoading = false;
+        renderOperationsPeriod();
+      }
+    },
+  }, opener);
+}
+
+function buildMobileActivePeriodBody(period) {
+  const body = document.createElement("div");
+  body.className = "mobile-period-detail";
+  const facts = document.createElement("dl");
+  facts.className = "mobile-readonly-list";
+  facts.innerHTML = `
+    <div><dt>Status</dt><dd>Active</dd></div>
+    <div><dt>Start date</dt><dd>${escapeHtml(localDate(period.start_date))}</dd></div>
+    <div><dt>End date</dt><dd>${escapeHtml(localDate(period.end_date))}</dd></div>
+    <div><dt>Opening balance</dt><dd>${moneyMarkup(period.opening_balance, period.asset.code)}</dd></div>
+    <div><dt>Current balance</dt><dd>${moneyMarkup(period.current_balance, period.asset.code)}</dd></div>
+    <div><dt>Available today</dt><dd>${moneyMarkup(period.available_today, period.asset.code)}</dd></div>`;
+  body.append(facts);
+  return body;
+}
+
+function openMobileClosePeriod(period, opener = document.activeElement) {
+  const account = selectedOperationsAccount();
+  if (!account || !period || period.status !== "current" || !canUseAccount(account, "owner")) return;
+  const accountId = account.id;
+  openMobileConfirmation({
+    title: "Close this period?",
+    body: "The current balance is saved in period history and the period becomes read-only. You can start a new period right away.",
+    actionLabel: "Close period",
+    onAction: async () => {
+      const closed = await api(`/api/v1/account-periods/${period.id}/close`, { method: "POST" });
+      if (selectedOperationsAccount()?.id !== accountId) return;
+      state.operationsPeriods = [closed, ...state.operationsPeriods.filter((item) => item.id !== closed.id)];
+      state.operationsPeriodError = null;
+      renderOperationsPeriod();
+      closeAllMobileOverlays();
+      switchView("operations");
+    },
+  }, opener);
+}
+
+function openMobileActivePeriod(period = currentOperationsPeriod(), opener = document.activeElement) {
+  const account = selectedOperationsAccount();
+  if (!account || !period || period.status !== "current" || !canUseAccount(account, "owner")) return;
+  openMobileSheet({
+    kicker: "SPENDING PERIOD",
+    title: "Active period",
+    secondaryLabel: "View history",
+    onSecondary: () => openMobilePeriodHistory(document.activeElement),
+    primaryLabel: "Close period",
+    onPrimary: () => openMobileClosePeriod(period, document.activeElement),
+    buildBody: () => buildMobileActivePeriodBody(period),
+  }, opener);
+}
+
+function buildMobilePeriodHistoryBody(account) {
+  const body = document.createElement("div");
+  body.className = "mobile-period-history";
+  const heading = document.createElement("h3");
+  heading.className = "mobile-sheet-section-title";
+  heading.textContent = `${account.name.toUpperCase()} · ${account.asset.code}`;
+  body.append(heading);
+  if (!state.operationsPeriods.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "No period history.";
+    body.append(empty);
+    return body;
+  }
+  for (const period of state.operationsPeriods) {
+    const row = document.createElement(period.status === "current" ? "button" : "article");
+    if (period.status === "current") row.type = "button";
+    row.className = `mobile-period-history-row${period.status === "current" ? " is-active mobile-interactive" : ""}`;
+    const balance = period.status === "current"
+      ? period.current_balance
+      : period.status === "closed"
+        ? period.closing_balance
+        : null;
+    row.innerHTML = `
+      <span><strong>${escapeHtml(`${localDate(period.start_date)} – ${localDate(period.end_date)}`)}</strong><small>${escapeHtml(period.status)}</small></span>
+      ${balance === null ? "" : `<span>${moneyMarkup(balance, period.asset.code)}</span>`}`;
+    if (period.status === "current") row.addEventListener("click", () => openMobileActivePeriod(period, row));
+    body.append(row);
+  }
+  return body;
+}
+
+function openMobilePeriodHistory(opener = document.activeElement) {
+  const account = selectedOperationsAccount();
+  if (!account || !canUseAccount(account, "owner")) return;
+  const current = currentOperationsPeriod();
+  openMobileSheet({
+    kicker: "SPENDING PERIOD",
+    title: "Period history",
+    secondaryLabel: current ? "Edit" : "",
+    onSecondary: current ? () => openMobilePeriodForm(current, document.activeElement) : undefined,
+    primaryLabel: current ? "Close current" : "",
+    onPrimary: current ? () => openMobileClosePeriod(current, document.activeElement) : undefined,
+    buildBody: () => buildMobilePeriodHistoryBody(account),
+  }, opener);
 }
 
 function openPeriodDialog(period = null) {
@@ -4309,9 +4526,11 @@ $("operations-has-fee").addEventListener("change", () => {
   updateOperationsTransferMode();
 });
 $("operations-add-period").addEventListener("click", () => openPeriodDialog());
-$("operations-add-period-mobile").addEventListener("click", () => {
-  if (!isMobileViewport()) openPeriodDialog();
+$("operations-add-period-mobile").addEventListener("click", (event) => {
+  if (isMobileViewport()) openMobilePeriodForm(null, event.currentTarget);
+  else openPeriodDialog();
 });
+$("operations-period-active-mobile").addEventListener("click", (event) => openMobileActivePeriod(currentOperationsPeriod(), event.currentTarget));
 $("operations-period-retry-mobile").addEventListener("click", loadOperationsPeriods);
 $("operations-edit-period").addEventListener("click", () => openPeriodDialog(currentOperationsPeriod()));
 $("operations-close-period").addEventListener("click", () => closeOperationsPeriod(currentOperationsPeriod()));

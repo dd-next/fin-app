@@ -184,7 +184,7 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .transaction-detail-legs li { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 12px; }
 .load-more { display: block; margin: 18px auto 0; }
 .mobile-transaction-filter, #transaction-chips { display: none; }
-.mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix { display: none; }
+.mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix, .mobile-period-card-trigger { display: none; }
 
 .empty-state { padding: 64px 20px; text-align: center; color: var(--muted); }
 .empty-state h3 { color: var(--text); }
@@ -541,6 +541,8 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-ops-period-state { display: flex; height: 44px; min-height: 44px; align-items: center; justify-content: space-between; color: var(--mobile-muted); font-size: 11px; font-weight: 500; }
   .mobile-ops-period-state.hidden { display: none; }
   #operations-period-retry-mobile { height: 44px; min-height: 44px; padding: 0 12px; }
+  .mobile-period-card-trigger { position: absolute; z-index: 1; inset: 0; display: block; width: 100%; height: 96px; padding: 0; border: 0; border-radius: 16px; background: transparent; }
+  .mobile-period-card-trigger.hidden { display: none; }
   #operations-account-card label { gap: 0; }
   #operations-account-card-title { display: none; }
   #operations-account-card select.mobile-field { display: none; }
@@ -740,6 +742,13 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-account-history-row strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
   .mobile-account-history-row small { color: var(--mobile-muted); font-size: 11px; }
   .mobile-account-history-row > span:last-child { flex: 0 0 auto; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .mobile-period-form, .mobile-period-detail, .mobile-period-history { display: grid; gap: 12px; }
+  .mobile-period-history-row { display: flex; height: 48px; min-height: 48px; max-height: 48px; padding: 0; gap: 12px; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid var(--mobile-hairline); border-radius: 0; background: transparent; color: var(--mobile-text); text-align: left; }
+  .mobile-period-history-row > span:first-child { display: grid; min-width: 0; gap: 3px; }
+  .mobile-period-history-row strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-period-history-row small { color: var(--mobile-muted); font-size: 11px; text-transform: capitalize; }
+  .mobile-period-history-row > span:last-child { flex: 0 0 auto; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .mobile-period-history-row.is-active { color: var(--mobile-accent); }
   .mobile-profile-body, .mobile-category-manager, .mobile-sharing-body { display: grid; gap: 12px; }
   .mobile-profile-identity { display: grid; gap: 3px; padding: 12px 0 16px; border-bottom: 1px solid var(--mobile-hairline); }
   .mobile-profile-identity strong { font-size: 17px; font-weight: 600; }
