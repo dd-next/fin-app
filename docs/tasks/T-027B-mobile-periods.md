@@ -1,13 +1,13 @@
 ---
 id: T-027B
 title: Implement mobile account-period cards and lifecycle
-status: todo
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.3; spec/04-sheets.md; spec/05-interactions.md
 blocked-by: [T-027A]
 branch: task/T-027B-mobile-periods
-base-commit:
-implementer:
+base-commit: 6313852045c08b14d5c73c0b19a94b7991382d0d
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
@@ -80,3 +80,6 @@ Append the bounded independent implementation review following the protocol.
   confirmed T-027A locally accepted, accepted T-027B readiness evidence, and
   promoted T-027B from `backlog` to `todo` on accepted integration `1b2e89a`;
   no task branch was claimed in this checkpoint.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  atomically claimed `task/T-027B-mobile-periods` from promoted integration
+  `6313852`, recorded `/root` as implementer, and started only T-027B.
