@@ -1,7 +1,7 @@
 ---
 id: T-024B
 title: Establish mobile sheets, pickers, and confirmations
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/02-components.md; spec/04-sheets.md; spec/05-interactions.md
 blocked-by: [T-024A]
@@ -334,3 +334,60 @@ protocol.
   fixed; all recorded P0–P2 findings are closed. Targeted 22-test, JavaScript,
   diff and scratch `$verify` mobile/desktop gates pass. Task is `review`,
   awaiting authorised local acceptance; no open questions.
+- 2026-08-13 repository owner authorisation executed by Codex GPT-5: locally
+  accepted fully verified task commit `6116203` by fast-forward into
+  `finapp-v2-develop`; task is `done`. No next task was promoted or claimed,
+  and no push, deploy, archive, or Phase 15 commit was created.
+
+### Local acceptance lifecycle review
+
+- Reviewer: `/root/t024b_acceptance_review`, Codex GPT-5 same-vendor fallback;
+  read-only, no files or Git state changed.
+- Reviewed range: `finapp-v2-develop` at implementation commit
+  `6116203ea86137178b05f333d71ef0e131e19670` plus the three-file uncommitted
+  acceptance lifecycle diff in this task, `docs/BACKLOG.md`, and
+  `docs/PROGRESS.md`.
+- Verbatim result:
+
+  > Final read-only local-acceptance lifecycle review for T-024B: **No findings (P0–P3).**
+  >
+  > Reviewer: `/root/t024b_acceptance_review`, Codex GPT-5 same-vendor fallback; read-only, no files or Git state changed.
+  >
+  > Reviewed state:
+  >
+  > - Current branch is exactly `finapp-v2-develop` at `6116203ea86137178b05f333d71ef0e131e19670` (`T-024B: add mobile overlays`).
+  > - Reflog proves checkout from the task branch and a fast-forward merge from accepted integration `bf50e75`; ancestry is `bf50e75 → c12edd8 → 6116203`.
+  > - `task/T-024B-mobile-overlays` and `finapp-v2-develop` resolve to the identical implementation tree.
+  > - The only uncommitted files are the expected acceptance lifecycle documents:
+  >   - `docs/tasks/T-024B-mobile-overlays.md`
+  >   - `docs/BACKLOG.md`
+  >   - `docs/PROGRESS.md`
+  > - Task metadata and backlog row consistently move T-024B from `review` to `done`.
+  > - The appended session log accurately records local fast-forward acceptance of commit `6116203`, with no successor promotion or claim.
+  > - `PROGRESS.md` accurately reports no active work, T-024B locally accepted, and owner direction required before a successor task.
+  > - T-025A, T-025B, T-026, T-027A, T-027B, T-028 and later tasks remain `backlog`; no successor task branches exist.
+  > - T-024B remains in `docs/tasks/`; it was not archived.
+  > - No Phase 15 commit was created. Origin remains unchanged at `e2e5313` and local integration is ahead; no push occurred. The reviewed diff contains no deployment action or deployment-state claim.
+  > - The acceptance statements do not overclaim Phase 15 completion or permanent-financial-data readiness.
+  >
+  > Independent verification:
+  >
+  > - `.venv/bin/python -m pytest -q tests/test_frontend_v2.py tests/test_phase15_primitives.py tests/test_phase15_overlays.py` → **22 passed in 0.14s**
+  > - `node --check app/static/app.js` → passed
+  > - `git diff --check` → passed
+  >
+  > Verdict: the three-file lifecycle diff is accurate and suitable to commit unchanged as the local T-024B acceptance checkpoint.
+
+- Limited transcription re-review, verbatim:
+
+  > Limited transcription re-review: **No findings (P0–P3).**
+  >
+  > The complete prior `/root/t024b_acceptance_review` response is transcribed verbatim under “Local acceptance lifecycle review,” including reviewer identity, exact commit/range, Git-state evidence, successor-task boundary, verification results, and acceptance verdict.
+  >
+  > Confirmed:
+  >
+  > - Only the expected three acceptance lifecycle documents remain modified.
+  > - Task/backlog/progress remain consistent with T-024B `done`.
+  > - No successor promotion or claim, push, deploy, archive, Phase 15 commit, phase-completion claim, or permanent-data-readiness overclaim was introduced.
+  > - `git diff --check` passes.
+  > - Read-only review; no files or Git state changed.

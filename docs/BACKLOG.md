@@ -67,7 +67,7 @@ rows remain blocked until their accepted dependencies land.
 |----|------|--------|------|------|------------|
 | [T-023](tasks/T-023-mobile-shell.md) | Import approved tokens and responsive mobile shell | done | M | design §01 | T-022 |
 | [T-024A](tasks/T-024A-mobile-primitives.md) | Build reusable mobile visual primitives | done | M | design §01–§02 | T-023 |
-| [T-024B](tasks/T-024B-mobile-overlays.md) | Establish sheets, pickers, and confirmations | review | M | design §02, §04–§05 | T-024A |
+| [T-024B](tasks/T-024B-mobile-overlays.md) | Establish sheets, pickers, and confirmations | done | M | design §02, §04–§05 | T-024A |
 | [T-025A](tasks/T-025A-mobile-accounts.md) | Accounts and account lifecycle | backlog | M | design §03.1, §04 | T-024B |
 | [T-025B](tasks/T-025B-mobile-profile-access.md) | Profile, categories, rates, sharing, and logout | backlog | M | design §04–§06 | T-025A |
 | [T-026](tasks/T-026-mobile-transactions.md) | Transactions feed, filters, details, correction, and swipe | backlog | M | design §03.2, §05 | T-024B |
