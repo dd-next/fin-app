@@ -22,7 +22,7 @@ the one task file you are working on. Nothing else by default.
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
 | Active work | None — T-027A locally accepted |
-| Next | Promote and claim readiness-reviewed T-027B mobile account periods |
+| Next | Claim promoted T-027B mobile account periods from `1b2e89a` |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -46,7 +46,7 @@ implemented from accepted integration `7821bab`; reviewed implementation
 commit `bf7c3a8` is now locally accepted on `finapp-v2-develop`. Its 77-test
 targeted gate, syntax/diff checks, isolated 390×844 browser matrix and preserved
 1280×900 checks pass, and all implementation-review P0–P3 findings are closed.
-T-027B is next and remains unclaimed. Phase 15 remains incomplete.
+T-027B is promoted to `todo` and remains unclaimed. Phase 15 remains incomplete.
 
 Phase 15 authority and constraints:
 
