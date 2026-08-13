@@ -130,6 +130,7 @@
             <div class="mobile-ops-topline"><span class="mobile-ops-dot" aria-hidden="true"></span><span id="operations-period-card-title" class="mobile-ops-period-text">No period</span></div>
             <div><span class="mobile-ops-label">Available today</span><span id="operations-period-mobile-value" class="mobile-money mobile-ops-value">N/A</span></div>
             <button id="operations-add-period-mobile" type="button" class="mobile-start-period mobile-interactive"><span class="mobile-start-period-visual">＋ Start period</span></button>
+            <div id="operations-period-mobile-state" class="mobile-ops-period-state hidden" role="status"><span id="operations-period-mobile-state-copy"></span><button id="operations-period-retry-mobile" type="button" class="mobile-button-inline mobile-interactive hidden">Retry</button></div>
           </div>
           <div class="group-heading">
             <div><p class="eyebrow">Account period</p><h3 id="operations-period-title">Current period</h3></div>
@@ -159,10 +160,10 @@
             <p class="eyebrow">Spend</p><h3>Record spending</h3>
             <form id="operations-spend-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>Amount<input id="operations-spend-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required></label>
-                <label>Category<select id="operations-spend-category" class="mobile-field"><option value="">Uncategorized</option></select></label>
-                <label>Financial date<input id="operations-spend-date" class="mobile-field" type="date" required></label>
-                <label>Note<input id="operations-spend-note" class="mobile-field" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-spend-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-spend-currency" class="mobile-amount-suffix"></span></span></label>
+                <label class="mobile-ops-choice-label"><span>Category</span><select id="operations-spend-category" class="mobile-field"><option value="">Uncategorized</option></select><button id="operations-spend-category-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Uncategorized</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-spend-date" class="mobile-field" type="date" required><button id="operations-spend-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-spend-note" class="mobile-field" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
               <p id="operations-spend-error" class="form-error mobile-field-error" role="alert"></p>
               <div class="form-actions"><button id="operations-spend-submit" class="mobile-button-primary" type="submit">Save spending</button></div>
@@ -172,10 +173,10 @@
             <p class="eyebrow">Add funds</p><h3>Record incoming funds</h3>
             <form id="operations-add-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>Amount<input id="operations-add-amount" inputmode="decimal" required></label>
-                <label>Category<select id="operations-add-category"><option value="">Uncategorized</option></select></label>
-                <label>Financial date<input id="operations-add-date" type="date" required></label>
-                <label>Note<input id="operations-add-note" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-add-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-add-currency" class="mobile-amount-suffix"></span></span></label>
+                <label class="mobile-ops-choice-label"><span>Category</span><select id="operations-add-category"><option value="">Uncategorized</option></select><button id="operations-add-category-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Uncategorized</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-add-date" type="date" required><button id="operations-add-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-add-note" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
               <p id="operations-add-error" class="form-error" role="alert"></p>
               <div class="form-actions"><button id="operations-add-submit" type="submit">Add funds</button></div>
@@ -185,12 +186,12 @@
             <p class="eyebrow">Transfer</p><h3>Move money</h3>
             <form id="operations-transfer-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>To account<select id="operations-transfer-to" required></select></label>
-                <label>Financial date<input id="operations-transfer-date" type="date" required></label>
-                <label id="operations-transfer-amount-field">Amount<input id="operations-transfer-amount" inputmode="decimal" required></label>
+                <label class="mobile-ops-destination-label">To account<select id="operations-transfer-to" required></select><button id="operations-transfer-to-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Choose destination</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-transfer-date" type="date" required><button id="operations-transfer-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label id="operations-transfer-amount-field" class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-transfer-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-transfer-currency" class="mobile-amount-suffix"></span></span></label>
                 <label id="operations-exchange-from-field" class="hidden">From amount<input id="operations-exchange-from" inputmode="decimal"></label>
                 <label id="operations-exchange-to-field" class="hidden">To amount<input id="operations-exchange-to" inputmode="decimal"></label>
-                <label>Note<input id="operations-transfer-note" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-transfer-note" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
               <p id="operations-transfer-mode" class="muted"></p>
               <div id="operations-fee" class="panel-subtle hidden">
@@ -431,6 +432,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=phase15-t026-1" defer></script>
+  <script src="/app.js?v=phase15-t027a-1" defer></script>
 </body>
 </html>

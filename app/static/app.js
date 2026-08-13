@@ -246,6 +246,13 @@ async function showApp(context) {
     state.operationsPeriodRequestId += 1;
     state.operationsUndoCandidate = null;
     state.operationsUndoRequestId += 1;
+    for (const id of [
+      "operations-spend-amount", "operations-spend-note",
+      "operations-add-amount", "operations-add-note",
+      "operations-transfer-amount", "operations-transfer-note",
+      "operations-exchange-from", "operations-exchange-to", "operations-fee-amount",
+    ]) $(id).value = "";
+    $("operations-transfer-to").value = "";
   }
   state.lastUserId = context.user.id;
   state.context = context;
@@ -656,6 +663,7 @@ function writeOperationsPreference(kind, value) {
 }
 
 function setOperationsAction(action, { persist = true, focus = false } = {}) {
+  if (isMobileViewport() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
   state.operationsAction = OPERATION_ACTIONS.includes(action) ? action : "spend";
   document.querySelectorAll("[data-operation-action]").forEach((button) => {
     const active = button.dataset.operationAction === state.operationsAction;
@@ -668,6 +676,7 @@ function setOperationsAction(action, { persist = true, focus = false } = {}) {
     $(`operation-panel-${item}`).classList.toggle("hidden", item !== state.operationsAction);
   }
   if (persist) writeOperationsPreference("action", state.operationsAction);
+  if (isMobileViewport()) updateMobileOperationsSubmitState();
 }
 
 function renderOperationsNavigation() {
@@ -711,12 +720,118 @@ function selectedOperationsAccount() {
   return accountById(state.operationsAccountId);
 }
 
+function operationsTransferTargets(account = selectedOperationsAccount()) {
+  const requiredAction = isMobileViewport() ? "owner" : "edit";
+  return state.accounts.filter((item) => (
+    account
+    && item.id !== account.id
+    && item.workspace_id === account.workspace_id
+    && canUseAccount(item, requiredAction)
+  ));
+}
+
+function isPositiveDecimalInput(value) {
+  const raw = String(value || "").trim();
+  return /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(raw)
+    && /[1-9]/.test(raw.replace(".", ""));
+}
+
+function updateMobileOperationsSubmitState() {
+  if (!isMobileViewport()) return;
+  const account = selectedOperationsAccount();
+  const target = accountById($("operations-transfer-to").value);
+  $("operations-spend-submit").disabled = state.operationsCommandLoading
+    || !canUseAccount(account, "expense")
+    || !isPositiveDecimalInput($("operations-spend-amount").value);
+  $("operations-add-submit").disabled = state.operationsCommandLoading
+    || !canUseAccount(account, "income")
+    || !isPositiveDecimalInput($("operations-add-amount").value);
+  $("operations-transfer-submit").disabled = state.operationsCommandLoading
+    || !canUseAccount(account, "owner")
+    || !target
+    || !operationsTransferTargets(account).some((item) => item.id === target.id)
+    || !isPositiveDecimalInput($("operations-transfer-amount").value);
+}
+
+function renderMobileOperationsControls() {
+  const account = selectedOperationsAccount();
+  const code = account?.asset.code || "";
+  for (const kind of ["spend", "add", "transfer"]) {
+    $(`operations-${kind}-currency`).textContent = code;
+  }
+  for (const kind of ["spend", "add"]) {
+    const select = $(`operations-${kind}-category`);
+    $(`operations-${kind}-category-mobile`).textContent = select.selectedOptions[0]?.textContent || "Uncategorized";
+  }
+  for (const kind of ["spend", "add", "transfer"]) {
+    const date = $(`operations-${kind}-date`).value;
+    $(`operations-${kind}-date-mobile`).textContent = date ? localDate(date) : "Date";
+  }
+  const target = accountById($("operations-transfer-to").value);
+  $("operations-transfer-to-mobile").textContent = target
+    ? `${target.name} · ${target.asset.code}`
+    : "Choose destination";
+  updateMobileOperationsSubmitState();
+}
+
+function openMobileOperationsCategory(kind, opener) {
+  const select = $(`operations-${kind}-category`);
+  openMobileChoose({
+    title: "Category",
+    returnFocusSelector: `#operations-${kind}-category-mobile`,
+    options: [...select.options].map((option) => ({
+      value: option.value,
+      label: option.textContent,
+      current: option.value === select.value,
+      disabled: option.disabled,
+    })),
+    onSelect: (value) => {
+      select.value = value;
+      renderMobileOperationsControls();
+    },
+  }, opener);
+}
+
+function openMobileOperationsDate(kind, opener) {
+  const input = $(`operations-${kind}-date`);
+  openMobileDateChoose({
+    label: "Date",
+    value: input.value || todayValue(),
+    returnFocusSelector: `#operations-${kind}-date-mobile`,
+    onSelect: (value) => {
+      input.value = value;
+      renderMobileOperationsControls();
+    },
+  }, opener);
+}
+
+function openMobileOperationsDestination(opener) {
+  const select = $("operations-transfer-to");
+  const targets = operationsTransferTargets();
+  if (!targets.length) return;
+  openMobileChoose({
+    title: "Destination",
+    returnFocusSelector: "#operations-transfer-to-mobile",
+    options: targets.map((account) => ({
+      value: account.id,
+      label: `${account.name} · ${account.asset.code}`,
+      current: account.id === Number(select.value),
+    })),
+    onSelect: (value) => {
+      select.value = value;
+      updateOperationsTransferMode();
+      renderMobileOperationsControls();
+    },
+  }, opener);
+}
+
 function renderOperationsAccountBalance() {
   const selectedAccount = selectedOperationsAccount();
   $("operations-account-overlay-label").textContent = selectedAccount?.name || "Choose account";
   $("operations-account-balance").innerHTML = selectedAccount
     ? moneyMarkup(selectedAccount.balance, selectedAccount.asset.code)
     : "—";
+  renderMobileOperationsControls();
 }
 
 function renderOperationsUndo() {
@@ -724,9 +839,11 @@ function renderOperationsUndo() {
   const button = $("operations-undo");
   button.classList.toggle("hidden", !candidate);
   button.disabled = state.operationsUndoLoading || !candidate;
-  button.textContent = candidate
-    ? `↶ Undo ${candidate.type.replaceAll("_", " ")}`
-    : "↶ Undo";
+  button.textContent = isMobileViewport()
+    ? "↶"
+    : candidate
+      ? `↶ Undo ${candidate.type.replaceAll("_", " ")}`
+      : "↶ Undo";
   button.setAttribute(
     "aria-label",
     candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo",
@@ -765,14 +882,7 @@ async function loadOperationsUndoCandidate() {
   }
 }
 
-async function undoLatestOperation() {
-  const account = selectedOperationsAccount();
-  const transaction = state.operationsUndoCandidate;
-  if (
-    !account
-    || !transaction
-    || !window.confirm(`Undo your latest ${transaction.type} operation? Balances and periods will be recalculated.`)
-  ) return;
+async function performOperationsUndo(account, transaction) {
   state.operationsUndoLoading = true;
   renderOperationsUndo();
   try {
@@ -785,16 +895,37 @@ async function undoLatestOperation() {
     });
     state.operationsUndoCandidate = null;
     renderOperationsUndo();
-    toast("Operation undone");
     await refreshAll();
-    switchView("operations");
+    if (!isMobileViewport()) {
+      toast("Operation undone");
+      switchView("operations");
+    }
   } catch (error) {
-    toast(error.message);
+    if (!isMobileViewport()) toast(error.message);
     await loadOperationsUndoCandidate();
+    throw error;
   } finally {
     state.operationsUndoLoading = false;
     renderOperationsUndo();
   }
+}
+
+async function undoLatestOperation() {
+  const account = selectedOperationsAccount();
+  const transaction = state.operationsUndoCandidate;
+  if (!account || !transaction) return;
+  if (isMobileViewport()) {
+    openMobileConfirmation({
+      title: "Undo this operation?",
+      body: "The latest operation is marked Deleted. Balances and periods are recalculated.",
+      actionLabel: "Undo",
+      variant: "destructive",
+      onAction: () => performOperationsUndo(account, transaction),
+    }, $("operations-undo"));
+    return;
+  }
+  if (!window.confirm(`Undo your latest ${transaction.type} operation? Balances and periods will be recalculated.`)) return;
+  try { await performOperationsUndo(account, transaction); } catch (_error) { /* surfaced by toast */ }
 }
 
 async function updateOperationsCategories(account) {
@@ -805,14 +936,50 @@ async function updateOperationsCategories(account) {
   const choices = (kind) => categories
     .filter((category) => !category.archived_at && [kind, "both"].includes(category.kind))
     .map((category) => ({ value: category.id, label: category.name }));
-  selectOptions($("operations-spend-category"), choices("expense"), { placeholder: "Uncategorized" });
-  selectOptions($("operations-add-category"), choices("income"), { placeholder: "Uncategorized" });
+  const spendChoices = choices("expense");
+  const incomeChoices = choices("income");
+  const spendDefault = isMobileViewport()
+    ? spendChoices.find((item) => item.label.toLowerCase() === "groceries")?.value
+    : null;
+  const incomeDefault = isMobileViewport()
+    ? incomeChoices.find((item) => item.label.toLowerCase() === "salary")?.value
+    : null;
+  const spendSelected = spendChoices.some((item) => String(item.value) === $("operations-spend-category").value)
+    ? $("operations-spend-category").value
+    : spendDefault;
+  const incomeSelected = incomeChoices.some((item) => String(item.value) === $("operations-add-category").value)
+    ? $("operations-add-category").value
+    : incomeDefault;
+  selectOptions($("operations-spend-category"), spendChoices, {
+    placeholder: "Uncategorized",
+    selected: spendSelected,
+  });
+  selectOptions($("operations-add-category"), incomeChoices, {
+    placeholder: "Uncategorized",
+    selected: incomeSelected,
+  });
+  renderMobileOperationsControls();
 }
 
 function updateOperationsTransferMode() {
   const source = selectedOperationsAccount();
   const target = accountById($("operations-transfer-to").value);
   const exchange = Boolean(source && target && source.asset.id !== target.asset.id);
+  if (isMobileViewport()) {
+    $("operations-transfer-amount").required = true;
+    $("operations-exchange-from").required = false;
+    $("operations-exchange-to").required = false;
+    $("operations-fee-account").required = false;
+    $("operations-fee-amount").required = false;
+    $("operations-transfer-amount-field").classList.remove("hidden");
+    $("operations-exchange-from-field").classList.add("hidden");
+    $("operations-exchange-to-field").classList.add("hidden");
+    $("operations-fee").classList.add("hidden");
+    $("operations-transfer-submit").textContent = "Save transfer";
+    $("operations-transfer-mode").textContent = "";
+    renderMobileOperationsControls();
+    return;
+  }
   $("operations-transfer-amount").required = !exchange;
   $("operations-exchange-from").required = exchange;
   $("operations-exchange-to").required = exchange;
@@ -832,6 +999,7 @@ function updateOperationsTransferMode() {
       ? `Cross-asset exchange · ${source.asset.code} → ${target.asset.code}`
       : `Same-asset transfer · ${source.asset.code}`;
   $("operations-transfer-submit").textContent = exchange ? "Save exchange" : "Save transfer";
+  renderMobileOperationsControls();
 }
 
 function setOperationsCommandLoading(value) {
@@ -844,15 +1012,11 @@ function setOperationsCommandLoading(value) {
   }
   if (!value) {
     const account = selectedOperationsAccount();
-    const hasTarget = state.accounts.some((item) => (
-      account
-      && item.id !== account.id
-      && item.workspace_id === account.workspace_id
-      && canUseAccount(item, "edit")
-    ));
+    const hasTarget = operationsTransferTargets(account).length > 0;
     $("operations-spend-submit").disabled = !canUseAccount(account, "expense");
     $("operations-add-submit").disabled = !canUseAccount(account, "income");
-    $("operations-transfer-submit").disabled = !canUseAccount(account, "edit") || !hasTarget;
+    $("operations-transfer-submit").disabled = !canUseAccount(account, isMobileViewport() ? "owner" : "edit") || !hasTarget;
+    updateMobileOperationsSubmitState();
   }
 }
 
@@ -863,18 +1027,13 @@ async function renderOperationsForms() {
   }
   const spendAllowed = canUseAccount(account, "expense");
   const incomeAllowed = canUseAccount(account, "income");
-  const transferAllowed = canUseAccount(account, "edit");
+  const transferAllowed = canUseAccount(account, isMobileViewport() ? "owner" : "edit");
   $("operations-spend-submit").disabled = state.operationsCommandLoading || !spendAllowed;
   $("operations-add-submit").disabled = state.operationsCommandLoading || !incomeAllowed;
   $("operations-spend-error").textContent = account && !spendAllowed ? "You cannot record spending on this account." : "";
   $("operations-add-error").textContent = account && !incomeAllowed ? "You cannot add funds to this account." : "";
 
-  const targets = state.accounts.filter((item) => (
-    account
-    && item.id !== account.id
-    && item.workspace_id === account.workspace_id
-    && canUseAccount(item, "edit")
-  ));
+  const targets = operationsTransferTargets(account);
   selectOptions($("operations-transfer-to"), targets.map((item) => ({
     value: item.id,
     label: `${item.name} · ${item.asset.code}`,
@@ -889,17 +1048,27 @@ async function renderOperationsForms() {
     label: `${item.name} · ${item.asset.code}`,
   })), { placeholder: "Choose fee account", selected: account?.id });
   $("operations-transfer-submit").disabled = state.operationsCommandLoading || !transferAllowed || !targets.length;
-  $("operations-transfer-error").textContent = account && !transferAllowed ? "You cannot transfer from this account." : "";
+  $("operations-transfer-error").textContent = account && !transferAllowed
+    ? isMobileViewport()
+      ? "Mobile Transfer is available only to the account owner."
+      : "You cannot transfer from this account."
+    : "";
   updateOperationsTransferMode();
   try {
     await updateOperationsCategories(account);
   } catch (error) {
     toast(error.message);
   }
+  renderMobileOperationsControls();
 }
 
 function currentOperationsPeriod() {
   return state.operationsPeriods.find((period) => period.status === "current") || null;
+}
+
+function calendarDayNumber(value) {
+  const [year, month, day] = String(value).split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86400000;
 }
 
 function renderOperationsPeriodHistory() {
@@ -952,10 +1121,28 @@ function renderOperationsPeriod() {
   const unavailable = !current;
   $("operations-period").classList.toggle("is-active", Boolean(current));
   $("operations-period").classList.toggle("is-absent", !current);
-  $("operations-period-card-title").textContent = current ? "Period active" : "No period";
+  const daysLeft = current
+    ? Math.max(0, calendarDayNumber(current.end_date) - calendarDayNumber(todayValue()) + 1)
+    : 0;
+  $("operations-period-card-title").textContent = current
+    ? `Period · ${daysLeft}d`
+    : state.operationsPeriodLoading
+      ? "Loading period…"
+      : state.operationsPeriodError
+        ? "Period unavailable"
+        : "No period";
   $("operations-period-mobile-value").innerHTML = current
     ? moneyMarkup(current.available_today, current.asset.code)
     : "N/A";
+  const showMobileState = owner && !current && (state.operationsPeriodLoading || state.operationsPeriodError);
+  $("operations-period-mobile-state").classList.toggle("hidden", !showMobileState);
+  $("operations-period-mobile-state-copy").textContent = state.operationsPeriodLoading
+    ? "Loading…"
+    : state.operationsPeriodError
+      ? "Could not load period."
+      : "";
+  $("operations-period-retry-mobile").classList.toggle("hidden", !state.operationsPeriodError);
+  $("operations-period-retry-mobile").disabled = state.operationsPeriodLoading || state.periodCommandLoading;
   $("operations-period").setAttribute(
     "aria-busy",
     String(state.operationsPeriodLoading || state.periodCommandLoading),
@@ -968,6 +1155,7 @@ function renderOperationsPeriod() {
     : formatMoney(current.current_balance, current.asset.code);
   $("operations-add-period").classList.toggle("hidden", !ready || Boolean(current));
   $("operations-add-period-mobile").classList.toggle("hidden", !ready || Boolean(current));
+  $("operations-add-period-mobile").disabled = isMobileViewport();
   $("operations-edit-period").classList.toggle("hidden", !ready || !current);
   $("operations-close-period").classList.toggle("hidden", !ready || !current);
   $("operations-period-history").classList.toggle("hidden", !ready);
@@ -1100,6 +1288,62 @@ function openPeriodHistory() {
   $("period-history-dialog").showModal();
 }
 
+function clearMobileOperationsDraft(kind) {
+  if (kind === "spend" || kind === "add") {
+    $(`operations-${kind}-amount`).value = "";
+    $(`operations-${kind}-note`).value = "";
+  } else {
+    $("operations-transfer-amount").value = "";
+    $("operations-transfer-note").value = "";
+    $("operations-transfer-to").value = "";
+  }
+  renderMobileOperationsControls();
+}
+
+async function finishMobileOperation(kind, account, body) {
+  switchView("operations");
+  const current = accountById(account.id) || account;
+  const messages = {
+    spend: `The expense was written to ${current.name} · ${current.asset.code}. Available today was recalculated.`,
+    add: `The funds were added to ${current.name} · ${current.asset.code}. Balance and Available today were recalculated.`,
+    transfer: "The transfer was recorded. Both accounts were updated — total capital is unchanged.",
+  };
+  openMobileConfirmation({
+    title: "Saved",
+    body: messages[kind],
+    variant: "saved",
+    onAction: async () => {
+      clearMobileOperationsDraft(kind);
+      await refreshAll();
+      switchView("operations");
+    },
+  }, document.activeElement);
+}
+
+async function mobileOperationCommand(path, body, confirmationTitle, confirmationBody, onConfirmed) {
+  try {
+    await apiCommand(path, "POST", body);
+    return true;
+  } catch (error) {
+    if (error.status !== 409 || !String(error.message).includes("explicit confirmation")) throw error;
+    openMobileConfirmation({
+      title: confirmationTitle,
+      body: confirmationBody,
+      actionLabel: "Continue",
+      onAction: async () => {
+        setOperationsCommandLoading(true);
+        try {
+          await apiCommand(path, "POST", { ...body, confirm_ended_period: true });
+          await onConfirmed();
+        } finally {
+          setOperationsCommandLoading(0);
+        }
+      },
+    }, document.activeElement);
+    return false;
+  }
+}
+
 async function saveOperationsSingle(event, kind) {
   event.preventDefault();
   if (state.operationsCommandLoading) return;
@@ -1108,6 +1352,7 @@ async function saveOperationsSingle(event, kind) {
   $(`${prefix}-error`).textContent = "";
   if (!account) return $(`${prefix}-error`).textContent = "Choose an account.";
   try {
+    if (!isPositiveDecimalInput($(`${prefix}-amount`).value)) throw new Error("Enter an amount greater than zero.");
     const body = {
       account_id: account.id,
       amount: requiredValue(`${prefix}-amount`, "Amount"),
@@ -1119,11 +1364,19 @@ async function saveOperationsSingle(event, kind) {
       ? "/api/v1/operations/spend"
       : "/api/v1/operations/add-funds";
     setOperationsCommandLoading(true);
-    await apiWithEndedPeriodConfirmation(
-      route,
-      "POST",
-      body,
-    );
+    if (isMobileViewport()) {
+      const completed = await mobileOperationCommand(
+        route,
+        body,
+        "Save this operation?",
+        "It changes an ended account period. Balances and period history will be recalculated.",
+        () => finishMobileOperation(kind === "spend" ? "spend" : "add", account, body),
+      );
+      if (!completed) return;
+      await finishMobileOperation(kind === "spend" ? "spend" : "add", account, body);
+      return;
+    }
+    await apiWithEndedPeriodConfirmation(route, "POST", body);
     $(`${prefix}-amount`).value = "";
     $(`${prefix}-note`).value = "";
     toast(kind === "spend" ? "Spending saved" : "Funds added");
@@ -1144,6 +1397,9 @@ async function saveOperationsTransfer(event) {
   const target = accountById($("operations-transfer-to").value);
   if (!source || !target) return $("operations-transfer-error").textContent = "Choose both accounts.";
   try {
+    if (isMobileViewport() && (!canUseAccount(source, "owner") || !canUseAccount(target, "owner"))) {
+      throw new Error("Mobile Transfer is available only to the account owner.");
+    }
     const exchange = source.asset.id !== target.asset.id;
     const body = {
       from_account_id: source.id,
@@ -1152,7 +1408,23 @@ async function saveOperationsTransfer(event) {
       note: $("operations-transfer-note").value.trim() || null,
     };
     let route = "/api/v1/operations/transfer";
-    if (exchange) {
+    if (isMobileViewport()) {
+      const fromAmount = requiredValue("operations-transfer-amount", "Amount");
+      if (!isPositiveDecimalInput(fromAmount)) throw new Error("Enter an amount greater than zero.");
+      setOperationsCommandLoading(true);
+      const quote = await api("/api/v1/operations/transfer/quotes", {
+        method: "POST",
+        body: JSON.stringify({
+          from_account_id: source.id,
+          to_account_id: target.id,
+          from_amount: fromAmount,
+          rate_source: "manual",
+        }),
+      });
+      route = `/api/v1/operations/transfer/quotes/${quote.id}/execute`;
+      delete body.from_account_id;
+      delete body.to_account_id;
+    } else if (exchange) {
       route = "/api/v1/operations/exchange";
       body.from_amount = requiredValue("operations-exchange-from", "From amount");
       body.to_amount = requiredValue("operations-exchange-to", "To amount");
@@ -1162,10 +1434,20 @@ async function saveOperationsTransfer(event) {
           amount: requiredValue("operations-fee-amount", "Fee amount"),
         };
       }
-    } else {
-      body.amount = requiredValue("operations-transfer-amount", "Amount");
-    }
+    } else body.amount = requiredValue("operations-transfer-amount", "Amount");
     setOperationsCommandLoading(true);
+    if (isMobileViewport()) {
+      const completed = await mobileOperationCommand(
+        route,
+        body,
+        "Save this transfer?",
+        "It changes an ended account period. Both account histories will be recalculated.",
+        () => finishMobileOperation("transfer", source, body),
+      );
+      if (!completed) return;
+      await finishMobileOperation("transfer", source, body);
+      return;
+    }
     await apiWithEndedPeriodConfirmation(route, "POST", body);
     for (const id of ["operations-transfer-amount", "operations-exchange-from", "operations-exchange-to", "operations-fee-amount", "operations-transfer-note"]) $(id).value = "";
     $("operations-has-fee").checked = false;
@@ -4009,6 +4291,15 @@ $("operations-account").addEventListener("change", () => {
   void loadOperationsUndoCandidate();
 });
 $("operations-account-overlay-trigger").addEventListener("click", openOperationsAccountChoose);
+for (const id of ["operations-spend-amount", "operations-add-amount", "operations-transfer-amount"]) {
+  $(id).addEventListener("input", updateMobileOperationsSubmitState);
+}
+$("operations-spend-category-mobile").addEventListener("click", (event) => openMobileOperationsCategory("spend", event.currentTarget));
+$("operations-add-category-mobile").addEventListener("click", (event) => openMobileOperationsCategory("add", event.currentTarget));
+$("operations-spend-date-mobile").addEventListener("click", (event) => openMobileOperationsDate("spend", event.currentTarget));
+$("operations-add-date-mobile").addEventListener("click", (event) => openMobileOperationsDate("add", event.currentTarget));
+$("operations-transfer-date-mobile").addEventListener("click", (event) => openMobileOperationsDate("transfer", event.currentTarget));
+$("operations-transfer-to-mobile").addEventListener("click", (event) => openMobileOperationsDestination(event.currentTarget));
 $("operations-spend-form").addEventListener("submit", (event) => saveOperationsSingle(event, "spend"));
 $("operations-add-form").addEventListener("submit", (event) => saveOperationsSingle(event, "add-funds"));
 $("operations-transfer-form").addEventListener("submit", saveOperationsTransfer);
@@ -4018,7 +4309,10 @@ $("operations-has-fee").addEventListener("change", () => {
   updateOperationsTransferMode();
 });
 $("operations-add-period").addEventListener("click", () => openPeriodDialog());
-$("operations-add-period-mobile").addEventListener("click", () => openPeriodDialog());
+$("operations-add-period-mobile").addEventListener("click", () => {
+  if (!isMobileViewport()) openPeriodDialog();
+});
+$("operations-period-retry-mobile").addEventListener("click", loadOperationsPeriods);
 $("operations-edit-period").addEventListener("click", () => openPeriodDialog(currentOperationsPeriod()));
 $("operations-close-period").addEventListener("click", () => closeOperationsPeriod(currentOperationsPeriod()));
 $("operations-period-history").addEventListener("click", openPeriodHistory);
