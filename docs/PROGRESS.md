@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-028 mobile Plan and Analytics is reviewed on `task/T-028-mobile-plan-analytics` |
-| Next | Locally accept reviewed T-028, then promote T-029 |
+| Active work | None — T-028 is locally accepted |
+| Next | Promote and claim readiness-reviewed T-029 navigation/accessibility |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -46,14 +46,12 @@ implemented from accepted integration `7821bab`; reviewed implementation
 commit `bf7c3a8` is now locally accepted on `finapp-v2-develop`. Its 77-test
 targeted gate, syntax/diff checks, isolated 390×844 browser matrix and preserved
 1280×900 checks pass, and all implementation-review P0–P3 findings are closed.
-T-027B was implemented from promoted integration `6313852`; reviewed
-implementation commit `283215f` is now locally accepted on
-`finapp-v2-develop`. T-028 was claimed from promoted integration `39e3cf6` and
-its mobile rule/occurrence flows plus exact Analytics placeholder are now
-implemented and independently reviewed. The exact 35-test target, syntax/diff,
-isolated 390×844 browser matrix and retained 1280×900 Plan regression pass; both
-Link-safety P2 findings are closed and no P0–P3 finding remains. T-028 awaits
-local owner acceptance. Phase 15 remains incomplete.
+T-027B's reviewed implementation `283215f` and T-028's reviewed implementation
+`173ea51` are now locally accepted on `finapp-v2-develop`. T-028's exact
+35-test target, syntax/diff, isolated 390×844 browser matrix and retained
+1280×900 Plan regression passed; both Link-safety P2 findings are closed and no
+P0–P3 finding remains. T-029 is next, remains unclaimed, and Phase 15 remains
+incomplete.
 
 Phase 15 authority and constraints:
 
