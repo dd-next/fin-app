@@ -22,7 +22,7 @@ the one task file you are working on. Nothing else by default.
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
 | Active work | None — T-028 is locally accepted |
-| Next | Promote and claim readiness-reviewed T-029 navigation/accessibility |
+| Next | Claim promoted T-029 navigation/accessibility |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign

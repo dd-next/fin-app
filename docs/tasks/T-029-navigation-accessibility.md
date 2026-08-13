@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: Integrate navigation, keyboard, motion, and accessibility
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/05-interactions.md; spec/08-acceptance.md
 blocked-by: [T-025B, T-026, T-027B, T-028]
@@ -73,3 +73,7 @@ Append the bounded independent implementation review following the protocol.
   claimed.
 - 2026-08-12 Codex GPT-5: dependency references updated after T-025 split;
   limited independent re-review verdict `ready`.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  confirmed T-025B, T-026, T-027B, and T-028 locally accepted, accepted the
+  recorded readiness verdict, and promoted T-029 from `backlog` to `todo` on
+  accepted integration `9d40b9f`; no task branch was claimed here.
