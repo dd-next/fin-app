@@ -51,10 +51,14 @@ desktop verification out of this task without changing their current code.
 - [ ] Transactions keeps the bottom tab bar visible while the feed scrolls and
       excludes planned occurrences from All/Income/Expense/Transfer; planned
       rows appear only after explicitly selecting Planned.
-- [ ] `All` is a lossless frontend adapter over the existing persisted
-      `/api/v1/transactions` endpoint and its opaque cursor; Income/Expense/
-      Transfer/Planned keep using their accepted feed filters. No mixed `all`
-      page is filtered client-side and no backend/API contract changes.
+- [ ] `All` is a lossless frontend drain over the existing
+      `/api/v1/transaction-feed?filter=all` financial-date feed and its opaque
+      cursor: successive mixed source pages are consumed until 50 persisted
+      rows have been collected or the source cursor is exhausted, and planned
+      rows are never rendered. Each source request uses the number of visible
+      rows still needed, so no persisted overflow buffer is lost. Income/
+      Expense/Transfer/Planned keep using their accepted feed filters; no
+      backend/API contract changes.
 - [ ] Core-section sheets span the viewport width, extend through the tab bar
       to the bottom safe edge, and cover the tab bar while open. Option rows and
       hairlines fill the available body width; long bodies scroll without
@@ -79,8 +83,8 @@ Frontend files only for bounded mobile corrections,
 `tests/test_phase15_mobile_acceptance.py`, focused existing frontend tests,
 `docs/design/DESIGN-NOTES.md`, this task and relevant progress evidence. Design
 notes may record only these owner-approved corrections: core overlays cover the
-tab bar, All adapts the persisted transaction endpoint, and in-scope editable
-controls use at least 16px to prevent iPhone Safari auto-zoom.
+tab bar, All drains the existing mixed feed without rendering planned rows, and
+in-scope editable controls use at least 16px to prevent iPhone Safari auto-zoom.
 
 ## Out of scope
 
@@ -116,12 +120,19 @@ Append the bounded independent implementation review following the protocol.
 - Reviewed task-file commit: `6c9be0a4a9c1de9de293e708417f70dfba18edc5`.
 - Verdict: not ready; no P0/P3 findings, three P1 and two P2 findings.
 - Resolution: the task now explicitly authorizes and bounds the core-only
-  overlay design correction; defines the lossless persisted-All adapter without
+  overlay design correction; defines the lossless mixed-feed drain without
   backend/API changes; freezes the 16px editable-control exception and actual
   iPhone Safari evidence; enumerates the in-scope sheet catalogue; and includes
   all focused core mobile regression suites. Full findings are preserved in the
   reviewer response for this session and will be transcribed verbatim into the
   implementation evidence before task completion.
+- First limited re-review: four findings closed; one P1 remained because the
+  proposed `/transactions` adapter did not preserve the accepted financial-date
+  ordering across cursor boundaries. Resolution: `All` now explicitly drains
+  the accepted mixed feed using its opaque cursor and a shrinking requested
+  limit, discarding planned projections only after each source page while
+  retaining every persisted row in stable feed order. Plan-heavy interleaving
+  and corrected financial dates across multiple pages are required coverage.
 
 ## Session log
 
