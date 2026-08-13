@@ -186,6 +186,9 @@ button:disabled { cursor: not-allowed; opacity: .45; filter: none; }
 .operations-period { margin-bottom: 12px; }
 .operations-period-mobile { display: none; }
 .operations-account-balance { display: none; }
+.operations-account-overlay-trigger { display: none; }
+.overlay-verify-trigger { position: fixed; width: 1px; height: 1px; padding: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+.overlay-verify-active { position: fixed; z-index: 200; top: 8px; left: 8px; }
 .operations-period .group-heading { align-items: flex-start; gap: 16px; }
 .operations-period-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 16px 0 12px; }
 .operations-period-cards .metric-card { min-height: 108px; padding: 18px; border-radius: 16px; }
@@ -335,6 +338,7 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
     outline: none;
     box-shadow: inset 0 0 0 3px rgba(255, 162, 75, .55);
   }
+  body.overlay-active .primary-nav { z-index: 110; }
   .page-loading { top: calc(var(--mobile-safe-top) + 8px); }
   .view-heading { align-items: center; }
   .view-heading > button { width: 48px; overflow: hidden; padding: 0; color: transparent; }
@@ -492,7 +496,8 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-ops-card.is-active #operations-add-period-mobile { display: none; }
   .mobile-ops-card.is-absent #operations-period-mobile-value { display: none; }
   #operations-account-card label { gap: 0; }
-  #operations-account-card .mobile-field { height: 36px; min-height: 36px; padding: 0; border: 0; background: transparent; }
+  #operations-account-card select.mobile-field { display: none; }
+  .operations-account-overlay-trigger { display: flex; width: 100%; height: 36px; min-height: 36px; padding: 0; justify-content: space-between; border: 0; background: transparent; color: var(--mobile-text); }
   #operations-account-card .operations-account-balance { display: block; }
   #operations-account-card #operations-undo { position: absolute; top: 4px; right: 4px; width: 44px; overflow: hidden; padding: 0; }
   .mobile-segmented {
@@ -540,6 +545,35 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .account-card .account-name { flex: 1; margin: 0; text-align: left; }
   .account-card > strong { margin: 0 0 0 auto; font-size: 15px; }
   .account-card > small { display: none; }
+  .mobile-overlay-root { position: fixed; z-index: 100; inset: 0; overflow: hidden; }
+  .mobile-sheet[hidden], .mobile-confirm[hidden] { display: none; }
+  .mobile-overlay-scrim { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: rgba(0,0,0,.62); }
+  .mobile-sheet { position: absolute; right: 0; bottom: 0; left: 0; display: flex; max-height: 88%; overflow: hidden; flex-direction: column; border: 1px solid rgba(255,255,255,.1); border-bottom: 0; border-radius: 20px 20px 0 0; background: var(--mobile-surface); transform: translateY(0); transition: transform 180ms ease-out; }
+  .mobile-sheet-grabber { display: grid; height: 18px; min-height: 18px; place-items: center; }
+  .mobile-sheet-grabber span { width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.22); }
+  .mobile-sheet-header { display: flex; height: 44px; min-height: 44px; padding: 0 16px; align-items: center; justify-content: space-between; }
+  .mobile-sheet-kicker { margin: 0; color: var(--mobile-accent); font: 700 11px ui-monospace, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+  .mobile-sheet-title { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: normal; }
+  .mobile-sheet-close { display: grid; width: 44px; height: 44px; padding: 0; place-items: center; border: 0; background: transparent; }
+  .mobile-sheet-close span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 10px; background: var(--mobile-neutral); }
+  .mobile-sheet-body { display: grid; min-height: 0; gap: 8px; padding: 8px 16px 0; overflow-y: auto; overscroll-behavior: contain; }
+  .mobile-sheet-footer { display: flex; gap: 8px; padding: 16px; }
+  .mobile-sheet-footer:empty { display: none; }
+  .mobile-sheet-footer .mobile-button-sheet-primary { flex: 1; }
+  .mobile-sheet-safe-band { height: var(--mobile-safe-bottom); min-height: var(--mobile-safe-bottom); }
+  body.overlay-active .mobile-sheet-safe-band { height: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); min-height: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); }
+  .mobile-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 48px; padding: 0; align-items: center; text-align: left; border: 0; border-top: 1px solid var(--mobile-hairline); border-radius: 0; background: transparent; color: var(--mobile-text); }
+  .mobile-option[aria-disabled="true"] { color: var(--mobile-hint); }
+  .mobile-option-current { color: var(--mobile-accent); }
+  .mobile-confirm { position: absolute; right: 16px; bottom: var(--mobile-safe-bottom); left: 16px; display: grid; gap: 14px; padding: 20px 18px 16px; border: 1px solid rgba(255,255,255,.1); border-radius: 18px; background: #1B2028; }
+  body.overlay-active .mobile-confirm { bottom: calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height)); }
+  .mobile-confirm h2 { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: normal; }
+  .mobile-confirm p { margin: 0; color: var(--mobile-muted); font-size: 14px; font-weight: 400; line-height: 1.5; text-wrap: pretty; }
+  .mobile-confirm-actions { display: flex; gap: 8px; }
+  .mobile-confirm-actions > button { flex: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-sheet { transform: none; transition: none; }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -110,7 +110,7 @@
         <div class="view-heading"><div><p class="eyebrow">Financial actions</p><h2 id="operations-title">Operations</h2></div></div>
         <div class="operations-card-row">
         <div id="operations-account-card" class="operations-toolbar panel-subtle mobile-ops-card is-active" role="group" aria-labelledby="operations-account-card-title">
-          <label><span id="operations-account-card-title" class="mobile-ops-topline mobile-ops-title">Account</span><select id="operations-account" class="mobile-field" aria-label="Operations account"></select></label>
+          <label><span id="operations-account-card-title" class="mobile-ops-topline mobile-ops-title">Account</span><select id="operations-account" class="mobile-field" aria-label="Operations account"></select><button id="operations-account-overlay-trigger" class="operations-account-overlay-trigger mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog" aria-controls="mobile-sheet"><span id="operations-account-overlay-label">Choose account</span><span aria-hidden="true">⌄</span></button></label>
           <div class="operations-account-balance"><span class="mobile-ops-label">Balance</span><span id="operations-account-balance" class="mobile-money mobile-ops-value">—</span></div>
           <button id="operations-undo" type="button" class="button-secondary mobile-button-inline mobile-interactive hidden" disabled>↶ Undo</button>
         </div>
@@ -214,6 +214,29 @@
       </section>
     </section>
   </main>
+
+  <button id="mobile-overlay-verify-trigger" class="overlay-verify-trigger" type="button" aria-label="Run overlay verification"></button>
+  <div id="mobile-overlay-root" class="mobile-overlay-root" hidden>
+    <button id="mobile-overlay-scrim" class="mobile-overlay-scrim" type="button" aria-label="Close overlay"></button>
+    <section id="mobile-sheet" class="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-sheet-title" tabindex="-1" hidden>
+      <div class="mobile-sheet-grabber" aria-hidden="true"><span></span></div>
+      <header class="mobile-sheet-header">
+        <div><p id="mobile-sheet-kicker" class="mobile-sheet-kicker"></p><h2 id="mobile-sheet-title" class="mobile-sheet-title"></h2></div>
+        <button id="mobile-sheet-close" class="mobile-sheet-close mobile-interactive" type="button" aria-label="Close"><span aria-hidden="true">✕</span></button>
+      </header>
+      <div id="mobile-sheet-body" class="mobile-sheet-body"></div>
+      <footer id="mobile-sheet-footer" class="mobile-sheet-footer"></footer>
+      <div class="mobile-sheet-safe-band" aria-hidden="true"></div>
+    </section>
+    <section id="mobile-confirm" class="mobile-confirm" role="alertdialog" aria-modal="true" aria-labelledby="mobile-confirm-title" aria-describedby="mobile-confirm-body" tabindex="-1" hidden>
+      <h2 id="mobile-confirm-title"></h2>
+      <p id="mobile-confirm-body"></p>
+      <div class="mobile-confirm-actions">
+        <button id="mobile-confirm-cancel" class="mobile-button-secondary" type="button">Cancel</button>
+        <button id="mobile-confirm-action" class="mobile-button-sheet-primary" type="button">Done</button>
+      </div>
+    </section>
+  </div>
 
   <dialog id="account-dialog" aria-labelledby="account-dialog-title">
     <form id="account-form" class="dialog-form">
@@ -384,6 +407,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=phase15-t024b-4" defer></script>
 </body>
 </html>

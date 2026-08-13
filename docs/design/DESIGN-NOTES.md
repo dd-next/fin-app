@@ -173,6 +173,23 @@ compact Operations balance is updated from the selected account while its
 desktop-only legacy controls remain unchanged. Shared/non-owner period privacy
 continues to rely on the accepted owner guard and generic `No period` state.
 
+T-024B adds one mobile overlay root and controller outside the inert application
+content. It owns a stack of sheets and confirmations, records the root and
+immediate openers, traps focus in the active panel, restores focus on pop/close,
+and closes the full stack when a primary tab changes. Scrim, close, Escape and
+Cancel only dismiss; confirmed asynchronous actions are guarded so they run at
+most once. Callers construct option and copy nodes from already-authorized data;
+the controller performs no API or financial work.
+
+The production exercise is the Operations account field: mobile opens a Choose
+sheet while desktop retains the existing native select and its unchanged event
+path. Choose options expose the current value and reject disabled entries. The
+same controller supports cancel+accent, cancel+destructive and one-button Saved
+confirmations. Overlay motion is 180ms and becomes transform-free under reduced
+motion. While an overlay is active, the fixed tab bar is raised above the scrim
+so a physical tab tap can close the stack; the sheet safe band and confirmation
+bottom clearance grow by the tab-bar height so options/actions remain reachable.
+
 ## Change log
 
 One line per landed design change: date, what changed, why.
@@ -189,3 +206,6 @@ One line per landed design change: date, what changed, why.
   contracts for headers, rows, metric strips, Operations cards and controls,
   fields, buttons, truncation, and precision-safe money presentation while
   preserving the accepted desktop and financial workflows.
+- 2026-08-13 — added the single accessible T-024B mobile overlay stack, Choose
+  and confirmation contracts, physical tab-close path, reduced-motion behavior,
+  and desktop-preserving Operations account integration.

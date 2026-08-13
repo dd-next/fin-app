@@ -275,7 +275,287 @@ async function refreshAll() {
   }
 }
 
+const mobileOverlayState = {
+  stack: [],
+  rootOpener: null,
+  lastTabBackward: false,
+};
+
+function mobileOverlayFocusable(panel) {
+  return [...panel.querySelectorAll('button:not([disabled]):not([hidden]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+}
+
+function setMobileOverlayBackground(active) {
+  document.querySelectorAll("#app-shell > .topbar, .app-view").forEach((element) => {
+    element.inert = active;
+    if (active) element.setAttribute("aria-hidden", "true");
+    else element.removeAttribute("aria-hidden");
+  });
+}
+
+function renderMobileOverlay() {
+  const entry = mobileOverlayState.stack.at(-1) || null;
+  const active = Boolean(entry);
+  const root = $("mobile-overlay-root");
+  const sheet = $("mobile-sheet");
+  const confirmation = $("mobile-confirm");
+  document.body.classList.toggle("overlay-active", active);
+  root.hidden = !active;
+  sheet.hidden = !active || entry.kind !== "sheet";
+  confirmation.hidden = !active || entry.kind !== "confirmation";
+  if (!active) {
+    setMobileOverlayBackground(false);
+    return;
+  }
+
+  let panel;
+  if (entry.kind === "sheet") {
+    panel = sheet;
+    $("mobile-sheet-kicker").textContent = entry.kicker;
+    $("mobile-sheet-title").textContent = entry.title;
+    $("mobile-sheet-body").replaceChildren(entry.buildBody());
+    const footer = $("mobile-sheet-footer");
+    footer.replaceChildren();
+    if (entry.secondaryLabel) {
+      const secondary = document.createElement("button");
+      secondary.type = "button";
+      secondary.className = "mobile-button-secondary";
+      secondary.textContent = entry.secondaryLabel;
+      secondary.addEventListener("click", () => closeMobileOverlay());
+      footer.append(secondary);
+    }
+    if (entry.primaryLabel) {
+      const primary = document.createElement("button");
+      primary.type = "button";
+      primary.className = "mobile-button-sheet-primary";
+      primary.textContent = entry.primaryLabel;
+      primary.addEventListener("click", async () => {
+        if (entry.actionTaken) return;
+        entry.actionTaken = true;
+        primary.disabled = true;
+        try { await entry.onPrimary?.(); }
+        finally { entry.actionTaken = false; primary.disabled = false; }
+      });
+      footer.append(primary);
+    }
+  } else {
+    panel = confirmation;
+  }
+
+  requestAnimationFrame(() => {
+    const focusables = mobileOverlayFocusable(panel);
+    (panel.querySelector("[autofocus]") || focusables[0] || panel).focus();
+    setMobileOverlayBackground(active);
+  });
+}
+
+function openMobileSheet(config, opener = document.activeElement) {
+  if (!window.matchMedia("(max-width: 640px)").matches) return;
+  if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
+  mobileOverlayState.stack.push({
+    kind: "sheet",
+    kicker: String(config.kicker || ""),
+    title: String(config.title || ""),
+    buildBody: config.buildBody,
+    secondaryLabel: config.secondaryLabel || "",
+    primaryLabel: config.primaryLabel || "",
+    onPrimary: config.onPrimary,
+    returnFocusSelector: config.returnFocusSelector || "",
+    opener,
+    openerId: opener?.id || "",
+    actionTaken: false,
+  });
+  renderMobileOverlay();
+}
+
+function closeMobileOverlay({ restoreFocus = true } = {}) {
+  if (mobileOverlayState.stack.at(-1)?.actionTaken) return;
+  const closed = mobileOverlayState.stack.pop();
+  const hasParent = Boolean(mobileOverlayState.stack.length);
+  const rootFocusTarget = mobileOverlayState.rootOpener;
+  renderMobileOverlay();
+  if (!mobileOverlayState.stack.length) {
+    mobileOverlayState.rootOpener = null;
+    setMobileOverlayBackground(false);
+  }
+  if (restoreFocus) requestAnimationFrame(() => {
+    const focusTarget = hasParent
+      ? (closed?.returnFocusSelector && document.querySelector(closed.returnFocusSelector))
+        || (closed?.opener?.isConnected ? closed.opener : null)
+        || (closed?.openerId && document.getElementById(closed.openerId))
+      : rootFocusTarget;
+    if (focusTarget?.isConnected) focusTarget.focus();
+  });
+}
+
+function closeAllMobileOverlays({ restoreFocus = false } = {}) {
+  const focusTarget = mobileOverlayState.rootOpener;
+  mobileOverlayState.stack.length = 0;
+  mobileOverlayState.rootOpener = null;
+  renderMobileOverlay();
+  if (restoreFocus && focusTarget?.isConnected) requestAnimationFrame(() => focusTarget.focus());
+}
+
+function openMobileChoose({ title, options, onSelect, returnFocusSelector = "" }, opener = document.activeElement) {
+  openMobileSheet({
+    kicker: "CHOOSE",
+    title,
+    returnFocusSelector,
+    buildBody: () => {
+      const list = document.createElement("div");
+      list.className = "mobile-option-list";
+      for (const option of options) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "mobile-option";
+        button.dataset.value = String(option.value);
+        button.innerHTML = `<span></span><span class="mobile-option-current" aria-hidden="true">${option.current ? "✓" : ""}</span>`;
+        button.firstElementChild.textContent = option.label;
+        if (option.disabled) button.setAttribute("aria-disabled", "true");
+        button.addEventListener("click", () => {
+          if (option.disabled) return;
+          onSelect(button.dataset.value);
+          closeMobileOverlay();
+        });
+        list.append(button);
+      }
+      return list;
+    },
+  }, opener);
+}
+
+function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction }, opener = document.activeElement) {
+  if (!window.matchMedia("(max-width: 640px)").matches) return;
+  if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, opener, openerId: opener?.id || "" };
+  mobileOverlayState.stack.push(entry);
+  $("mobile-confirm-title").textContent = title;
+  $("mobile-confirm-body").textContent = body;
+  const cancel = $("mobile-confirm-cancel");
+  const action = $("mobile-confirm-action");
+  cancel.hidden = variant === "saved";
+  action.textContent = actionLabel;
+  action.className = variant === "destructive"
+    ? "mobile-button-destructive-confirm"
+    : "mobile-button-sheet-primary";
+  action.onclick = async () => {
+    if (entry.actionTaken) return;
+    entry.actionTaken = true;
+    action.disabled = true;
+    try {
+      await onAction?.();
+      entry.actionTaken = false;
+      closeMobileOverlay({ restoreFocus: variant !== "saved" });
+    } finally {
+      entry.actionTaken = false;
+      action.disabled = false;
+    }
+  };
+  renderMobileOverlay();
+}
+
+function trapMobileOverlayFocus(event) {
+  if (!mobileOverlayState.stack.length) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeMobileOverlay();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  mobileOverlayState.lastTabBackward = event.shiftKey;
+  const panel = $("mobile-confirm").hidden ? $("mobile-sheet") : $("mobile-confirm");
+  const focusables = mobileOverlayFocusable(panel);
+  if (!focusables.length) {
+    event.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = focusables[0];
+  const last = focusables.at(-1);
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+function openOperationsAccountChoose() {
+  openMobileChoose({
+    title: "Account",
+    options: state.accounts.map((account) => ({
+      value: account.id,
+      label: `${account.name} · ${account.asset.code}`,
+      current: account.id === state.operationsAccountId,
+      disabled: false,
+    })),
+    onSelect: (value) => {
+      $("operations-account").value = String(value);
+      $("operations-account").dispatchEvent(new Event("change", { bubbles: true }));
+    },
+  }, $("operations-account-overlay-trigger"));
+}
+
+function runMobileOverlayVerificationScenario(name) {
+  if (!new URLSearchParams(window.location.search).has("verify-overlay")) return;
+  const opener = $("operations-account-overlay-trigger");
+  if (name === "nested") {
+    openMobileSheet({
+      kicker: "VERIFY",
+      title: "Parent sheet",
+      buildBody: () => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.id = "overlay-verify-nested-opener";
+        button.textContent = "Open nested choose";
+        button.addEventListener("click", () => openMobileChoose({
+          title: "Nested choice",
+          options: [
+            { value: "disabled", label: "Disabled option", disabled: true, current: false },
+            { value: "enabled", label: "Enabled option", disabled: false, current: true },
+          ],
+          onSelect: (value) => document.documentElement.setAttribute("data-overlay-result", value),
+        }, button));
+        return button;
+      },
+    }, opener);
+  } else if (name === "confirmation") {
+    openMobileConfirmation({
+      title: "Verify action?",
+      body: "This verification changes only an in-memory counter.",
+      actionLabel: "Verify",
+      variant: "destructive",
+      onAction: async () => {
+        const current = document.documentElement.getAttribute("data-overlay-action-count");
+        document.documentElement.setAttribute("data-overlay-action-count", current ? "2" : "1");
+        await new Promise((resolve) => window.setTimeout(resolve, 80));
+      },
+    }, opener);
+  } else if (name === "saved") {
+    openMobileConfirmation({ title: "Saved", body: "Verification saved.", variant: "saved" }, opener);
+  } else if (name === "accent") {
+    openMobileConfirmation({ title: "Continue?", body: "This verification has no persistent effect.", actionLabel: "Continue", variant: "accent" }, opener);
+  }
+}
+
+document.addEventListener("finapp:verify-overlay", (event) => {
+  runMobileOverlayVerificationScenario(event.detail);
+});
+$("mobile-overlay-verify-trigger").addEventListener("click", () => {
+  runMobileOverlayVerificationScenario(new URLSearchParams(window.location.search).get("verify-overlay"));
+});
+if (new URLSearchParams(window.location.search).has("verify-overlay")) {
+  $("mobile-overlay-verify-trigger").classList.remove("overlay-verify-trigger");
+  $("mobile-overlay-verify-trigger").classList.add("overlay-verify-active");
+  $("mobile-overlay-verify-trigger").textContent = "Run overlay verification";
+  window.setTimeout(() => {
+    runMobileOverlayVerificationScenario(new URLSearchParams(window.location.search).get("verify-overlay"));
+  }, 0);
+}
+
 function switchView(view, updateUrl = true) {
+  closeAllMobileOverlays();
   const allowed = ["accounts", "transactions", "operations", "plan", "analytics"];
   state.activeView = allowed.includes(view) ? view : "accounts";
   document.querySelectorAll(".app-view").forEach((section) => section.classList.add("hidden"));
@@ -376,6 +656,7 @@ function selectedOperationsAccount() {
 
 function renderOperationsAccountBalance() {
   const selectedAccount = selectedOperationsAccount();
+  $("operations-account-overlay-label").textContent = selectedAccount?.name || "Choose account";
   $("operations-account-balance").innerHTML = selectedAccount
     ? moneyMarkup(selectedAccount.balance, selectedAccount.asset.code)
     : "—";
@@ -1897,6 +2178,19 @@ document.querySelectorAll("dialog").forEach((dialog) => {
     if (event.target === dialog) dialog.close();
   });
 });
+$("app-shell").append($("mobile-overlay-root"));
+$("mobile-overlay-scrim").addEventListener("click", () => closeMobileOverlay());
+$("mobile-sheet-close").addEventListener("click", () => closeMobileOverlay());
+$("mobile-confirm-cancel").addEventListener("click", () => closeMobileOverlay());
+$("mobile-overlay-root").addEventListener("keydown", trapMobileOverlayFocus);
+$("mobile-overlay-root").addEventListener("focusin", (event) => {
+  if (!mobileOverlayState.stack.length) return;
+  const panel = $("mobile-confirm").hidden ? $("mobile-sheet") : $("mobile-confirm");
+  if (event.target === panel || !panel.contains(event.target)) {
+    const focusables = mobileOverlayFocusable(panel);
+    (mobileOverlayState.lastTabBackward ? focusables.at(-1) : focusables[0] || panel).focus();
+  }
+});
 document.querySelectorAll(".primary-nav button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
 document.querySelectorAll("[data-operation-action]").forEach((button) => {
   button.addEventListener("click", () => setOperationsAction(button.dataset.operationAction));
@@ -1921,6 +2215,7 @@ $("operations-account").addEventListener("change", () => {
   void loadOperationsPeriods();
   void loadOperationsUndoCandidate();
 });
+$("operations-account-overlay-trigger").addEventListener("click", openOperationsAccountChoose);
 $("operations-spend-form").addEventListener("submit", (event) => saveOperationsSingle(event, "spend"));
 $("operations-add-form").addEventListener("submit", (event) => saveOperationsSingle(event, "add-funds"));
 $("operations-transfer-form").addEventListener("submit", saveOperationsTransfer);
