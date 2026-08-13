@@ -72,7 +72,7 @@ rows remain blocked until their accepted dependencies land.
 | [T-025B](tasks/T-025B-mobile-profile-access.md) | Profile, categories, rates, sharing, and logout | done | M | design §04–§06 | T-025A |
 | [T-026](tasks/T-026-mobile-transactions.md) | Transactions feed, filters, details, correction, and swipe | done | M | design §03.2, §05 | T-024B |
 | [T-027A](tasks/T-027A-mobile-operations.md) | Operations action surface and exact Save flows | done | M | design §03.3, §05 | T-024B |
-| [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | review | M | design §03.3, §04–§05 | T-027A |
+| [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | done | M | design §03.3, §04–§05 | T-027A |
 | [T-028](tasks/T-028-mobile-plan-analytics.md) | Plan rule/occurrence flows and Analytics placeholder | backlog | M | spec §8, design §03.4–§03.5 | T-019, T-024B |
 | [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | backlog | M | design §05, §08 | T-025B, T-026, T-027B, T-028 |
 | [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the 390×844 mobile acceptance matrix | backlog | M | design §01–§08 | T-029 |

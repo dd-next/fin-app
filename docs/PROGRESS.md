@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-027B mobile account periods in implementation review on `task/T-027B-mobile-periods` |
-| Next | Commit reviewed T-027B and perform local owner acceptance |
+| Active work | None — T-027B locally accepted |
+| Next | Promote and claim readiness-reviewed T-028 mobile Plan and Analytics |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -46,11 +46,12 @@ implemented from accepted integration `7821bab`; reviewed implementation
 commit `bf7c3a8` is now locally accepted on `finapp-v2-develop`. Its 77-test
 targeted gate, syntax/diff checks, isolated 390×844 browser matrix and preserved
 1280×900 checks pass, and all implementation-review P0–P3 findings are closed.
-T-027B now has a clean reviewed implementation manifest on its exact task branch
-from promoted integration `6313852`. Its 143-test targeted gate, syntax/diff
-checks, isolated 390×844 browser matrix and retained 1280×900 regression pass,
-and all implementation-review P0–P3 findings are closed. It is ready for its
-task commit and local owner acceptance. Phase 15 remains incomplete.
+T-027B was implemented from promoted integration `6313852`; reviewed
+implementation commit `283215f` is now locally accepted on
+`finapp-v2-develop`. Its 143-test targeted gate, syntax/diff checks, isolated
+390×844 browser matrix and retained 1280×900 regression pass, and all
+implementation-review P0–P3 findings are closed. T-028 is next and remains
+unclaimed. Phase 15 remains incomplete.
 
 Phase 15 authority and constraints:
 

@@ -1,7 +1,7 @@
 ---
 id: T-027B
 title: Implement mobile account-period cards and lifecycle
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.3; spec/04-sheets.md; spec/05-interactions.md
 blocked-by: [T-027A]
@@ -147,6 +147,23 @@ desktop period regression.
 - 1280×900 browser retained Add/Edit/Close/History and exact negative values;
   the mobile active-card trigger remained hidden and no overflow appeared.
 
+### Local owner acceptance
+
+- Accepted implementation commit:
+  `283215fc4d88fdfb0d02c8234cb289241bc979e1`.
+- Repository-owner authorisation fast-forwarded the exact task branch to local
+  `finapp-v2-develop`; no push or deploy was performed.
+- Acceptance scope is T-027B only. T-028 remains unclaimed and Phase 15 is not
+  yet complete.
+
+#### Acceptance lifecycle review
+
+- Reviewer: `/root/t027b_acceptance_review`, Codex GPT-5.6, fresh same-vendor
+  fallback because cross-vendor review was unavailable.
+- Response, transcribed verbatim:
+
+> T-027B local owner-acceptance review complete (read-only). P0: None. P1: None. P2: None. P3: None. Verified exact direct ancestry `1b2e89a` (T-027A acceptance) → `6313852` promotion → `f6a3b54` claim → `283215f` implementation; current `finapp-v2-develop` and exact task branch both point at `283215f`. Promotion recorded todo/unclaimed; claim recorded in-progress with exact base `6313852045c08b14d5c73c0b19a94b7991382d0d` and implementer `/root, Codex GPT-5`; implementation recorded review. Current acceptance manifest modifies only `docs/BACKLOG.md`, `docs/PROGRESS.md`, and `docs/tasks/T-027B-mobile-periods.md`; task/backlog are done; acceptance/session evidence is append-only; PROGRESS accurately says T-027B locally accepted, T-028 next/unclaimed, and Phase 15 incomplete. T-028 task remains backlog with empty base/implementer and no matching local task branch. No remote branch contains `283215f`, consistent with no push/deploy. `git diff --check` passes (LF→CRLF notices only). Verdict: APPROVED; suitable for the local `T-027B: accept mobile periods` acceptance commit. Reviewer made no edits and did not alter Git state.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-027; not claimed.
@@ -165,3 +182,7 @@ desktop period regression.
   findings after limited re-review; targeted, syntax/diff, isolated 390×844
   browser and retained 1280×900 checks pass. Task is ready for its
   implementation commit and local owner acceptance; nothing remains open.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  fast-forwarded reviewed implementation `283215f` onto local
+  `finapp-v2-develop`, accepted T-027B as `done`, and left T-028 unclaimed for
+  its separate promotion/claim lifecycle. No push or deploy was performed.
