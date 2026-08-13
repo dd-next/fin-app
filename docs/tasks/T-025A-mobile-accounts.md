@@ -1,7 +1,7 @@
 ---
 id: T-025A
 title: Implement mobile Accounts and account lifecycle
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.1; spec/04-sheets.md account catalogue
 blocked-by: [T-024B]
