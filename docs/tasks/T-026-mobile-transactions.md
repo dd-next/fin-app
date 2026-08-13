@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: Implement the mobile Transactions feed and management flows
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.2; spec/04-sheets.md; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-024B]
@@ -79,3 +79,6 @@ Append the bounded independent implementation review following the protocol.
 - 2026-08-12 Codex GPT-5: task specified for batch readiness; not claimed.
 - 2026-08-12 Codex GPT-5: independent batch readiness verdict `ready`; remains
   blocked by T-024B.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  accepted readiness evidence and promoted T-026 from `backlog` to `todo` on
+  accepted integration; no task branch was claimed in this checkpoint.
