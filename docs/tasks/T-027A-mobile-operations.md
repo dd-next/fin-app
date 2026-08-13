@@ -1,7 +1,7 @@
 ---
 id: T-027A
 title: Implement the mobile Operations action surface
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.3; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-024B]
@@ -189,6 +189,44 @@ viewer/contributor/editor/owner role states at 390×844; preserve desktop at
 - 1280×900 browser retained direct exchange, To amount, optional fee, full
   persistent Undo, richer forms, and no horizontal overflow.
 
+### Local owner acceptance
+
+- Accepted implementation commit:
+  `bf7c3a814ab6691b66b4fa3bbb0c5254792df76d`.
+- Repository-owner authorisation fast-forwarded the exact task branch to local
+  `finapp-v2-develop`; no push or deploy was performed.
+- Acceptance scope is T-027A only. T-027B remains unclaimed and its period
+  lifecycle forms are not part of this checkpoint.
+
+#### Acceptance lifecycle review
+
+- Reviewer: `/root/t027a_acceptance_review`, Codex GPT-5.6, fresh same-vendor
+  fallback because cross-vendor review was unavailable.
+- Response, transcribed verbatim:
+
+> Read-only local owner-acceptance review for T-027A, fresh same-vendor Codex fallback because cross-vendor review was unavailable.
+>
+> No P0–P3 findings.
+>
+> Reviewed:
+>
+> - Exact linear ancestry: accepted T-026 `e2e7d74` → promotion `7821bab` → claim `6d92f68` → implementation `bf7c3a8`.
+> - `finapp-v2-develop` and `task/T-027A-mobile-operations` both point to `bf7c3a8`, confirming the local fast-forward.
+> - Current manifest contains only the intended acceptance edits to:
+>   - `docs/tasks/T-027A-mobile-operations.md`
+>   - `docs/BACKLOG.md`
+>   - `docs/PROGRESS.md`
+> - Task and backlog consistently mark T-027A `done`.
+> - T-027B remains `backlog`, unclaimed, and has no task branch.
+> - Phase 15 remains explicitly incomplete.
+> - The session log is append-only and records promotion, claim, implementation, and local acceptance.
+> - Implementation review findings are transcribed verbatim with resolutions, limited re-reviews, exact test evidence, browser evidence, syntax and diff checks.
+> - PROGRESS accurately identifies implementation `bf7c3a8`, the 77-test gate, local acceptance, and T-027B as next.
+> - Local branch is ahead of origin; no push is represented. No deploy is claimed.
+> - `git diff --check` passed; only informational LF→CRLF notices appeared.
+>
+> Verdict: suitable for the local T-027A acceptance commit.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-027; not claimed.
@@ -208,3 +246,7 @@ viewer/contributor/editor/owner role states at 390×844; preserve desktop at
   geometry finding after two limited re-reviews; targeted, syntax/diff,
   isolated 390×844 browser and retained 1280×900 checks pass. Task is ready for
   its implementation commit and local owner acceptance; nothing remains open.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  fast-forwarded reviewed implementation `bf7c3a8` onto local
+  `finapp-v2-develop`, accepted T-027A as `done`, and left T-027B unclaimed for
+  its separate promotion/claim lifecycle. No push or deploy was performed.
