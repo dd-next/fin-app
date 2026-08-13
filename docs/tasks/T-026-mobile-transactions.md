@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: Implement the mobile Transactions feed and management flows
-status: review
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/03-screens.md §3.2; spec/04-sheets.md; spec/05-interactions.md; spec/06-content.md
 blocked-by: [T-024B]
@@ -154,6 +154,53 @@ details/correction/delete/empty state at 390×844 and retained filters at
 - 1280×900 browser: the seven richer filters, persisted rows, Details/actions,
   and no page overflow passed.
 
+### Local acceptance lifecycle review — 2026-08-13
+
+- Reviewer: `/root/t025b_acceptance_review`, Codex GPT-5 fresh independent
+  same-vendor fallback because the other vendor was unavailable.
+- Reviewed range: implementation commit
+  `de7cf41e051d3decefd2129517fb1ed0162b2581` fast-forwarded onto local
+  `finapp-v2-develop`, plus the uncommitted acceptance-only task/backlog/progress
+  manifest.
+- Initial finding, transcribed verbatim:
+
+> Findings:
+>
+> - P2 — [docs/PROGRESS.md](C:\Users\Ксюша\Documents\Codex\fin-app\docs\PROGRESS.md:40): The handoff still says “T-026 is now the sole claimed task,” contradicting the release table’s `Active work | None`, T-026’s `done` status, and the following statement that implementation commit `de7cf41` is locally accepted. Change this to historical/accepted wording so repository shared memory unambiguously records that no task is active.
+>
+> No P0, P1, or P3 findings.
+>
+> Other lifecycle evidence is correct:
+>
+> - `de7cf41e051d3decefd2129517fb1ed0162b2581` is the single-parent descendant of claim `51fe3fcf8d660b3fd0fd101493b0ced7c3210413`, which is the single-parent descendant of base/promotion `f3f747bfcc9e1e731f7200770c2b963da1753a19`.
+> - Reflog confirms `finapp-v2-develop` advanced to `de7cf41` through a fast-forward merge of `task/T-026-mobile-transactions`.
+> - The task branch and integration branch both point to the implementation commit.
+> - T-026 is consistently `done` in its task file and backlog row.
+> - T-027A remains `backlog`, has blank `base-commit` and `implementer`, and has no task branch.
+> - Phase 15 remains explicitly incomplete.
+> - The implementation-review, 33-test, syntax/diff, scratch-browser, mobile, and desktop evidence is preserved unchanged from the implementation commit.
+> - Origin remains at `71e3396`; no push, deploy, archive, or phase commit is represented.
+> - The dirty manifest contains only the expected task, backlog, and progress documents.
+> - `git diff --check` passes with only informational LF→CRLF notices.
+>
+> Verdict: **changes required — one P2 lifecycle-state contradiction remains; the acceptance is not yet suitable to commit.**
+>
+> Cross-vendor review was unavailable; this was a fresh independent same-vendor Codex fallback.
+
+- Resolution: changed the handoff to historical accepted wording; the release
+  table, task/backlog status, and narrative now all record no active task.
+- Limited re-review, transcribed verbatim:
+
+> No P0–P3 findings.
+>
+> The prior P2 is closed: `docs/PROGRESS.md` now describes T-026 historically as implemented from `f3f747b` and locally accepted at `de7cf41`, consistent with `Active work | None`, T-026 `done`, and T-027A next.
+>
+> The dirty manifest remains exactly the three expected acceptance documents, and `git diff --check` passes with only informational LF→CRLF notices.
+>
+> Verdict: **PASS — the lifecycle contradiction is resolved and the T-026 local acceptance is suitable to commit.**
+>
+> Cross-vendor review was unavailable; this was a fresh independent same-vendor Codex fallback.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task specified for batch readiness; not claimed.
@@ -171,3 +218,8 @@ details/correction/delete/empty state at 390×844 and retained filters at
   review findings after two limited re-reviews; targeted, syntax/diff, isolated
   390×844 browser and retained 1280×900 checks pass. Task is ready for its
   implementation commit and local owner acceptance; nothing remains open.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  accepted reviewed implementation commit
+  `de7cf41e051d3decefd2129517fb1ed0162b2581` by fast-forwarding local
+  `finapp-v2-develop`, marked T-026 `done`, and left Phase 15 incomplete with
+  T-027A next. No push or deploy was performed.

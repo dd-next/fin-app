@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-026 mobile Transactions in review on `task/T-026-mobile-transactions` |
-| Next | Commit and locally accept the reviewed T-026 implementation |
+| Active work | None |
+| Next | Promote and claim readiness-reviewed T-027A mobile Operations |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -37,11 +37,12 @@ also locally accepted after targeted tests, independent bounded review,
 P0–P2 findings closed. T-025B Profile/categories/rates/sharing/logout is also
 locally accepted after targeted 67-test, syntax/diff, isolated 390×844 browser
 and preserved 1280×900 checks passed, with all reviewer P2 sharing-race
-findings closed. T-026 is now the sole claimed task from accepted integration
-`f3f747b`; its 33-test targeted gate, JavaScript/diff checks, isolated 390×844
-browser smoke and retained 1280×900 check pass. Independent bounded review
-closed all P0–P3 findings after limited re-review, so T-026 is ready for its
-task implementation commit and local acceptance. Phase 15 remains incomplete.
+findings closed. T-026 was implemented from accepted integration `f3f747b`;
+its reviewed implementation commit `de7cf41` is now locally accepted on
+`finapp-v2-develop`. Its 33-test targeted gate, JavaScript/diff checks,
+isolated 390×844 browser smoke and retained 1280×900 check passed, with all
+independent-review P0–P3 findings closed after limited re-review. T-027A is
+next; Phase 15 remains incomplete.
 
 Phase 15 authority and constraints:
 
