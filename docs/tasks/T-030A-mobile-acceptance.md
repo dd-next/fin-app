@@ -1,16 +1,16 @@
 ---
 id: T-030A
 title: Pass the core iPhone 15 mobile acceptance matrix
-status: backlog
+status: todo
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md through spec/06-content.md; spec/08-acceptance.md scoped to Accounts, Transactions, and Operations
 blocked-by: [T-029]
 branch: task/T-030A-mobile-acceptance
 base-commit:
 implementer:
-readiness-reviewed-by:
-readiness-reviewed-commit:
-readiness-verdict: pending re-review after owner scope reduction
+readiness-reviewed-by: /root/t030a_core_readiness, Codex GPT-5 same-vendor fallback
+readiness-reviewed-commit: 36fa32a3676cf66ecb8e5c5588cd6bcbfae62756
+readiness-verdict: ready
 ---
 
 ## Goal
@@ -133,6 +133,13 @@ Append the bounded independent implementation review following the protocol.
   limit, discarding planned projections only after each source page while
   retaining every persisted row in stable feed order. Plan-heavy interleaving
   and corrected financial dates across multiple pages are required coverage.
+- Final limited re-review, transcribed verbatim:
+
+> No P0–P3 findings.
+>
+> The remaining lossless-All P1 is closed. T-030A now requires `All` to drain successive pages from the accepted financial-date `/api/v1/transaction-feed?filter=all`, retain its opaque source cursor, discard planned projections only after each source page, and continue until 50 persisted rows are collected or the source is exhausted. Shrinking each source request to the remaining visible capacity prevents an untracked persisted overflow buffer. The required plan-heavy and corrected-financial-date multi-page coverage makes the formerly missing ordering/pagination invariant testable without backend changes.
+>
+> Verdict: **READY**. Exact reviewed task-file commit: `36fa32a3676cf66ecb8e5c5588cd6bcbfae62756`.
 
 ## Session log
 

@@ -22,7 +22,7 @@ the one task file you are working on. Nothing else by default.
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
 | Active work | None claimed — T-029 accepted; `finapp-v2-develop` pushed to `origin` |
-| Next | Readiness-review and claim the owner-scoped T-030A core iPhone 15 matrix |
+| Next | Claim readiness-approved T-030A core iPhone 15 matrix |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -60,8 +60,8 @@ The preview is usable under ADR-0011. The repository owner has narrowed T-030A
 to an iPhone 15 fast-track for Accounts, Transactions, and Operations after
 reporting Safari regressions; Plan, Analytics, and desktop verification are
 explicitly deferred and their code is out of scope. Phase 15 remains incomplete
-and unaccepted, and the narrowed T-030A has not been claimed pending readiness
-re-review.
+and unaccepted. The narrowed T-030A readiness review and two limited re-reviews
+closed all P0–P3 findings; it is promoted to `todo` and not yet claimed.
 
 `finapp-v2-develop` has been pushed to `origin` on owner instruction, so the
 remote integration branch now matches local accepted state. `finapp-v2` was not
