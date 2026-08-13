@@ -1,13 +1,13 @@
 ---
 id: T-028
 title: Implement mobile Plan flows and Analytics placeholder
-status: todo
+status: in-progress
 size: M
 spec: specs/FinnApp-v2.md §8; design/Finnapp mobile specification/spec/03-screens.md §3.4–§3.5; spec/04-sheets.md
 blocked-by: [T-019, T-024B]
 branch: task/T-028-mobile-plan-analytics
-base-commit:
-implementer:
+base-commit: 39e3cf673887d2571ae658d5bb5f6fdef005f9d6
+implementer: /root, Codex GPT-5
 readiness-reviewed-by: /root/phase15_readiness_review, Codex GPT-5 same-vendor fallback
 readiness-reviewed-commit: deb8a5a
 readiness-verdict: ready
@@ -79,3 +79,7 @@ Append the bounded independent implementation review following the protocol.
   confirmed T-019 and T-024B accepted, accepted T-028 readiness evidence, and
   promoted T-028 from `backlog` to `todo` on accepted integration `0630535`;
   no task branch was claimed in this checkpoint.
+- 2026-08-13 repository owner authorisation executed by `/root`, Codex GPT-5:
+  atomically claimed `task/T-028-mobile-plan-analytics` from promoted
+  integration `39e3cf6`, recorded `/root` as implementer, and started only
+  T-028.
