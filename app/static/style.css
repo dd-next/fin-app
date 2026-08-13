@@ -92,6 +92,13 @@ input, select {
 input:hover, select:hover { border-color: #505866; }
 input:focus, select:focus { border-color: var(--accent); background: #141820; }
 input[type="checkbox"] { width: 20px; min-height: 20px; accent-color: var(--accent); }
+.picker-control {
+  display: flex; width: 100%; min-height: 48px; padding: 0 13px; align-items: center; justify-content: space-between;
+  border: 1px solid var(--border-strong); border-radius: 12px; background: #101319; color: var(--text);
+  font-weight: 500; text-align: left;
+}
+.picker-control::after { content: "⌄"; margin-left: 12px; color: var(--muted); }
+.picker-control:hover { border-color: #505866; }
 
 button {
   min-height: 44px; border: 1px solid transparent; border-radius: 12px; padding: 0 17px;
@@ -595,7 +602,7 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-period-card-trigger.hidden { display: none; }
   #operations-account-card label { gap: 0; }
   #operations-account-card-title { display: none; }
-  #operations-account-card select.mobile-field { display: none; }
+  #operations-account-card #operations-account { display: none; }
   #operations-account-overlay-trigger { position: absolute; top: 0; right: 48px; left: 0; display: flex; width: auto; height: 44px; min-height: 44px; padding: 0 8px 0 14px; justify-content: space-between; border: 0; background: transparent; color: var(--mobile-text); font-size: 15px; font-weight: 600; }
   #operations-account-card .operations-account-balance { display: block; }
   #operations-account-card #operations-undo { position: absolute; top: 4px; right: 4px; width: 44px; overflow: hidden; padding: 0; }
@@ -613,8 +620,9 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .mobile-ops-amount-control { position: relative; display: block; height: 60px; }
   .mobile-ops-amount-control .mobile-amount-field { width: 100%; height: 60px; min-height: 60px; max-height: 60px; padding-right: 64px; }
   .mobile-ops-amount-control .mobile-amount-suffix { position: absolute; top: 0; right: 14px; display: flex; height: 60px; align-items: center; }
-  .mobile-ops-choice-label select,
-  .mobile-ops-destination-label select,
+  #operations-spend-category,
+  #operations-add-category,
+  #operations-transfer-to,
   #view-operations .operations-form input[type="date"] { display: none; }
   .mobile-ops-choice { display: flex; width: 100%; padding: 0 12px; align-items: center; justify-content: space-between; color: var(--mobile-text); font-size: 13px; font-weight: 500; }
   .mobile-ops-choice::after { content: "›"; color: var(--mobile-chevron); font-size: 20px; }
@@ -748,6 +756,7 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   .account-card .account-trailing small { display: block; max-width: 150px; margin: 0; overflow: hidden; color: var(--mobile-muted); font-size: 11px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
   .account-card .account-trailing small .mobile-money { gap: 2px; }
   .mobile-overlay-root { position: fixed; z-index: 100; inset: 0; overflow: hidden; }
+  body.overlay-active .primary-nav { z-index: 101; }
   .mobile-sheet[hidden], .mobile-confirm[hidden] { display: none; }
   .mobile-overlay-scrim { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: rgba(0,0,0,.62); }
   .mobile-sheet { position: absolute; right: 0; bottom: 0; left: 0; display: flex; max-height: 88%; overflow: hidden; flex-direction: column; border: 1px solid rgba(255,255,255,.1); border-bottom: 0; border-radius: 20px 20px 0 0; background: var(--mobile-surface); transform: translateY(0); transition: transform 180ms ease-out; }
@@ -835,4 +844,55 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+
+.mobile-overlay-root {
+  width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0;
+  overflow: hidden; border: 0; background: transparent; color: var(--mobile-text);
+}
+.mobile-overlay-root::backdrop { background: transparent; }
+
+@media (min-width: 641px) {
+  .mobile-overlay-root { position: fixed; z-index: 100; inset: 0; }
+  .mobile-sheet[hidden], .mobile-confirm[hidden] { display: none; }
+  .mobile-overlay-scrim { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: rgba(3,5,8,.76); }
+  .mobile-sheet { position: absolute; top: 50%; left: 50%; display: flex; width: min(560px, calc(100% - 40px)); max-height: calc(100% - 40px); overflow: hidden; flex-direction: column; border: 1px solid var(--border); border-radius: 23px; background: rgba(24,27,33,.99); transform: translate(-50%, -50%); transition: transform 180ms ease-out; box-shadow: 0 22px 80px rgba(0,0,0,.5); }
+  .mobile-sheet-grabber { display: none; }
+  .mobile-sheet-header { display: flex; min-height: 64px; padding: 12px 18px 6px 24px; align-items: center; justify-content: space-between; }
+  .mobile-sheet-kicker { margin: 0 0 3px; color: var(--accent); font-size: .69rem; font-weight: 850; letter-spacing: .14em; text-transform: uppercase; }
+  .mobile-sheet-title { margin: 0; font-size: 1.55rem; }
+  .mobile-sheet-close { display: grid; width: 44px; height: 44px; padding: 0; place-items: center; background: transparent; color: var(--muted); }
+  .mobile-sheet-body { display: grid; min-height: 0; gap: 12px; padding: 14px 24px 4px; overflow-y: auto; overscroll-behavior: contain; }
+  .mobile-sheet-footer { display: flex; gap: 10px; padding: 20px 24px 24px; }
+  .mobile-sheet-footer:empty, .mobile-sheet-safe-band { display: none; }
+  .mobile-sheet-footer .mobile-button-sheet-primary { flex: 1; }
+  .mobile-option-list, .mobile-account-form, .mobile-category-manager, .mobile-sharing-body, .mobile-profile-body, .mobile-period-form, .mobile-period-detail, .mobile-plan-item-detail { display: grid; gap: 10px; }
+  .mobile-option { display: grid; grid-template-columns: minmax(0,1fr) auto; min-height: 48px; padding: 0; align-items: center; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; color: var(--text); text-align: left; }
+  .mobile-option[aria-disabled="true"] { color: var(--muted); }
+  .mobile-option-current { color: var(--accent); }
+  .mobile-sheet-field { display: grid; gap: 7px; }
+  .mobile-sheet-field-label, .mobile-sheet-hint { color: var(--muted); font-size: .8rem; }
+  .mobile-sheet-field .mobile-field, .mobile-sheet-field .mobile-field-sheet { width: 100%; }
+  .mobile-field-sheet { display: flex; min-height: 48px; align-items: center; justify-content: space-between; border: 1px solid var(--border-strong); background: #101319; color: var(--text); }
+  .mobile-sheet-section-title { margin: 8px 0 0; color: var(--muted); font-size: .72rem; letter-spacing: .12em; }
+  .mobile-button-secondary { border-color: var(--border); background: #262b34; color: var(--text); }
+  .mobile-button-destructive-inline, .mobile-button-destructive-confirm { border-color: rgba(255,125,130,.25); background: rgba(255,125,130,.12); color: var(--red); }
+  .mobile-confirm { position: absolute; top: 50%; left: 50%; display: grid; width: min(440px, calc(100% - 40px)); gap: 15px; padding: 24px; border: 1px solid var(--border); border-radius: 20px; background: #1b2028; transform: translate(-50%, -50%); box-shadow: 0 22px 80px rgba(0,0,0,.5); }
+  .mobile-confirm h2, .mobile-confirm p { margin: 0; }
+  .mobile-confirm p { color: var(--muted); line-height: 1.5; }
+  .mobile-confirm-error { color: var(--red) !important; }
+  .mobile-confirm-actions { display: flex; gap: 10px; }
+  .mobile-confirm-actions > button { flex: 1; }
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-sheet, .mobile-confirm { transition: none; }
+  }
+}
+
+@media (max-width: 640px) {
+  .mobile-overlay-root {
+    top: 0; right: 0; bottom: calc(var(--mobile-tabbar-height) + var(--mobile-safe-bottom)); left: 0;
+    width: 100%; height: auto; max-height: none;
+  }
+  body.overlay-active .mobile-sheet-safe-band { height: var(--mobile-safe-bottom); min-height: var(--mobile-safe-bottom); }
+  body.overlay-active .mobile-confirm { bottom: var(--mobile-safe-bottom); }
 }

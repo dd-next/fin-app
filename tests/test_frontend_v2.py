@@ -210,7 +210,7 @@ def test_plan_renders_one_card_per_rule_with_nearest_occurrences_only():
     assert 'id="plan-rule-detail-dialog"' in html
     assert 'id="plan-detail-filter"' in html
     for option in ("all", "open", "completed", "skipped"):
-        assert f'<option value="{option}"' in html
+        assert f'{{ value: "{option}",' in javascript
     # Compact Open/Completed summary stays.
     assert 'id="plan-open-count"' in html
     assert 'id="plan-completed-count"' in html

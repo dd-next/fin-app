@@ -1,4 +1,5 @@
 const $ = (id) => document.getElementById(id);
+const SHARED_ACTION_CANCELLED = Symbol("shared-action-cancelled");
 
 const state = {
   registerMode: false,
@@ -185,24 +186,140 @@ function roleLabel(role) {
   return `${role[0].toUpperCase()}${role.slice(1)}`;
 }
 
-function selectOptions(select, items, { placeholder = null, selected = null } = {}) {
-  const previous = selected === null ? select.value : String(selected ?? "");
-  const nodes = [];
-  if (placeholder !== null) {
-    const option = document.createElement("option");
-    option.value = "";
-    option.textContent = placeholder;
-    nodes.push(option);
+function pickerLabel(control) {
+  return control._pickerOptions?.find((option) => option.value === String(control.value))?.label || "Choose";
+}
+
+function bindPickerValue(control) {
+  if (control._pickerValueBound) return;
+  control._pickerValueBound = true;
+  control.type = "button";
+  control.classList.add("picker-control");
+  control.setAttribute("aria-haspopup", "dialog");
+  control.setAttribute("aria-controls", "mobile-sheet");
+  if (!control.dataset.pickerTitle) {
+    const label = control.closest("label");
+    const labelText = label?.querySelector(":scope > span")?.textContent
+      || [...(label?.childNodes || [])].find((node) => node.nodeType === Node.TEXT_NODE)?.textContent;
+    control.dataset.pickerTitle = String(labelText || control.getAttribute("aria-label") || "Choose").trim();
   }
-  for (const item of items) {
-    const option = document.createElement("option");
-    option.value = String(item.value);
-    option.textContent = item.label;
-    option.disabled = Boolean(item.disabled);
-    nodes.push(option);
+  control._pickerValue = String(control.getAttribute("value") || "");
+  Object.defineProperty(control, "value", {
+    configurable: true,
+    get: () => control._pickerValue,
+    set: (value) => {
+      control._pickerValue = String(value ?? "");
+      const option = control._pickerOptions?.find((item) => item.value === control._pickerValue);
+      if (option) control.textContent = option.label;
+    },
+  });
+  control.addEventListener("click", () => openPickerControl(control));
+}
+
+function setPickerValue(control, value) {
+  const normalized = String(value ?? "");
+  const option = control._pickerOptions?.find((item) => item.value === normalized && !item.disabled)
+    || control._pickerOptions?.find((item) => !item.disabled)
+    || null;
+  control.value = option?.value || "";
+  control.textContent = option?.label || control.dataset.emptyLabel || "Choose";
+  control.disabled = !option;
+}
+
+function selectOptions(control, items, { placeholder = null, selected = null } = {}) {
+  bindPickerValue(control);
+  const previous = selected === null ? control.value : String(selected ?? "");
+  control._pickerOptions = [
+    ...(placeholder === null ? [] : [{ value: "", label: placeholder, disabled: false }]),
+    ...items.map((item) => ({
+      value: String(item.value),
+      label: String(item.label),
+      disabled: Boolean(item.disabled),
+    })),
+  ];
+  control.dataset.emptyLabel = placeholder || "Choose";
+  setPickerValue(control, previous);
+}
+
+function initializeStaticPickers() {
+  const configurations = {
+    "filter-type": ["Type", [
+      { value: "", label: "All types" }, { value: "expense", label: "Expense" },
+      { value: "income", label: "Income" }, { value: "transfer", label: "Transfer" },
+      { value: "exchange", label: "Exchange" }, { value: "adjustment", label: "Adjustment" },
+    ]],
+    "filter-status": ["Status", [
+      { value: "", label: "All statuses" }, { value: "posted", label: "Posted" },
+      { value: "unassigned", label: "Unassigned" }, { value: "deleted", label: "Deleted" },
+    ]],
+    "account-storage": ["Storage", [
+      { value: "bank", label: "Bank account" }, { value: "card", label: "Card" },
+      { value: "cash", label: "Cash" }, { value: "e_wallet", label: "E-wallet" },
+      { value: "crypto_wallet", label: "Crypto wallet" }, { value: "exchange", label: "Exchange" },
+      { value: "virtual", label: "Virtual" },
+    ]],
+    "account-purpose": ["Purpose", [
+      { value: "spending", label: "Spending" }, { value: "reserve", label: "Reserve" },
+      { value: "savings", label: "Savings" }, { value: "investment", label: "Investment" },
+    ]],
+    "invitation-role": ["Role", [
+      { value: "editor", label: "Editor" }, { value: "contributor", label: "Contributor" },
+      { value: "viewer", label: "Viewer" },
+    ]],
+    "transaction-type": ["Type", [
+      { value: "expense", label: "Expense" }, { value: "income", label: "Income" },
+      { value: "transfer", label: "Transfer" }, { value: "exchange", label: "Exchange" },
+      { value: "adjustment", label: "Adjustment" },
+    ]],
+    "category-kind": ["Kind", [
+      { value: "expense", label: "Expense" }, { value: "income", label: "Income" },
+      { value: "both", label: "Both" },
+    ]],
+    "rate-source": ["Source", [
+      { value: "manual", label: "Manual value" }, { value: "auto", label: "Auto · Coming soon", disabled: true },
+    ]],
+    "plan-rule-kind": ["Kind", [
+      { value: "income", label: "Expected income" }, { value: "required_expense", label: "Required expense" },
+      { value: "subscription", label: "Subscription" }, { value: "reserve_transfer", label: "Reserve transfer" },
+      { value: "other_expense", label: "Other expense" },
+    ]],
+    "plan-rule-recurrence": ["Repeats", [
+      { value: "once", label: "Once" }, { value: "weekly", label: "Weekly" },
+      { value: "monthly", label: "Monthly" }, { value: "yearly", label: "Yearly" },
+    ]],
+    "plan-detail-filter": ["Show", [
+      { value: "all", label: "All occurrences" }, { value: "open", label: "Open" },
+      { value: "completed", label: "Completed" }, { value: "skipped", label: "Skipped" },
+    ]],
+  };
+  for (const [id, [title, options]] of Object.entries(configurations)) {
+    const control = $(id);
+    control.dataset.pickerTitle = title;
+    selectOptions(control, options, { selected: options[0].value });
   }
-  select.replaceChildren(...nodes);
-  if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+}
+
+function openPickerControl(control) {
+  if (control.disabled || !control._pickerOptions?.length) return;
+  const parentDialogs = [...document.querySelectorAll("dialog[open]")];
+  [...parentDialogs].reverse().forEach((dialog) => dialog.close());
+  openMobileChoose({
+    title: control.dataset.pickerTitle || control.getAttribute("aria-label") || "Choose",
+    returnFocusSelector: `#${control.id}`,
+    options: control._pickerOptions.map((option) => ({
+      ...option,
+      current: option.value === String(control.value),
+    })),
+    onSelect: (value) => {
+      setPickerValue(control, value);
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    },
+    onClose: () => {
+      parentDialogs.forEach((dialog) => {
+        if (dialog.isConnected && !dialog.open) dialog.showModal();
+      });
+    },
+  }, control);
 }
 
 function showAuth() {
@@ -336,7 +453,7 @@ const mobileOverlayState = {
 };
 
 function mobileOverlayFocusable(panel) {
-  return [...panel.querySelectorAll('button:not([disabled]):not([hidden]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  return [...panel.querySelectorAll('button:not([disabled]):not([hidden]), [href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
 }
 
 function setMobileOverlayBackground(active) {
@@ -344,6 +461,11 @@ function setMobileOverlayBackground(active) {
     element.inert = active;
     if (active) element.setAttribute("aria-hidden", "true");
     else element.removeAttribute("aria-hidden");
+  });
+  document.querySelectorAll("body > dialog[open]").forEach((dialog) => {
+    dialog.inert = active;
+    if (active) dialog.setAttribute("aria-hidden", "true");
+    else dialog.removeAttribute("aria-hidden");
   });
 }
 
@@ -354,7 +476,13 @@ function renderMobileOverlay() {
   const sheet = $("mobile-sheet");
   const confirmation = $("mobile-confirm");
   document.body.classList.toggle("overlay-active", active);
-  root.hidden = !active;
+  if (active) {
+    root.hidden = false;
+    if (!root.matches(":popover-open")) root.showPopover();
+  } else {
+    if (root.matches(":popover-open")) root.hidePopover();
+    root.hidden = true;
+  }
   sheet.hidden = !active || entry.kind !== "sheet";
   confirmation.hidden = !active || entry.kind !== "confirmation";
   if (!active) {
@@ -418,7 +546,6 @@ function renderMobileOverlay() {
 }
 
 function openMobileSheet(config, opener = document.activeElement) {
-  if (!window.matchMedia("(max-width: 640px)").matches) return;
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
   const parentContext = mobileOverlayState.stack.at(-1)?.context || null;
   mobileOverlayState.stack.push({
@@ -431,6 +558,7 @@ function openMobileSheet(config, opener = document.activeElement) {
     primaryLabel: config.primaryLabel || "",
     primaryDisabled: config.primaryDisabled || false,
     onPrimary: config.onPrimary,
+    onClose: config.onClose,
     context: config.context || parentContext,
     returnFocusSelector: config.returnFocusSelector || "",
     opener,
@@ -443,9 +571,14 @@ function openMobileSheet(config, opener = document.activeElement) {
 function closeMobileOverlay({ restoreFocus = true } = {}) {
   if (mobileOverlayState.stack.at(-1)?.actionTaken) return;
   const closed = mobileOverlayState.stack.pop();
+  if (closed?.kind === "confirmation" && !closed.resolved) {
+    closed.resolved = true;
+    closed.onCancel?.();
+  }
   const hasParent = Boolean(mobileOverlayState.stack.length);
   const rootFocusTarget = mobileOverlayState.rootOpener;
   renderMobileOverlay();
+  closed?.onClose?.();
   if (!mobileOverlayState.stack.length) {
     mobileOverlayState.rootOpener = null;
     setMobileOverlayBackground(false);
@@ -462,17 +595,24 @@ function closeMobileOverlay({ restoreFocus = true } = {}) {
 
 function closeAllMobileOverlays({ restoreFocus = false } = {}) {
   const focusTarget = mobileOverlayState.rootOpener;
+  for (const entry of mobileOverlayState.stack) {
+    if (entry.kind === "confirmation" && !entry.resolved) {
+      entry.resolved = true;
+      entry.onCancel?.();
+    }
+  }
   mobileOverlayState.stack.length = 0;
   mobileOverlayState.rootOpener = null;
   renderMobileOverlay();
   if (restoreFocus && focusTarget?.isConnected) requestAnimationFrame(() => focusTarget.focus());
 }
 
-function openMobileChoose({ title, options, onSelect, returnFocusSelector = "" }, opener = document.activeElement) {
+function openMobileChoose({ title, options, onSelect, onClose, returnFocusSelector = "" }, opener = document.activeElement) {
   openMobileSheet({
     kicker: "CHOOSE",
     title,
     returnFocusSelector,
+    onClose,
     buildBody: () => {
       const list = document.createElement("div");
       list.className = "mobile-option-list";
@@ -496,10 +636,9 @@ function openMobileChoose({ title, options, onSelect, returnFocusSelector = "" }
   }, opener);
 }
 
-function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
-  if (!window.matchMedia("(max-width: 640px)").matches) return;
+function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: mobileOverlayState.stack.at(-1)?.context || null };
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: mobileOverlayState.stack.at(-1)?.context || null };
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
@@ -518,6 +657,7 @@ function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "
     action.disabled = true;
     try {
       await onAction?.();
+      entry.resolved = true;
       entry.actionTaken = false;
       if (mobileOverlayState.stack.at(-1) === entry) {
         closeMobileOverlay({ restoreFocus: variant !== "saved" });
@@ -534,6 +674,17 @@ function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "
     }
   };
   renderMobileOverlay();
+}
+
+function requestSharedConfirmation({ title, body, actionLabel = "Continue", variant = "destructive" }, opener = document.activeElement) {
+  return new Promise((resolve) => openMobileConfirmation({
+    title,
+    body,
+    actionLabel,
+    variant,
+    onAction: () => resolve(true),
+    onCancel: () => resolve(false),
+  }, opener));
 }
 
 function trapMobileOverlayFocus(event) {
@@ -681,7 +832,7 @@ function writeOperationsPreference(kind, value) {
 }
 
 function setOperationsAction(action, { persist = true, focus = false } = {}) {
-  if (isMobileViewport() && document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   state.operationsAction = OPERATION_ACTIONS.includes(action) ? action : "spend";
   document.querySelectorAll("[data-operation-action]").forEach((button) => {
     const active = button.dataset.operationAction === state.operationsAction;
@@ -778,8 +929,8 @@ function renderMobileOperationsControls() {
     $(`operations-${kind}-currency`).textContent = code;
   }
   for (const kind of ["spend", "add"]) {
-    const select = $(`operations-${kind}-category`);
-    $(`operations-${kind}-category-mobile`).textContent = select.selectedOptions[0]?.textContent || "Uncategorized";
+    const control = $(`operations-${kind}-category`);
+    $(`operations-${kind}-category-mobile`).textContent = pickerLabel(control) || "Uncategorized";
   }
   for (const kind of ["spend", "add", "transfer"]) {
     const date = $(`operations-${kind}-date`).value;
@@ -793,18 +944,16 @@ function renderMobileOperationsControls() {
 }
 
 function openMobileOperationsCategory(kind, opener) {
-  const select = $(`operations-${kind}-category`);
+  const control = $(`operations-${kind}-category`);
   openMobileChoose({
     title: "Category",
     returnFocusSelector: `#operations-${kind}-category-mobile`,
-    options: [...select.options].map((option) => ({
-      value: option.value,
-      label: option.textContent,
-      current: option.value === select.value,
-      disabled: option.disabled,
+    options: (control._pickerOptions || []).map((option) => ({
+      ...option,
+      current: option.value === control.value,
     })),
     onSelect: (value) => {
-      select.value = value;
+      setPickerValue(control, value);
       renderMobileOperationsControls();
     },
   }, opener);
@@ -932,18 +1081,13 @@ async function undoLatestOperation() {
   const account = selectedOperationsAccount();
   const transaction = state.operationsUndoCandidate;
   if (!account || !transaction) return;
-  if (isMobileViewport()) {
-    openMobileConfirmation({
-      title: "Undo this operation?",
-      body: "The latest operation is marked Deleted. Balances and periods are recalculated.",
-      actionLabel: "Undo",
-      variant: "destructive",
-      onAction: () => performOperationsUndo(account, transaction),
-    }, $("operations-undo"));
-    return;
-  }
-  if (!window.confirm(`Undo your latest ${transaction.type} operation? Balances and periods will be recalculated.`)) return;
-  try { await performOperationsUndo(account, transaction); } catch (_error) { /* surfaced by toast */ }
+  openMobileConfirmation({
+    title: "Undo this operation?",
+    body: "The latest operation is marked Deleted. Balances and periods are recalculated.",
+    actionLabel: "Undo",
+    variant: "destructive",
+    onAction: () => performOperationsUndo(account, transaction),
+  }, $("operations-undo"));
 }
 
 async function updateOperationsCategories(account) {
@@ -1476,21 +1620,23 @@ async function saveOperationsPeriod(event) {
 }
 
 async function closeOperationsPeriod(period) {
-  if (
-    !period
-    || state.periodCommandLoading
-    || !window.confirm("Close this period? Closed periods are read-only.")
-  ) return;
-  setPeriodCommandLoading(true);
-  try {
-    await api(`/api/v1/account-periods/${period.id}/close`, { method: "POST" });
-    toast("Period closed");
-    await loadOperationsPeriods();
-  } catch (error) {
-    toast(error.message);
-  } finally {
-    setPeriodCommandLoading(false);
-  }
+  if (!period || state.periodCommandLoading) return;
+  openMobileConfirmation({
+    title: "Close this period?",
+    body: "Closed periods are read-only. Transactions remain in history.",
+    actionLabel: "Close period",
+    variant: "destructive",
+    onAction: async () => {
+      setPeriodCommandLoading(true);
+      try {
+        await api(`/api/v1/account-periods/${period.id}/close`, { method: "POST" });
+        toast("Period closed");
+        await loadOperationsPeriods();
+      } finally {
+        setPeriodCommandLoading(false);
+      }
+    },
+  }, $("operations-close-period"));
 }
 
 function setPeriodCommandLoading(value) {
@@ -1597,7 +1743,7 @@ async function saveOperationsSingle(event, kind) {
       await finishMobileOperation(kind === "spend" ? "spend" : "add", account, body);
       return;
     }
-    await apiWithEndedPeriodConfirmation(route, "POST", body);
+    if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;
     $(`${prefix}-amount`).value = "";
     $(`${prefix}-note`).value = "";
     toast(kind === "spend" ? "Spending saved" : "Funds added");
@@ -1669,7 +1815,7 @@ async function saveOperationsTransfer(event) {
       await finishMobileOperation("transfer", source, body);
       return;
     }
-    await apiWithEndedPeriodConfirmation(route, "POST", body);
+    if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;
     for (const id of ["operations-transfer-amount", "operations-exchange-from", "operations-exchange-to", "operations-fee-amount", "operations-transfer-note"]) $(id).value = "";
     $("operations-has-fee").checked = false;
     $("operations-fee-fields").classList.add("hidden");
@@ -2219,13 +2365,18 @@ async function accountDetailAction(action) {
     switchView("transactions");
   }
   if (action === "archive") {
-    if (!window.confirm(`Archive ${account.name}? Its history will be preserved.`)) return;
-    try {
-      await api(`/api/v1/accounts/${account.id}/archive`, { method: "POST" });
-      $("account-detail-dialog").close();
-      toast("Account archived");
-      await refreshAll();
-    } catch (error) { toast(error.message); }
+    openMobileConfirmation({
+      title: `Archive ${account.name}?`,
+      body: "Its transaction and period history will be preserved. This release does not provide restoration.",
+      actionLabel: "Archive",
+      variant: "destructive",
+      onAction: async () => {
+        await api(`/api/v1/accounts/${account.id}/archive`, { method: "POST" });
+        $("account-detail-dialog").close();
+        toast("Account archived");
+        await refreshAll();
+      },
+    }, document.activeElement);
   }
 }
 
@@ -2822,12 +2973,16 @@ async function loadAccess() {
       if (row.role === "owner") {
         wrapper.insertAdjacentHTML("beforeend", `<span class="badge">Owner</span>`);
       } else {
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", `Role for ${row.user.display_name}`);
-        selectOptions(select, ["editor", "contributor", "viewer"].map((role) => ({ value: role, label: role[0].toUpperCase() + role.slice(1) })), { selected: row.role });
-        select.addEventListener("change", async () => {
+        const roleControl = document.createElement("button");
+        roleControl.type = "button";
+        roleControl.className = "picker-control";
+        roleControl.setAttribute("aria-haspopup", "dialog");
+        roleControl.setAttribute("aria-label", `Role for ${row.user.display_name}`);
+        roleControl.dataset.pickerTitle = `Role for ${row.user.display_name}`;
+        selectOptions(roleControl, ["editor", "contributor", "viewer"].map((role) => ({ value: role, label: role[0].toUpperCase() + role.slice(1) })), { selected: row.role });
+        roleControl.addEventListener("change", async () => {
           try {
-            await api(`/api/v1/accounts/${state.sharingAccount.id}/access/${row.user.id}`, { method: "PATCH", body: JSON.stringify({ role: select.value }) });
+            await api(`/api/v1/accounts/${state.sharingAccount.id}/access/${row.user.id}`, { method: "PATCH", body: JSON.stringify({ role: roleControl.value }) });
             toast("Access updated");
             await refreshAll();
           } catch (error) { toast(error.message); await loadAccess(); }
@@ -2836,15 +2991,18 @@ async function loadAccess() {
         remove.type = "button";
         remove.className = "button-danger";
         remove.textContent = "Remove";
-        remove.addEventListener("click", async () => {
-          if (!window.confirm(`Remove access for ${row.user.display_name}?`)) return;
-          try {
+        remove.addEventListener("click", () => openMobileConfirmation({
+          title: `Remove ${row.user.display_name}?`,
+          body: "They will lose access to this account. Existing ledger history is preserved.",
+          actionLabel: "Remove",
+          variant: "destructive",
+          onAction: async () => {
             await api(`/api/v1/accounts/${state.sharingAccount.id}/access/${row.user.id}`, { method: "DELETE" });
             toast("Access removed");
             await loadAccess();
-          } catch (error) { toast(error.message); }
-        });
-        wrapper.append(select, remove);
+          },
+        }, remove));
+        wrapper.append(roleControl, remove);
       }
       return wrapper;
     });
@@ -2878,12 +3036,8 @@ async function copyInvitation() {
 }
 
 async function openCategories(opener = document.activeElement) {
-  if (isMobileViewport()) return openMobileCategories(opener);
   document.querySelector(".profile-menu").removeAttribute("open");
-  $("category-name").value = "";
-  $("category-error").textContent = "";
-  $("categories-dialog").showModal();
-  await renderCategoryManager();
+  return openMobileCategories(opener);
 }
 
 async function renderCategoryManager() {
@@ -2897,33 +3051,24 @@ async function renderCategoryManager() {
     rename.type = "button";
     rename.className = "button-secondary";
     rename.textContent = "Rename";
-    rename.addEventListener("click", async () => {
-      const name = window.prompt("Category name", category.name);
-      if (!name || name.trim() === category.name) return;
-      try {
-        await api(`/api/v1/workspaces/${workspaceId}/categories/${category.id}`, {
-          method: "PATCH", body: JSON.stringify({ name: name.trim() }),
-        });
-        state.categories.delete(workspaceId);
-        await renderCategoryManager();
-        renderFilterOptions();
-        toast("Category renamed");
-      } catch (error) { $("category-error").textContent = error.message; }
-    });
+    rename.addEventListener("click", () => openMobileCategoryForm(category, rename));
     const archive = document.createElement("button");
     archive.type = "button";
     archive.className = "button-danger";
     archive.textContent = "Archive";
-    archive.addEventListener("click", async () => {
-      if (!window.confirm(`Archive ${category.name}? Existing transactions keep it.`)) return;
-      try {
+    archive.addEventListener("click", () => openMobileConfirmation({
+      title: `Archive ${category.name}?`,
+      body: "Existing transactions keep this category and balances do not change.",
+      actionLabel: "Archive",
+      variant: "destructive",
+      onAction: async () => {
         await api(`/api/v1/workspaces/${workspaceId}/categories/${category.id}/archive`, { method: "POST" });
         state.categories.delete(workspaceId);
         await renderCategoryManager();
         renderFilterOptions();
         toast("Category archived");
-      } catch (error) { $("category-error").textContent = error.message; }
-    });
+      },
+    }, archive));
     row.append(rename, archive);
     return row;
   });
@@ -3263,11 +3408,13 @@ async function apiWithEndedPeriodConfirmation(
   try {
     return await apiCommand(path, method, body);
   } catch (error) {
-    if (
-      error.status !== 409
-      || !String(error.message).includes("explicit confirmation")
-      || !window.confirm(confirmation)
-    ) throw error;
+    if (error.status !== 409 || !String(error.message).includes("explicit confirmation")) throw error;
+    const confirmed = await requestSharedConfirmation({
+      title: "Confirm historical change",
+      body: confirmation,
+      actionLabel: "Continue",
+    });
+    if (!confirmed) return SHARED_ACTION_CANCELLED;
     body.confirm_ended_period = true;
     return apiCommand(path, method, body);
   }
@@ -3670,21 +3817,31 @@ function openMobilePlanItem(
 }
 
 async function archivePlanRule(rule) {
-  if (!window.confirm(`Archive ${rule.name}? Open items will be skipped.`)) return;
-  try {
-    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
-    toast("Plan rule archived");
-    await refreshAll();
-  } catch (error) { toast(error.message); }
+  openMobileConfirmation({
+    title: `Archive ${rule.name}?`,
+    body: "Open items generated by this rule will be skipped. Linked transactions stay unchanged.",
+    actionLabel: "Archive",
+    variant: "destructive",
+    onAction: async () => {
+      await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-rules/${rule.id}/archive`, { method: "POST" });
+      toast("Plan rule archived");
+      await refreshAll();
+    },
+  }, document.activeElement);
 }
 
 async function skipPlanOccurrence(occurrence) {
-  if (!window.confirm(`Skip ${occurrence.rule.name} on ${localDate(occurrence.due_date)}?`)) return;
-  try {
-    await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/skip`, { method: "POST" });
-    toast("Plan item skipped");
-    await refreshAll();
-  } catch (error) { toast(error.message); }
+  openMobileConfirmation({
+    title: `Skip ${occurrence.rule.name}?`,
+    body: `${localDate(occurrence.due_date)} will be marked Skipped. Real balances do not change.`,
+    actionLabel: "Skip",
+    variant: "destructive",
+    onAction: async () => {
+      await api(`/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrence.id}/skip`, { method: "POST" });
+      toast("Plan item skipped");
+      await refreshAll();
+    },
+  }, document.activeElement);
 }
 
 function transactionMatchesOccurrence(transaction, occurrence) {
@@ -3718,11 +3875,11 @@ async function linkPlanTransaction(event) {
     return;
   }
   try {
-    await apiWithEndedPeriodConfirmation(
+    if (await apiWithEndedPeriodConfirmation(
       `/api/v1/workspaces/${state.context.workspace.id}/plan-occurrences/${occurrenceId}/link-transaction`,
       "POST",
       { transaction_id: Number(transactionId) },
-    );
+    ) === SHARED_ACTION_CANCELLED) return;
     $("plan-link-dialog").close();
     toast("Transaction linked to Plan");
     await refreshAll();
@@ -4864,17 +5021,12 @@ async function saveTransaction(event) {
       }
     }
     const route = `/api/v1/transactions/${transactionId}`;
-    try {
-      await apiCommand(route, "PATCH", body);
-    } catch (error) {
-      if (
-        error.status !== 409
-        || !String(error.message).includes("explicit confirmation")
-        || !window.confirm("This transaction correction requires confirmation. Continue?")
-      ) throw error;
-      body.confirm_ended_period = true;
-      await apiCommand(route, "PATCH", body);
-    }
+    if (await apiWithEndedPeriodConfirmation(
+      route,
+      "PATCH",
+      body,
+      "This transaction correction rewrites historical movements. Balances and affected periods will be recalculated.",
+    ) === SHARED_ACTION_CANCELLED) return;
     $("transaction-dialog").close();
     toast("Transaction updated");
     await refreshAll();
@@ -4884,46 +5036,62 @@ async function saveTransaction(event) {
 async function assignTransaction(transaction) {
   const choices = state.accounts.filter((account) => account.asset.code === transaction.legs[0].asset.code && canUseAccount(account, transaction.type === "expense" ? "expense" : "income"));
   if (!choices.length) return toast(`No accessible ${transaction.legs[0].asset.code} account`);
-  const labels = choices.map((account) => `${account.id}: ${account.name}`).join("\n");
-  const value = window.prompt(`Assign to an account:\n${labels}`, String(choices[0].id));
-  if (!value) return;
-  try {
-    await api(`/api/v1/transactions/${transaction.id}/assign-account`, { method: "POST", body: JSON.stringify({ account_id: Number(value) }) });
-    toast("Transaction assigned");
-    await refreshAll();
-  } catch (error) { toast(error.message); }
+  openMobileChoose({
+    title: "Assign account",
+    options: choices.map((account) => ({ value: account.id, label: `${account.name} · ${account.asset.code}` })),
+    onSelect: async (value) => {
+      try {
+        await api(`/api/v1/transactions/${transaction.id}/assign-account`, { method: "POST", body: JSON.stringify({ account_id: Number(value) }) });
+        toast("Transaction assigned");
+        await refreshAll();
+      } catch (error) { toast(error.message); }
+    },
+  }, document.activeElement);
 }
 
 async function deleteTransaction(transaction, button, row) {
   if (state.transactionDeleteLoading) return;
-  if (!window.confirm(`Delete this ${transaction.type}? It will remain in history as Deleted but will no longer affect balances or periods.`)) return;
-  state.transactionDeleteLoading = true;
-  document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = true; });
-  button.disabled = true;
-  row.setAttribute("aria-busy", "true");
-  try {
-    try {
-      await api(`/api/v1/transactions/${transaction.id}/delete`, { method: "POST" });
-    } catch (error) {
-      if (
-        error.status !== 409
-        || !String(error.message).includes("explicit confirmation")
-        || !window.confirm("Deleting this shared or historical transaction requires confirmation. Continue?")
-      ) throw error;
-      await api(`/api/v1/transactions/${transaction.id}/delete`, {
-        method: "POST",
-        body: JSON.stringify({ confirm_ended_period: true }),
-      });
-    }
-    toast("Transaction deleted");
-    await refreshAll();
-  } catch (error) { toast(error.message); }
-  finally {
-    state.transactionDeleteLoading = false;
-    document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = false; });
-    if (row.isConnected) row.setAttribute("aria-busy", "false");
-  }
+  openMobileConfirmation({
+    title: `Delete this ${transaction.type}?`,
+    body: "It remains in history as Deleted but no longer affects balances or periods.",
+    actionLabel: "Delete",
+    variant: "destructive",
+    onAction: async () => {
+      state.transactionDeleteLoading = true;
+      document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = true; });
+      button.disabled = true;
+      row.setAttribute("aria-busy", "true");
+      try {
+        try {
+          await api(`/api/v1/transactions/${transaction.id}/delete`, { method: "POST" });
+        } catch (error) {
+          if (error.status !== 409 || !String(error.message).includes("explicit confirmation")) throw error;
+          const confirmed = await requestSharedConfirmation({
+            title: "Confirm historical deletion",
+            body: "This shared or historical transaction needs explicit confirmation before its ledger effect is reversed.",
+            actionLabel: "Continue",
+          });
+          if (!confirmed) return;
+          await api(`/api/v1/transactions/${transaction.id}/delete`, {
+            method: "POST",
+            body: JSON.stringify({ confirm_ended_period: true }),
+          });
+        }
+        toast("Transaction deleted");
+        await refreshAll();
+      } finally {
+        state.transactionDeleteLoading = false;
+        document.querySelectorAll(".transaction-delete").forEach((item) => { item.disabled = false; });
+        if (row.isConnected) row.setAttribute("aria-busy", "false");
+      }
+    },
+  }, button);
 }
+
+initializeStaticPickers();
+document.querySelectorAll("form").forEach((form) => form.addEventListener("reset", () => {
+  form.querySelectorAll(".picker-control").forEach((control) => setPickerValue(control, control._pickerOptions?.[0]?.value || ""));
+}));
 
 document.querySelectorAll("[data-close]").forEach((button) => {
   button.addEventListener("click", () => $(button.dataset.close).close());
@@ -5021,15 +5189,7 @@ $("auth-form").addEventListener("submit", async (event) => {
   } catch (error) { $("auth-error").textContent = error.message; }
 });
 
-$("logout").addEventListener("click", async () => {
-  if (isMobileViewport()) {
-    openLogoutConfirmation(document.activeElement);
-    return;
-  }
-  await api("/api/v1/auth/logout", { method: "POST" });
-  document.querySelector(".profile-menu").removeAttribute("open");
-  showAuth();
-});
+$("logout").addEventListener("click", () => openLogoutConfirmation(document.activeElement));
 
 $("manage-categories").addEventListener("click", openCategories);
 $("manage-rates").addEventListener("click", (event) => openRateSettings(event.currentTarget));

@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: Integrate navigation, keyboard, motion, and accessibility
-status: in-progress
+status: review
 size: M
 spec: design/Finnapp mobile specification/spec/05-interactions.md; spec/08-acceptance.md
 blocked-by: [T-025B, T-026, T-027B, T-028]
@@ -20,24 +20,24 @@ without changing backend contracts or feature geometry.
 
 ## Acceptance
 
-- [ ] Every permitted tap-map and sheet-graph transition works; deferred Type
+- [x] Every permitted tap-map and sheet-graph transition works; deferred Type
       conversion/category merge-delete/restoration controls remain absent.
-- [ ] Tab switch closes overlays; scrim/close/Escape dismiss; nested Choose
+- [x] Tab switch closes overlays; scrim/close/Escape dismiss; nested Choose
       returns to its parent; focus is contained and restored to opener.
-- [ ] Sheets/dialogs expose correct accessible names/modal semantics, visible
+- [x] Sheets/dialogs expose correct accessible names/modal semantics, visible
       focus and keyboard operation; all actions work without a pointer.
-- [ ] Device/browser software keyboard opens for native amount/note fields,
+- [x] Device/browser software keyboard opens for native amount/note fields,
       clears on Done/segment switch, does not create forbidden screen scroll,
       and Transfer Save has ≥80px visible clearance in the 250px reference
       visual-viewport state. No custom keyboard is built.
-- [ ] Sheet motion is ≤180ms and reduced-motion removes transforms without
+- [x] Sheet motion is ≤180ms and reduced-motion removes transforms without
       hiding content.
-- [ ] Targets are ≥44px; chips sit in 44px lanes; console is clean.
-- [ ] The entire runtime contains no native `<select>` and no calls to
+- [x] Targets are ≥44px; chips sit in 44px lanes; console is clean.
+- [x] The entire runtime contains no native `<select>` and no calls to
       `alert`, `confirm`, or `prompt`; supported desktop actions use the shared
       accessible primitives rather than disappearing.
-- [ ] Regression tests cover graph/state/focus and forbidden APIs.
-- [ ] After acceptance, progress may say `preview-ready` but must still say
+- [x] Regression tests cover graph/state/focus and forbidden APIs.
+- [x] After acceptance, progress may say `preview-ready` but must still say
       Phase 15 is active/unaccepted under ADR-0011.
 
 ## Touches
@@ -65,7 +65,54 @@ keyboard/focus/reduced-motion/console at 390×844 and desktop action reachabilit
 
 ## Review
 
-Append the bounded independent implementation review following the protocol.
+Implementation reviewer: `/root/t028_review_retry`, Codex GPT-5 fresh
+same-vendor fallback; cross-vendor review was unavailable.
+
+Reviewed range: claim commit
+`ade15414c06eb106180ea701769d419de823b2d1` plus the complete uncommitted
+manifest: modified `app/static/index.html`, `app/static/app.js`,
+`app/static/style.css`, `tests/test_frontend_v2.py`,
+`docs/design/DESIGN-NOTES.md`, and direct inspection of untracked
+`tests/test_phase15_interactions.py`. The reviewer remained read-only and did
+not alter files or Git state.
+
+Initial bounded finding, verbatim:
+
+> - **[P2] Desktop logout still bypasses the required shared confirmation.** [app/static/app.js](C:/Users/Ксюша/Documents/Codex/fin-app/app/static/app.js:5192) calls `openLogoutConfirmation` only when `isMobileViewport()` is true; lines 5197–5199 immediately POST logout and show Auth on desktop. This violates T-029’s requirement that supported desktop actions use shared accessible primitives rather than disappearing/bypassing them. Route the desktop click through `openLogoutConfirmation` too and add a regression test proving cancel makes no logout request on both viewport classes.
+>
+> No other bounded P0–P2 finding. Verdict: changes requested; T-029 is not review-clean until desktop logout confirmation is unified.
+
+Resolution: the logout handler now routes every viewport through
+`openLogoutConfirmation`; the POST remains exclusively inside the confirmed
+action, and focused coverage freezes the unified handler. No desktop bypass
+remains.
+
+Limited re-review, verbatim:
+
+> No findings. The sole P2 is closed: desktop and mobile logout now share `openLogoutConfirmation`, and the focused regression test guards the unified handler. The resolution is review-clean.
+
+Final verdict: approved with no open P0–P2 finding; no P3 was reported.
+
+Verification evidence:
+
+- Exact task target: `11 passed in 0.55s`.
+- Bundled Node `--check app/static/app.js`: passed.
+- Forbidden runtime search for native `<select>` and
+  `window.alert/confirm/prompt`: clean.
+- `git diff --check`: passed; LF→CRLF notices only.
+- Isolated scratch `/health` and SPA: HTTP 200; repository `finapp.db` was not
+  touched.
+- Mobile 390×844: Add account → nested Storage Choose → parent return and
+  focus restoration; Saved/Done; Profile tab-close; Escape and scrim dismissal;
+  native amount focus clearing on operation segment change; exact 180ms sheet
+  motion; zero native select nodes, zero horizontal overflow and empty console
+  passed.
+- Desktop 1280×900: Account detail → Edit → shared Storage Choose temporarily
+  closed the nested native dialogs, selected Cash, and restored both dialogs in
+  order; zero horizontal overflow and empty console passed.
+- Scratch server used the isolated database at
+  `finapp-t029-79cc9e5adc5842fb9449ace283989e6a/finapp.db`; it was stopped after
+  verification.
 
 ## Session log
 
@@ -81,3 +128,11 @@ Append the bounded independent implementation review following the protocol.
   atomically claimed `task/T-029-navigation-accessibility` from promoted
   integration `844ea6c`, recorded `/root` as implementer, and started only
   T-029.
+- 2026-08-13 `/root`, Codex GPT-5: unified all mobile and supported desktop
+  selectors and destructive actions behind accessible shared Choose and
+  confirmation primitives; completed focus containment/restoration, tab-close,
+  keyboard blur, 180ms/reduced-motion, 44px-target and forbidden-native-API
+  guards. Exact 11-test, syntax/diff/search gates and isolated 390×844 plus
+  preserved 1280×900 browser smokes passed. Independent same-vendor fallback
+  review closed its sole P2 desktop-logout finding; T-029 is ready for local
+  owner acceptance. T-030A was not started.

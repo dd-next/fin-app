@@ -181,14 +181,16 @@ Cancel only dismiss; confirmed asynchronous actions are guarded so they run at
 most once. Callers construct option and copy nodes from already-authorized data;
 the controller performs no API or financial work.
 
-The production exercise is the Operations account field: mobile opens a Choose
-sheet while desktop retains the existing native select and its unchanged event
-path. Choose options expose the current value and reject disabled entries. The
-same controller supports cancel+accent, cancel+destructive and one-button Saved
-confirmations. Overlay motion is 180ms and becomes transform-free under reduced
-motion. While an overlay is active, the fixed tab bar is raised above the scrim
-so a physical tab tap can close the stack; the sheet safe band and confirmation
-bottom clearance grow by the tab-bar height so options/actions remain reachable.
+T-029 extends the production exercise to every selector and destructive action:
+mobile and desktop both use the shared Choose and confirmation stack, with no
+native select or browser alert/confirm/prompt call in the runtime. Choose options
+expose the current value and reject disabled entries. Desktop native dialogs are
+temporarily closed while a shared top-layer picker is active, then restored in
+their original order. The same controller supports cancel+accent,
+cancel+destructive and one-button Saved confirmations. Overlay motion is 180ms
+and becomes transform-free under reduced motion. On mobile the overlay ends
+above the fixed tab bar so a physical tab tap closes the full stack; sheets and
+confirmations keep their accepted safe-area clearance.
 
 T-025A composes the mobile Accounts surface from the accepted summary contract:
 one 72px capital strip, the conditional 44px missing-rate entry point, and
@@ -226,3 +228,6 @@ One line per landed design change: date, what changed, why.
 - 2026-08-13 — composed T-028 mobile Plan as bounded rule cards with nearest
   occurrences, adapter-backed rule/item/link sheets and archive consequences;
   shipped the exact data-free Analytics placeholder and retained desktop Plan.
+- 2026-08-13 — unified all runtime selectors, confirmations and logout behind
+  the accessible overlay stack; added desktop top-layer return, focus restore,
+  native-keyboard blur, tab-close and forbidden-native-API guards for T-029.

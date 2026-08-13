@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | T-029 navigation/accessibility on `task/T-029-navigation-accessibility` |
-| Next | Implement the readiness-reviewed T-029 acceptance criteria |
+| Active work | T-029 navigation/accessibility is implementation-review clean on `task/T-029-navigation-accessibility` |
+| Next | Local owner acceptance of reviewed T-029; T-030A remains backlog |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -50,8 +50,11 @@ T-027B's reviewed implementation `283215f` and T-028's reviewed implementation
 `173ea51` are now locally accepted on `finapp-v2-develop`. T-028's exact
 35-test target, syntax/diff, isolated 390×844 browser matrix and retained
 1280×900 Plan regression passed; both Link-safety P2 findings are closed and no
-P0–P3 finding remains. T-029 is next, remains unclaimed, and Phase 15 remains
-incomplete.
+P0–P3 finding remains. T-029's shared picker/confirmation navigation layer is
+implementation-review clean after its sole P2 desktop-logout finding was
+closed. Its exact 11-test target, syntax/diff and forbidden-native-API checks,
+plus isolated 390×844 and preserved 1280×900 browser smokes pass. Phase 15
+remains incomplete and T-030A has not been claimed.
 
 Phase 15 authority and constraints:
 
