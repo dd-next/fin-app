@@ -177,7 +177,7 @@ def test_money_formatting_uses_explicit_asset_precision():
     javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "assetByCode(code)?.decimals" in javascript
     assert 'fraction.padEnd(precision, "0")' in javascript
-    assert "formatMoney(account.valued_balance, base)" in javascript
+    assert "moneyMarkup(account.valued_balance, base)" in javascript
 
 
 def test_plan_renders_one_card_per_rule_with_nearest_occurrences_only():

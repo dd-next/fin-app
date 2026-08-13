@@ -73,12 +73,13 @@
             <small>Excludes protected accounts</small>
           </article>
         </div>
-        <div id="unvalued-warning" class="notice warning hidden"></div>
+        <button id="unvalued-warning" class="notice warning mobile-rate-warning hidden" type="button" aria-label="Set a missing exchange rate"></button>
         <div id="account-groups" class="account-groups"></div>
+        <button id="accounts-add-row" class="mobile-ghost-row mobile-interactive hidden" type="button"><span class="mobile-leading-icon" aria-hidden="true">＋</span><span class="mobile-ghost-label">New account</span></button>
         <div id="accounts-empty" class="empty-state hidden">
-          <div class="empty-icon">◫</div><h3>Add your first account</h3>
-          <p>Cash, bank cards, wallets, reserves, and crypto can all live here.</p>
-          <button id="empty-add-account" class="mobile-ghost-row mobile-interactive"><span class="mobile-leading-icon" aria-hidden="true">＋</span><span class="mobile-ghost-label">Add account</span></button>
+          <div class="empty-icon">▤</div><h3>Add your first account</h3>
+          <p>Cash, cards, wallets, reserves, and crypto all live here.</p>
+          <button id="empty-add-account" class="mobile-empty-primary mobile-interactive" type="button">Add account</button>
         </div>
       </section>
 
@@ -231,6 +232,7 @@
     <section id="mobile-confirm" class="mobile-confirm" role="alertdialog" aria-modal="true" aria-labelledby="mobile-confirm-title" aria-describedby="mobile-confirm-body" tabindex="-1" hidden>
       <h2 id="mobile-confirm-title"></h2>
       <p id="mobile-confirm-body"></p>
+      <p id="mobile-confirm-error" class="mobile-confirm-error hidden" role="alert"></p>
       <div class="mobile-confirm-actions">
         <button id="mobile-confirm-cancel" class="mobile-button-secondary" type="button">Cancel</button>
         <button id="mobile-confirm-action" class="mobile-button-sheet-primary" type="button">Done</button>
@@ -407,6 +409,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=phase15-t024b-4" defer></script>
+  <script src="/app.js?v=phase15-t025a-1" defer></script>
 </body>
 </html>

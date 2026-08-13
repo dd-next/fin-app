@@ -28,6 +28,8 @@ const state = {
   periodCommandLoading: false,
   activeView: "accounts",
   activeAccount: null,
+  activeAccountPage: null,
+  activeAccountError: null,
   sharingAccount: null,
   viewingTransaction: null,
   editingTransaction: null,
@@ -147,6 +149,10 @@ function canUseAccount(account, action) {
     owner: ["owner"],
   };
   return account && roles[action].includes(account.access_role);
+}
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 640px)").matches;
 }
 
 function selectOptions(select, items, { placeholder = null, selected = null } = {}) {
@@ -431,6 +437,8 @@ function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
+  $("mobile-confirm-error").textContent = "";
+  $("mobile-confirm-error").classList.add("hidden");
   const cancel = $("mobile-confirm-cancel");
   const action = $("mobile-confirm-action");
   cancel.hidden = variant === "saved";
@@ -446,6 +454,9 @@ function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "
       await onAction?.();
       entry.actionTaken = false;
       closeMobileOverlay({ restoreFocus: variant !== "saved" });
+    } catch (error) {
+      $("mobile-confirm-error").textContent = error.message;
+      $("mobile-confirm-error").classList.remove("hidden");
     } finally {
       entry.actionTaken = false;
       action.disabled = false;
@@ -1124,17 +1135,37 @@ async function saveOperationsTransfer(event) {
 }
 
 function accountGroup(account) {
-  if (["reserve", "savings"].includes(account.purpose)) return "Savings";
-  if (account.asset.kind === "crypto" || ["crypto_wallet", "exchange"].includes(account.storage_type)) return "Crypto";
   if (account.storage_type === "cash") return "Cash";
-  return "Banks & cards";
+  if (account.asset.kind === "crypto" || ["crypto_wallet", "exchange"].includes(account.storage_type)) return "Crypto";
+  return "Bank";
 }
 
 function accountIcon(account) {
-  if (["reserve", "savings"].includes(account.purpose)) return "◇";
-  if (account.asset.kind === "crypto") return "₿";
-  if (account.storage_type === "cash") return "¤";
+  if (accountGroup(account) === "Cash") return "¤";
+  if (accountGroup(account) === "Crypto") return "₿";
   return "▣";
+}
+
+function openSetRateEntry(opener = document.activeElement) {
+  const event = new CustomEvent("finapp:open-set-rate", {
+    cancelable: true,
+    detail: { opener },
+  });
+  if (!document.dispatchEvent(event)) return;
+  if (!isMobileViewport()) {
+    toast("Set a manual rate from Profile · Exchange rates");
+    return;
+  }
+  openMobileSheet({
+    kicker: "EXCHANGE",
+    title: "Set a rate",
+    buildBody: () => {
+      const body = document.createElement("div");
+      body.className = "mobile-sheet-message";
+      body.innerHTML = "<p>Manual exchange rates are managed from Profile · Exchange rates.</p>";
+      return body;
+    },
+  }, opener);
 }
 
 function renderAccounts() {
@@ -1145,8 +1176,8 @@ function renderAccounts() {
   $("net-worth-code").textContent = `Valued in ${base} across visible accounts`;
   const unvalued = state.summary.unvalued;
   $("unvalued-warning").classList.toggle("hidden", !unvalued.length);
-  $("unvalued-warning").textContent = unvalued.length
-    ? `Not included in totals — no exchange rate yet: ${unvalued.map((item) => formatMoney(item.total, item.asset.code)).join(", ")}. Add an exchange to establish a rate.`
+  $("unvalued-warning").innerHTML = unvalued.length
+    ? `<span class="mobile-rate-warning-icon" aria-hidden="true">!</span><span class="mobile-rate-warning-text">${unvalued.length} ${unvalued.length === 1 ? "asset has" : "assets have"} no rate — set one</span><span class="mobile-rate-warning-chevron" aria-hidden="true">›</span>`
     : "";
 
   const grouped = new Map();
@@ -1155,7 +1186,7 @@ function renderAccounts() {
     if (!grouped.has(group)) grouped.set(group, []);
     grouped.get(group).push(account);
   }
-  const order = ["Banks & cards", "Cash", "Crypto", "Savings"];
+  const order = ["Cash", "Bank", "Crypto"];
   const sections = [];
   for (const group of order) {
     const accounts = grouped.get(group) || [];
@@ -1171,19 +1202,24 @@ function renderAccounts() {
       button.dataset.accountId = account.id;
       const valued = account.valued_balance === null
         ? "Not valued"
-        : formatMoney(account.valued_balance, base);
+        : moneyMarkup(account.valued_balance, base);
+      const valueLine = account.valued_balance === null
+        ? "Not valued"
+        : account.include_in_available
+          ? `≈ ${valued}`
+          : `protected · ${valued}`;
       button.innerHTML = `
         <span class="account-top"><span class="account-icon mobile-leading-icon">${accountIcon(account)}</span>${account.is_shared ? `<span class="badge shared">${escapeHtml(account.access_role)}</span>` : ""}</span>
-        <span class="account-name mobile-row-title mobile-truncate">${escapeHtml(account.name)}</span>
-        <strong>${moneyMarkup(account.balance, account.asset.code)}</strong>
-        <small>${account.include_in_available ? valued : `Protected · ${valued}`}</small>`;
-      button.addEventListener("click", () => openAccountDetail(account.id));
+        <span class="account-main"><span class="account-name mobile-row-title mobile-truncate">${escapeHtml(account.name)}</span><span class="account-mobile-meta">${escapeHtml(account.storage_type.replaceAll("_", " "))}</span></span>
+        <span class="account-trailing"><strong>${moneyMarkup(account.balance, account.asset.code)}</strong><small>${valueLine}</small></span>`;
+      button.addEventListener("click", () => openAccountDetail(account.id, button));
       grid.append(button);
     }
     sections.push(section);
   }
   $("account-groups").replaceChildren(...sections);
   $("accounts-empty").classList.toggle("hidden", state.accounts.length > 0);
+  $("accounts-add-row").classList.toggle("hidden", state.accounts.length === 0);
 }
 
 function renderFilterOptions() {
@@ -1228,9 +1264,367 @@ function syncTransactionFilterPair(changed) {
   }
 }
 
-async function openAccountDetail(accountId) {
+function storageLabel(value) {
+  return {
+    bank: "Bank account",
+    card: "Card",
+    cash: "Cash",
+    e_wallet: "E-wallet",
+    crypto_wallet: "Crypto wallet",
+    exchange: "Exchange",
+    virtual: "Virtual",
+  }[value] || value.replaceAll("_", " ");
+}
+
+function purposeLabel(value) {
+  return value ? `${value[0].toUpperCase()}${value.slice(1)}` : "—";
+}
+
+function mobileChoiceField({ label, value, id, onOpen }) {
+  const field = document.createElement("div");
+  field.className = "mobile-sheet-field";
+  const caption = document.createElement("span");
+  caption.className = "mobile-sheet-field-label";
+  caption.textContent = label;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = id;
+  button.className = "mobile-field-sheet mobile-interactive";
+  button.innerHTML = `<span class="mobile-field-sheet-value"></span><span class="mobile-field-chevron" aria-hidden="true">›</span>`;
+  button.querySelector(".mobile-field-sheet-value").textContent = value;
+  button.addEventListener("click", onOpen);
+  field.append(caption, button);
+  return field;
+}
+
+function mobileAccountDetailBody(account) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-detail";
+  const base = state.summary.base_asset.code;
+  const valued = account.valued_balance === null
+    ? "Not valued"
+    : moneyMarkup(account.valued_balance, base);
+  const summary = document.createElement("dl");
+  summary.className = "mobile-readonly-list";
+  summary.innerHTML = `
+    <div><dt>Balance</dt><dd>${moneyMarkup(account.balance, account.asset.code)}</dd></div>
+    <div><dt>Valued amount</dt><dd>${valued}</dd></div>
+    <div><dt>Type</dt><dd>${escapeHtml(`${storageLabel(account.storage_type)} · ${purposeLabel(account.purpose)}`)}</dd></div>
+    <div><dt>Availability</dt><dd>${account.include_in_available ? "Available" : "protected"}</dd></div>`;
+  body.append(summary);
+
+  const actions = document.createElement("div");
+  actions.className = "mobile-account-actions";
+  const addAction = (label, action, className = "mobile-button-inline") => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `${className} mobile-interactive`;
+    button.textContent = label;
+    button.addEventListener("click", action);
+    actions.append(button);
+  };
+  if (canUseAccount(account, "owner")) {
+    addAction("Reconcile", () => openMobileReconcile(account, document.activeElement));
+  }
+  addAction("Full history", () => openAccountHistory(account));
+  if (canUseAccount(account, "owner")) {
+    addAction("Archive", () => openMobileArchive(account, document.activeElement), "mobile-button-destructive-inline");
+  }
+  body.append(actions);
+
+  const heading = document.createElement("h3");
+  heading.className = "mobile-sheet-section-title";
+  heading.textContent = "RECENT HISTORY";
+  body.append(heading);
+  const history = document.createElement("div");
+  history.className = "mobile-account-history";
+  if (state.activeAccountError) {
+    const error = document.createElement("p");
+    error.className = "form-error";
+    error.setAttribute("role", "alert");
+    error.textContent = state.activeAccountError;
+    history.append(error);
+  } else if (!state.activeAccountPage) {
+    history.innerHTML = '<p class="muted" role="status">Loading account history…</p>';
+  } else if (!state.activeAccountPage.items.length) {
+    history.innerHTML = '<p class="muted">No transactions on this account.</p>';
+  } else {
+    for (const transaction of state.activeAccountPage.items) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "mobile-account-history-row mobile-interactive";
+      row.innerHTML = `<span><strong>${escapeHtml(transactionTitle(transaction))}</strong><small>${escapeHtml(localDate(transaction.local_date))}</small></span><span>${escapeHtml(transactionAmount(transaction))}</span>`;
+      row.addEventListener("click", () => {
+        closeAllMobileOverlays();
+        openTransactionDetails(transaction);
+      });
+      history.append(row);
+    }
+  }
+  body.append(history);
+  return body;
+}
+
+function openMobileAccountDetail(account, opener) {
+  state.activeAccount = account;
+  state.activeAccountPage = null;
+  state.activeAccountError = null;
+  openMobileSheet({
+    kicker: "ACCOUNT",
+    title: account.name,
+    buildBody: () => mobileAccountDetailBody(account),
+    primaryLabel: canUseAccount(account, "edit") ? "Edit details" : "",
+    onPrimary: () => openMobileAccountForm(account, document.activeElement),
+  }, opener);
+  void api(`/api/v1/transactions?account_id=${account.id}&limit=10`).then((page) => {
+    if (state.activeAccount?.id !== account.id) return;
+    state.activeAccountPage = page;
+    const entry = mobileOverlayState.stack.at(-1);
+    if (entry?.kind === "sheet" && entry.title === account.name) renderMobileOverlay();
+  }).catch((error) => {
+    if (state.activeAccount?.id !== account.id) return;
+    state.activeAccountError = error.message;
+    const entry = mobileOverlayState.stack.at(-1);
+    if (entry?.kind === "sheet" && entry.title === account.name) renderMobileOverlay();
+  });
+}
+
+function buildMobileAccountFormBody(account, draft) {
+  const body = document.createElement("div");
+  body.className = "mobile-account-form";
+  const nameField = document.createElement("label");
+  nameField.className = "mobile-sheet-field";
+  nameField.innerHTML = '<span class="mobile-sheet-field-label">Name</span><input id="mobile-account-name" class="mobile-field" maxlength="100" autocomplete="off">';
+  const nameInput = nameField.querySelector("input");
+  nameInput.value = draft.name;
+  nameInput.addEventListener("input", () => { draft.name = nameInput.value; });
+  body.append(nameField);
+
+  const storageOptions = [
+    ["bank", "Bank account"], ["card", "Card"], ["cash", "Cash"],
+    ["e_wallet", "E-wallet"], ["crypto_wallet", "Crypto wallet"],
+    ["exchange", "Exchange"], ["virtual", "Virtual"],
+  ];
+  body.append(mobileChoiceField({
+    label: "Storage",
+    value: storageLabel(draft.storage_type),
+    id: "mobile-account-storage",
+    onOpen: () => openMobileChoose({
+      title: "Storage",
+      returnFocusSelector: "#mobile-account-storage",
+      options: storageOptions.map(([value, label]) => ({ value, label, current: draft.storage_type === value })),
+      onSelect: (value) => { draft.storage_type = value; },
+    }, document.activeElement),
+  }));
+
+  const purposeOptions = ["spending", "reserve", "savings", "investment"];
+  body.append(mobileChoiceField({
+    label: "Purpose",
+    value: purposeLabel(draft.purpose),
+    id: "mobile-account-purpose",
+    onOpen: () => openMobileChoose({
+      title: "Purpose",
+      returnFocusSelector: "#mobile-account-purpose",
+      options: purposeOptions.map((value) => ({ value, label: purposeLabel(value), current: draft.purpose === value })),
+      onSelect: (value) => { draft.purpose = value; },
+    }, document.activeElement),
+  }));
+
+  if (!account) {
+    const asset = assetByCode(draft.asset_code);
+    body.append(mobileChoiceField({
+      label: "Asset",
+      value: asset ? `${asset.code} · ${asset.name}` : draft.asset_code,
+      id: "mobile-account-asset",
+      onOpen: () => openMobileChoose({
+        title: "Asset",
+        returnFocusSelector: "#mobile-account-asset",
+        options: state.assets.map((item) => ({
+          value: item.code,
+          label: `${item.code} · ${item.name}`,
+          current: draft.asset_code === item.code,
+        })),
+        onSelect: (value) => { draft.asset_code = value; },
+      }, document.activeElement),
+    }));
+    const openingField = document.createElement("label");
+    openingField.className = "mobile-sheet-field";
+    openingField.innerHTML = '<span class="mobile-sheet-field-label">Opening balance</span><input id="mobile-account-opening" class="mobile-field" inputmode="decimal">';
+    const openingInput = openingField.querySelector("input");
+    openingInput.value = draft.opening_balance;
+    openingInput.addEventListener("input", () => { draft.opening_balance = openingInput.value; });
+    body.append(openingField);
+  } else {
+    const institutionField = document.createElement("label");
+    institutionField.className = "mobile-sheet-field";
+    institutionField.innerHTML = '<span class="mobile-sheet-field-label">Institution</span><input id="mobile-account-institution" class="mobile-field" maxlength="100" placeholder="Optional">';
+    const institutionInput = institutionField.querySelector("input");
+    institutionInput.value = draft.institution;
+    institutionInput.addEventListener("input", () => { draft.institution = institutionInput.value; });
+    body.append(institutionField);
+  }
+
+  const toggle = document.createElement("label");
+  toggle.className = "mobile-sheet-toggle";
+  toggle.innerHTML = '<span>Include in Available</span><input id="mobile-account-available" type="checkbox">';
+  const checkbox = toggle.querySelector("input");
+  checkbox.checked = draft.include_in_available;
+  checkbox.addEventListener("change", () => { draft.include_in_available = checkbox.checked; });
+  body.append(toggle);
+  const error = document.createElement("p");
+  error.className = "form-error";
+  error.setAttribute("role", "alert");
+  error.textContent = draft.error;
+  body.append(error);
+  return body;
+}
+
+function openMobileAccountForm(account = null, opener = document.activeElement) {
+  const draft = {
+    name: account?.name || "",
+    storage_type: account?.storage_type || "bank",
+    purpose: account?.purpose || "spending",
+    asset_code: account?.asset.code || state.context.workspace.base_asset.code,
+    opening_balance: "0",
+    institution: account?.institution || "",
+    include_in_available: account?.include_in_available ?? true,
+    error: "",
+  };
+  openMobileSheet({
+    kicker: "ACCOUNT",
+    title: account ? "Edit account" : "Add account",
+    secondaryLabel: "Cancel",
+    primaryLabel: account ? "Save changes" : "Add account",
+    buildBody: () => buildMobileAccountFormBody(account, draft),
+    onPrimary: async () => {
+      draft.error = "";
+      if (!draft.name.trim()) draft.error = "Name is required.";
+      if (!account && !draft.opening_balance.trim()) draft.error = "Opening balance is required.";
+      if (draft.error) {
+        renderMobileOverlay();
+        return;
+      }
+      const payload = {
+        name: draft.name.trim(),
+        storage_type: draft.storage_type,
+        purpose: draft.purpose,
+        institution: account ? draft.institution.trim() || null : null,
+        include_in_available: draft.include_in_available,
+      };
+      if (!account) {
+        payload.asset_code = draft.asset_code;
+        payload.opening_balance = draft.opening_balance.trim();
+      }
+      try {
+        await api(account ? `/api/v1/accounts/${account.id}` : "/api/v1/accounts", {
+          method: account ? "PATCH" : "POST",
+          body: JSON.stringify(payload),
+        });
+        await refreshAll();
+        const savedOpener = mobileOverlayState.rootOpener || opener;
+        closeAllMobileOverlays();
+        openMobileConfirmation({
+          title: "Saved",
+          body: account ? `${draft.name.trim()} was updated.` : `${draft.name.trim()} was added to Accounts.`,
+          variant: "saved",
+        }, savedOpener);
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+function openMobileReconcile(account, opener = document.activeElement) {
+  const draft = { target_balance: account.balance, note: "", error: "" };
+  openMobileSheet({
+    kicker: "BALANCE CORRECTION",
+    title: "Reconcile account",
+    secondaryLabel: "Cancel",
+    primaryLabel: "Save correction",
+    buildBody: () => {
+      const body = document.createElement("div");
+      body.className = "mobile-account-form";
+      body.innerHTML = `
+        <label class="mobile-sheet-field"><span class="mobile-sheet-field-label">Actual balance</span><input id="mobile-reconcile-balance" class="mobile-field" inputmode="decimal"></label>
+        <label class="mobile-sheet-field"><span class="mobile-sheet-field-label">Note</span><input id="mobile-reconcile-note" class="mobile-field" maxlength="500" placeholder="Counted cash"></label>
+        <p class="mobile-sheet-hint">A correction entry is written to history. Existing transactions are untouched.</p>
+        <p class="form-error" role="alert"></p>`;
+      const balance = body.querySelector("#mobile-reconcile-balance");
+      const note = body.querySelector("#mobile-reconcile-note");
+      balance.value = draft.target_balance;
+      note.value = draft.note;
+      balance.addEventListener("input", () => { draft.target_balance = balance.value; });
+      note.addEventListener("input", () => { draft.note = note.value; });
+      body.querySelector(".form-error").textContent = draft.error;
+      return body;
+    },
+    onPrimary: async () => {
+      draft.error = "";
+      if (!draft.target_balance.trim()) {
+        draft.error = "Actual balance is required.";
+        renderMobileOverlay();
+        return;
+      }
+      try {
+        await api(`/api/v1/accounts/${account.id}/reconcile`, {
+          method: "POST",
+          body: JSON.stringify({ target_balance: draft.target_balance.trim(), note: draft.note.trim() || null }),
+        });
+        await refreshAll();
+        const savedOpener = mobileOverlayState.rootOpener || opener;
+        closeAllMobileOverlays();
+        openMobileConfirmation({
+          title: "Saved",
+          body: `${account.name} was reconciled. The correction was written to history.`,
+          variant: "saved",
+        }, savedOpener);
+      } catch (error) {
+        draft.error = error.message;
+        renderMobileOverlay();
+      }
+    },
+  }, opener);
+}
+
+function openMobileArchive(account, opener = document.activeElement) {
+  openMobileConfirmation({
+    title: "Archive this account?",
+    body: "It disappears from Accounts and stops counting toward Total capital. History is kept.",
+    actionLabel: "Archive",
+    variant: "destructive",
+    onAction: async () => {
+      await api(`/api/v1/accounts/${account.id}/archive`, { method: "POST" });
+      closeAllMobileOverlays();
+      toast("Account archived");
+      await refreshAll();
+    },
+  }, opener);
+}
+
+async function openAccountHistory(account) {
+  const previousAccount = $("filter-account").value;
+  const previousPeriod = $("filter-period").value;
+  $("filter-account").value = String(account.id);
+  syncTransactionFilterPair("account");
+  const loaded = await loadTransactions(false);
+  if (!loaded) {
+    $("filter-account").value = previousAccount;
+    $("filter-period").value = previousPeriod;
+    return;
+  }
+  closeAllMobileOverlays();
+  switchView("transactions");
+}
+
+async function openAccountDetail(accountId, opener = document.activeElement) {
   const account = accountById(accountId);
   if (!account) return;
+  if (isMobileViewport()) {
+    openMobileAccountDetail(account, opener);
+    return;
+  }
   state.activeAccount = account;
   $("account-detail-title").textContent = account.name;
   $("account-detail-body").innerHTML = `<div class="empty-state"><p>Loading account history…</p></div>`;
@@ -1292,6 +1686,10 @@ async function accountDetailAction(action) {
 }
 
 function openAccountForm(account = null) {
+  if (isMobileViewport()) {
+    openMobileAccountForm(account, document.activeElement);
+    return;
+  }
   $("account-form").reset();
   $("account-error").textContent = "";
   $("account-id").value = account ? account.id : "";
@@ -1971,7 +2369,11 @@ async function loadTransactions(append = false) {
     state.transactions = append ? [...state.transactions, ...page.items] : page.items;
     state.nextCursor = page.next_cursor;
     renderTransactions();
-  } catch (error) { toast(error.message); }
+    return true;
+  } catch (error) {
+    toast(error.message);
+    return false;
+  }
   finally { setLoading(false); }
 }
 
@@ -2269,7 +2671,9 @@ $("plan-link-form").addEventListener("submit", linkPlanTransaction);
 $("plan-detail-filter").addEventListener("change", renderPlanRuleDetail);
 
 $("add-account").addEventListener("click", () => openAccountForm());
+$("accounts-add-row").addEventListener("click", () => openAccountForm());
 $("empty-add-account").addEventListener("click", () => openAccountForm());
+$("unvalued-warning").addEventListener("click", (event) => openSetRateEntry(event.currentTarget));
 $("account-form").addEventListener("submit", saveAccount);
 $("reconcile-form").addEventListener("submit", saveReconcile);
 $("invitation-form").addEventListener("submit", createInvitation);

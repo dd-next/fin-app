@@ -190,6 +190,17 @@ motion. While an overlay is active, the fixed tab bar is raised above the scrim
 so a physical tab tap can close the stack; the sheet safe band and confirmation
 bottom clearance grow by the tab-bar height so options/actions remain reachable.
 
+T-025A composes the mobile Accounts surface from the accepted summary contract:
+one 72px capital strip, the conditional 44px missing-rate entry point, and
+exact `CASH`, `BANK`, `CRYPTO` groups with 64px rows and a 56px New account row.
+Cash storage maps to CASH; crypto assets and crypto/exchange storage map to
+CRYPTO; every other visible account maps to BANK. Values remain summary-derived
+and money keeps separate non-wrapping value/code spans. Account details,
+Add/Edit, Reconcile, Archive, recent history and account-filtered Full history
+reuse accepted APIs and one overlay stack; denied actions are absent. Archive
+ends at `History is kept.` and exposes no restore control. Desktop keeps its
+existing cards and dialogs.
+
 ## Change log
 
 One line per landed design change: date, what changed, why.
@@ -209,3 +220,6 @@ One line per landed design change: date, what changed, why.
 - 2026-08-13 — added the single accessible T-024B mobile overlay stack, Choose
   and confirmation contracts, physical tab-close path, reduced-motion behavior,
   and desktop-preserving Operations account integration.
+- 2026-08-13 — composed T-025A mobile Accounts, summary-only group/value rules,
+  account lifecycle sheets, Saved/error states and filtered history while
+  retaining desktop dialogs and the accepted backend contract.

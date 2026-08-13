@@ -21,8 +21,8 @@ the one task file you are working on. Nothing else by default.
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
 | Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None; T-024B is locally accepted and `done` |
-| Next | Await repository-owner direction; no Phase 15 successor task is promoted or claimed |
+| Active work | T-025A verified in `review` on `task/T-025A-mobile-accounts` |
+| Next | Locally accept T-025A, then continue the owner-authorized Phase 15 sequence |
 | Blocker | None |
 
 ## Phase 15 handoff — mobile redesign
@@ -30,9 +30,11 @@ the one task file you are working on. Nothing else by default.
 Phase 14 is closed. Phase 15 has been decomposed into bounded T-023–T-031 task
 files, including the required T-024/T-025/T-027/T-030 splits. ADR-0011 defines a
 usable local preview after T-029 without calling the phase accepted. Batch
-readiness review closed all P0–P2 findings. T-023 is locally accepted and
-`done`; T-024A and T-024B are locally accepted and `done`. No successor task
-has been promoted or claimed.
+readiness review closed all P0–P2 findings. T-023, T-024A and T-024B are
+locally accepted and `done`. T-025A implements mobile Accounts and account
+lifecycle; targeted tests, independent bounded review, 390×844 scratch-browser
+smoke and preserved desktop smoke pass with all P0–P2 findings closed. It is in
+`review` pending local owner acceptance.
 
 Phase 15 authority and constraints:
 
