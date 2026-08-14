@@ -103,6 +103,13 @@ changing financial semantics:
   while advanced filters are active it shows persisted ledger rows only.
   Selecting a top chip clears advanced filters and returns to the unified feed,
   so Planned is never approximated from one client-side page.
+- T-030A narrows the owner-facing `All` presentation to persisted ledger rows
+  without changing that feed contract: the frontend drains successive mixed
+  `filter=all` pages in financial-date order, requests only the remaining
+  visible capacity, retains the opaque source cursor, and omits planned
+  projections from rendering. Planned projections remain available only under
+  the explicit Planned chip; Income, Expense and Transfer keep their existing
+  feed filters.
 - Account-details `Full history` opens account-filtered Transactions. Period
   history remains reachable from Operations.
 - A shared/non-owner account renders one non-actionable `No period` state and
@@ -192,6 +199,14 @@ and becomes transform-free under reduced motion. On mobile the overlay ends
 above the fixed tab bar so a physical tab tap closes the full stack; sheets and
 confirmations keep their accepted safe-area clearance.
 
+T-030A supersedes only that final geometry for core Accounts, Transactions and
+Operations overlays: those sheets and confirmations extend to the bottom safe
+edge and cover the tab bar, so close/scrim/Escape own dismissal while open.
+Profile/Settings and Plan overlays keep the preceding above-tab behavior.
+Core editable inputs and textareas use a computed font size of at least 16px as
+an iPhone Safari auto-zoom exception; the zoom-permitting viewport meta remains
+unchanged.
+
 T-025A composes the mobile Accounts surface from the accepted summary contract:
 one 72px capital strip, the conditional 44px missing-rate entry point, and
 exact `CASH`, `BANK`, `CRYPTO` groups with 64px rows and a 56px New account row.
@@ -231,3 +246,7 @@ One line per landed design change: date, what changed, why.
 - 2026-08-13 — unified all runtime selectors, confirmations and logout behind
   the accessible overlay stack; added desktop top-layer return, focus restore,
   native-keyboard blur, tab-close and forbidden-native-API guards for T-029.
+- 2026-08-13 — narrowed T-030A to the owner-selected core mobile surfaces;
+  kept persisted `All` lossless through mixed-feed draining, moved core
+  overlays through the tab bar to the safe edge, and raised core editable
+  controls to 16px for iPhone Safari focus stability.

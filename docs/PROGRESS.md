@@ -20,10 +20,10 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
-| Active work | None claimed — T-029 accepted; `finapp-v2-develop` pushed to `origin` |
-| Next | Claim T-030A mobile acceptance matrix |
-| Blocker | None |
+| Last full suite | **426 passed** (2026-08-15, on `finapp-v2-develop` after the T-030A merge) |
+| Active work | none claimed — T-030A accepted, T-030B is the next task |
+| Next | T-030B desktop regression and the full Phase 15 runtime gate |
+| Blocker | Owner must rule on the replaced design specification (see T-030A) |
 
 ## Phase 15 handoff — mobile redesign
 
@@ -56,8 +56,44 @@ now locally accepted: reviewed implementation `0ac4693` was fast-forwarded into
 exact 11-test target, diff and forbidden-native-API checks were re-run at
 acceptance and pass; the syntax gate stands on the implementation session's
 bundled-Node run because no Node runtime exists in the acceptance environment.
-The preview is usable under ADR-0011. Phase 15 remains incomplete and
-unaccepted, and T-030A has not been claimed.
+The preview is usable under ADR-0011. The repository owner narrowed T-030A to
+an iPhone 15 fast-track for Accounts, Transactions, and Operations after
+reporting Safari regressions; Plan, Analytics, and desktop verification are
+explicitly deferred. The reviewed implementation now fixes the reported core
+tab-bar, mixed Planned feed, sheet geometry and focus-zoom regressions. Its
+focused 72-test, JavaScript and diff gates pass, and disposable 393×852 plus
+390×844 browser evidence passes with a clean console.
+
+On 2026-08-14 the owner returned sixteen further iPhone Safari findings and
+replaced the mobile design specification in the working tree, reopening T-030A
+to `in-progress`. All sixteen are fixed: overlays now cover the tab bar with no
+per-surface exception, sheet secondaries lost the inherited accent fill, the
+swipe lane travels its real action width, Undo moved into the period card as
+the specified 26×26 `↺`, the segmented pill and Transfer layout match the
+spec, every editable control is at least 16px so Safari cannot focus-zoom, and
+the avatar carries its 10px accent dot. Full pytest is **425 passed**, the
+72-test target, `node --check` and `git diff --check` pass, and the 393×852
+matrix plus 390×844 smoke verify each finding from the live DOM. The replaced
+specification also reverts settled Phase 14 decisions that no finding depends
+on — over-limit submit blocking, the rollover checkbox, the allowance formula,
+Plan `Skip`, and the disabled `Coming soon` options — so those areas were left
+at their accepted behaviour and need an owner ruling.
+
+Two follow-up corrections landed on the same day: saving an operation is now
+silent, with the form clearing and the cards recalculating in place, and
+Transfer regained the 10px gap that made every mode share one layout. A third
+fixed delivery rather than the UI — `index.html` was served without
+`Cache-Control`, so iOS Safari kept a heuristically cached copy holding the old
+asset version tokens and no fix could reach the device at all; `app/main.py`
+now serves the entry document with `no-cache`.
+
+The repository owner accepted T-030A on 2026-08-15 and it is `done`;
+`finapp-v2-develop` fast-forwarded to `8bfa353` and re-ran clean at **426
+passed**. The independent round-2 review and the actual iPhone 15 Safari matrix
+were **waived, not satisfied**, and the `app/main.py` header is an accepted
+exception to that task's `Touches` — see the task file. Phase 15 remains
+incomplete and unaccepted: T-030B desktop regression and T-031 closure are
+still open.
 
 `finapp-v2-develop` has been pushed to `origin` on owner instruction, so the
 remote integration branch now matches local accepted state. `finapp-v2` was not

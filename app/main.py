@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.assets import router as assets_router, seed_default_assets
@@ -67,4 +68,19 @@ async def health():
 
 
 STATIC_DIR = Path(__file__).parent / "static"
+INDEX_FILE = STATIC_DIR / "index.html"
+
+
+@app.get("/")
+@app.get("/index.html")
+async def spa_index():
+    """Serve the SPA entry document, always revalidated.
+
+    The document carries the version tokens for `style.css` and `app.js`.
+    `StaticFiles` sends it without `Cache-Control`, so iOS Safari caches it
+    heuristically and keeps loading the previous assets even after a deploy.
+    """
+    return FileResponse(INDEX_FILE, headers={"Cache-Control": "no-cache"})
+
+
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

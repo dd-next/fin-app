@@ -7,6 +7,23 @@ async def test_health_is_public(client):
     assert response.json() == {"status": "ok"}
 
 
+async def test_spa_entry_document_is_always_revalidated(client):
+    """The entry document carries the asset version tokens.
+
+    Served without `Cache-Control`, iOS Safari caches it heuristically and keeps
+    loading the previous `style.css`/`app.js` after a deploy.
+    """
+    for path in ("/", "/index.html"):
+        response = await client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert response.headers["cache-control"] == "no-cache"
+    # Versioned assets stay cacheable; their URL changes when they change.
+    asset = await client.get("/style.css")
+    assert asset.status_code == 200
+    assert "cache-control" not in asset.headers
+
+
 async def test_financial_foundation_requires_auth(client):
     assert (await client.get("/api/v1/assets")).status_code == 401
     assert (await client.get("/api/v1/workspaces")).status_code == 401

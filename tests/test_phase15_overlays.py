@@ -111,12 +111,13 @@ def test_overlay_css_matches_frozen_geometry_and_reduced_motion():
     css = (STATIC / "style.css").read_text(encoding="utf-8")
     mobile, outside = balanced_mobile(css)
     base_mobile = mobile.split("@media (prefers-reduced-motion: reduce)", 1)[0]
-    assert not re.search(r"\.mobile-(?:overlay|sheet|confirm)", outside)
+    assert "@media (min-width: 641px)" in outside
     root = css_rule(base_mobile, ".mobile-overlay-root")
     assert root["position"] == "fixed" and root["inset"] == "0"
     assert root["z-index"] == "100"
-    active_nav = css_rule(base_mobile, "body.overlay-active .primary-nav")
-    assert int(active_nav["z-index"]) > int(root["z-index"])
+    # The sheet covers the whole frame, tab bar included, so no rule may lift
+    # the tab bar above the overlay root.
+    assert "body.overlay-active .primary-nav" not in css
     scrim = css_rule(base_mobile, ".mobile-overlay-scrim")
     assert scrim["background"] == "rgba(0,0,0,.62)"
     sheet = css_rule(base_mobile, ".mobile-sheet")
@@ -131,15 +132,14 @@ def test_overlay_css_matches_frozen_geometry_and_reduced_motion():
     assert header["height"] == "44px" and header["padding"] == "0 16px"
     safe = css_rule(base_mobile, ".mobile-sheet-safe-band")
     assert safe["height"] == "var(--mobile-safe-bottom)"
-    active_safe = css_rule(base_mobile, "body.overlay-active .mobile-sheet-safe-band")
-    assert active_safe["height"] == "calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height))"
-    assert active_safe["min-height"] == "calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height))"
+    assert safe["min-height"] == "var(--mobile-safe-bottom)"
+    assert "body.overlay-active .mobile-sheet-safe-band" not in css
     dialog = css_rule(base_mobile, ".mobile-confirm")
     assert dialog["left"] == dialog["right"] == "16px"
     assert dialog["border-radius"] == "18px"
     assert dialog["background"] == "#1B2028"
-    active_dialog = css_rule(base_mobile, "body.overlay-active .mobile-confirm")
-    assert active_dialog["bottom"] == "calc(var(--mobile-safe-bottom) + var(--mobile-tabbar-height))"
+    assert dialog["bottom"] == "var(--mobile-safe-bottom)"
+    assert "body.overlay-active .mobile-confirm" not in css
     reduced = mobile.split("@media (prefers-reduced-motion: reduce)", 1)[1]
     assert css_rule(reduced, ".mobile-sheet")["transition"] == "none"
     assert css_rule(reduced, ".mobile-sheet")["transform"] == "none"

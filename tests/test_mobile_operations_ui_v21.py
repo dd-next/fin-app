@@ -24,15 +24,15 @@ def test_mobile_operations_exact_modes_geometry_and_scan_copy():
     assert '#view-operations { margin: -2px -16px 0; padding: 8px 16px 0; }' in css
     assert "height: 96px" in css[css.index(".mobile-ops-card {"):css.index(".mobile-ops-card.is-active")]
     assert '#view-operations .operations-selector { margin: 12px 0 0; border: 0; }' in css
-    assert ".mobile-ops-destination-label { grid-column: 1 / -1; order: 1; height: 44px; margin-top: 10px; }" in css
-    assert "#operations-transfer-amount-field { order: 2; margin-top: -8px; }" in css
+    assert "#operations-transfer-amount-field { order: 1; }" in css
+    assert ".mobile-ops-destination-label { order: 2; grid-column: auto; height: 44px; }" in css
+    assert "#operation-panel-transfer .mobile-ops-choice-label { order: 3; }" in css
+    assert '<label class="mobile-ops-destination-label"><span>To account</span>' in html
     account_trigger = css[css.index("#operations-account-overlay-trigger"):css.index("#operations-account-card .operations-account-balance")]
     assert "height: 44px" in account_trigger
     assert "min-height: 44px" in account_trigger
     assert "right: 48px" in account_trigger
-    undo_rule = css[css.index("#operations-account-card #operations-undo"):css.index("#view-operations .operations-selector")]
-    assert "right: 4px" in undo_rule
-    assert "width: 44px" in undo_rule
+    assert "#operations-account-card #operations-undo { display: none; }" in css
 
 
 def test_mobile_operations_preferences_and_stale_account_fallback_are_per_user():
@@ -75,12 +75,15 @@ def test_mobile_spend_add_defaults_and_saved_copy_are_exact():
     assert 'item.label.toLowerCase() === "groceries"' in javascript
     assert 'item.label.toLowerCase() === "salary"' in javascript
     assert 'placeholder: "Uncategorized"' in javascript
-    assert "The expense was written to ${current.name} · ${current.asset.code}. Available today was recalculated." in javascript
-    assert "The funds were added to ${current.name} · ${current.asset.code}. Balance and Available today were recalculated." in javascript
+    # Saving writes silently: no Saved dialog and none of its copy survives.
     finish = javascript[javascript.index("async function finishMobileOperation"):javascript.index("async function mobileOperationCommand")]
-    assert 'title: "Saved"' in finish
-    assert "body: messages[kind]" in finish
-    assert 'variant: "saved"' in finish
+    assert "openMobileConfirmation" not in finish
+    assert "Saved" not in finish
+    assert "The expense was written to" not in javascript
+    assert "The funds were added to" not in javascript
+    assert "The transfer was recorded" not in javascript
+    assert "clearMobileOperationsDraft(kind)" in finish
+    assert "await refreshAll()" in finish
 
 
 def test_mobile_transfer_uses_one_exact_amount_and_quote_execute_only():
@@ -121,6 +124,7 @@ def test_mobile_operation_choose_controls_and_validation_are_non_native():
 def test_mobile_undo_is_compact_branded_and_refreshes_server_candidate():
     javascript = source("app.js")
     css = source("style.css")
+    html = source("index.html")
 
     undo = javascript[javascript.index("async function performOperationsUndo"):javascript.index("async function updateOperationsCategories")]
     assert 'title: "Undo this operation?"' in undo
@@ -130,8 +134,15 @@ def test_mobile_undo_is_compact_branded_and_refreshes_server_candidate():
     assert "state.operationsUndoCandidate = null" in undo
     assert "await refreshAll()" in undo
     mobile_undo = javascript[javascript.index("function renderOperationsUndo"):javascript.index("async function loadOperationsUndoCandidate")]
-    assert '? "↶"' in mobile_undo
-    assert '#operations-account-card #operations-undo { position: absolute; top: 4px; right: 4px; width: 44px' in css
+    assert '$("operations-undo-mobile")' in mobile_undo
+    assert 'mobileButton.classList.toggle("hidden", !candidate)' in mobile_undo
+    assert 'id="operations-undo-mobile" type="button" class="mobile-ops-undo' in html
+    undo_rule = css[css.index(".mobile-ops-card .mobile-ops-undo {"):css.index(".mobile-ops-undo::after")]
+    for declaration in ("width: 26px", "height: 26px", "min-height: 26px", "border-radius: 8px"):
+        assert declaration in undo_rule
+    # ::after restores the 44px tap target the 26px spec box would lose.
+    assert ".mobile-ops-undo::after { content: \"\"; position: absolute; top: -9px" in css
+    assert "event.stopPropagation();" in javascript[javascript.index('$("operations-undo-mobile").addEventListener'):]
 
 
 def test_mobile_role_boundaries_keep_quote_owner_private():
@@ -165,15 +176,14 @@ def test_mobile_no_period_host_and_success_reset_are_stable():
     assert '$("operations-transfer-to").value = ""' in reset
     assert "state.operationsAction" not in reset
     assert "state.operationsAccountId" not in reset
+    # The silent save clears the draft first, then recalculates the cards in
+    # place and leaves the mode untouched.
     finish = javascript[javascript.index("async function finishMobileOperation"):javascript.index("async function mobileOperationCommand")]
-    before_saved = finish[:finish.index("openMobileConfirmation")]
-    assert "await refreshAll()" not in before_saved
-    assert 'variant: "saved"' in finish
-    done_action = finish[finish.index("onAction: async () => {"):]
-    assert done_action.index("clearMobileOperationsDraft(kind)") < done_action.index("await refreshAll()")
+    assert finish.index("clearMobileOperationsDraft(kind)") < finish.index("await refreshAll()")
+    assert finish.rstrip().endswith('switchView("operations");\n}')
     start = javascript.index('$("operations-add-period-mobile").addEventListener')
     mobile_period_listener = javascript[start:javascript.index('$("operations-edit-period").addEventListener', start)]
-    assert "if (!isMobileViewport()) openPeriodDialog()" in mobile_period_listener
+    assert "else openPeriodDialog()" in mobile_period_listener
     assert '$("operations-period-retry-mobile").addEventListener("click", loadOperationsPeriods)' in mobile_period_listener
 
 
@@ -183,7 +193,7 @@ def test_mobile_period_day_count_uses_dst_safe_calendar_arithmetic():
     helper = javascript[javascript.index("function calendarDayNumber"):javascript.index("function renderOperationsPeriodHistory")]
     assert "Date.UTC(year, month - 1, day) / 86400000" in helper
     period = javascript[javascript.index("function renderOperationsPeriod"):javascript.index("async function loadOperationsPeriods")]
-    assert "calendarDayNumber(current.end_date) - calendarDayNumber(todayValue()) + 1" in period
+    assert "calendarDayNumber(current.end_date) - calendarDayNumber(workspaceTodayValue()) + 1" in period
     assert "T00:00:00" not in period
 
 
@@ -204,7 +214,8 @@ def test_desktop_exchange_fee_undo_and_richer_forms_remain():
     assert 'route = "/api/v1/operations/exchange"' in javascript
     assert "body.to_amount" in javascript
     assert "body.fee" in javascript
-    assert '!window.confirm(`Undo your latest' in javascript
+    assert 'title: "Undo this operation?"' in javascript
+    assert "window.confirm" not in javascript
     assert '? "Mobile Transfer is available only to the account owner."' in javascript
     assert ': "You cannot transfer from this account."' in javascript
-    assert ".mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix { display: none; }" in css
+    assert ".mobile-ops-choice, .mobile-ops-amount-control > .mobile-amount-suffix, .mobile-period-card-trigger { display: none; }" in css

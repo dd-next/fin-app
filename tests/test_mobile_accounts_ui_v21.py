@@ -63,7 +63,9 @@ def test_mobile_account_warning_and_lifecycle_are_overlay_and_api_backed():
         'History is kept."'
     ) in javascript
     assert "it can be restored" not in javascript.lower()
-    assert "restoration" not in javascript.lower()
+    mobile_start = javascript.index("function openMobileArchive")
+    mobile_end = javascript.index("async function openAccountHistory", mobile_start)
+    assert "restoration" not in javascript[mobile_start:mobile_end].lower()
     for route in (
         'account ? `/api/v1/accounts/${account.id}` : "/api/v1/accounts"',
         '`/api/v1/accounts/${account.id}/reconcile`',

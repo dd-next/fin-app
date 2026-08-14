@@ -326,9 +326,20 @@ function showAuth() {
   state.context = null;
   $("auth-card").classList.remove("hidden");
   $("app-shell").classList.add("hidden");
+  $("primary-nav").hidden = true;
   if (pendingInvite) {
     document.querySelector(".auth-copy").textContent = "Log in or create an account to accept your account invitation.";
   }
+}
+
+function placePrimaryNavForViewport() {
+  const nav = $("primary-nav");
+  const shell = $("app-shell");
+  if (isMobileViewport()) {
+    if (nav.parentElement === shell) shell.after(nav);
+    return;
+  }
+  if (nav.parentElement !== shell) shell.insertBefore(nav, $("page-loading"));
 }
 
 async function categoriesFor(workspaceId) {
@@ -389,6 +400,8 @@ async function showApp(context) {
   state.context = context;
   $("auth-card").classList.add("hidden");
   $("app-shell").classList.remove("hidden");
+  placePrimaryNavForViewport();
+  $("primary-nav").hidden = false;
   $("workspace-name").textContent = context.workspace.name;
   $("profile-summary").textContent = context.user.display_name;
   $("profile-name").textContent = context.user.display_name;
@@ -409,7 +422,9 @@ async function refreshAll() {
     const [summary, page, feedPage, planRules, planOccurrences] = await Promise.all([
       api("/api/v1/accounts/summary"),
       api(transactionUrl),
-      api(`/api/v1/transaction-feed?filter=${encodeURIComponent(state.transactionFeedFilter)}&limit=50`),
+      isMobileViewport()
+        ? fetchMobileTransactionFeedPage(state.transactionFeedFilter)
+        : api(`/api/v1/transaction-feed?filter=${encodeURIComponent(state.transactionFeedFilter)}&limit=50`),
       api(`/api/v1/workspaces/${workspaceId}/plan-rules`),
       api(`/api/v1/workspaces/${workspaceId}/plan-occurrences`),
     ]);
@@ -547,7 +562,8 @@ function renderMobileOverlay() {
 
 function openMobileSheet(config, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const parentContext = mobileOverlayState.stack.at(-1)?.context || null;
+  const parent = mobileOverlayState.stack.at(-1) || null;
+  const parentContext = parent?.context || null;
   mobileOverlayState.stack.push({
     kind: "sheet",
     kicker: String(config.kicker || ""),
@@ -638,7 +654,8 @@ function openMobileChoose({ title, options, onSelect, onClose, returnFocusSelect
 
 function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
-  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: mobileOverlayState.stack.at(-1)?.context || null };
+  const parent = mobileOverlayState.stack.at(-1) || null;
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: parent?.context || null };
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
@@ -1003,18 +1020,16 @@ function renderOperationsAccountBalance() {
 
 function renderOperationsUndo() {
   const candidate = state.operationsUndoCandidate;
+  const label = candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo";
   const button = $("operations-undo");
   button.classList.toggle("hidden", !candidate);
   button.disabled = state.operationsUndoLoading || !candidate;
-  button.textContent = isMobileViewport()
-    ? "↶"
-    : candidate
-      ? `↶ Undo ${candidate.type.replaceAll("_", " ")}`
-      : "↶ Undo";
-  button.setAttribute(
-    "aria-label",
-    candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo",
-  );
+  button.textContent = candidate ? `↶ Undo ${candidate.type.replaceAll("_", " ")}` : "↶ Undo";
+  button.setAttribute("aria-label", label);
+  const mobileButton = $("operations-undo-mobile");
+  mobileButton.classList.toggle("hidden", !candidate);
+  mobileButton.disabled = state.operationsUndoLoading || !candidate;
+  mobileButton.setAttribute("aria-label", label);
 }
 
 async function loadOperationsUndoCandidate() {
@@ -1077,7 +1092,7 @@ async function performOperationsUndo(account, transaction) {
   }
 }
 
-async function undoLatestOperation() {
+async function undoLatestOperation(opener = $("operations-undo")) {
   const account = selectedOperationsAccount();
   const transaction = state.operationsUndoCandidate;
   if (!account || !transaction) return;
@@ -1087,7 +1102,7 @@ async function undoLatestOperation() {
     actionLabel: "Undo",
     variant: "destructive",
     onAction: () => performOperationsUndo(account, transaction),
-  }, $("operations-undo"));
+  }, opener);
 }
 
 async function updateOperationsCategories(account) {
@@ -1667,24 +1682,13 @@ function clearMobileOperationsDraft(kind) {
   renderMobileOperationsControls();
 }
 
-async function finishMobileOperation(kind, account, body) {
+async function finishMobileOperation(kind) {
+  // Saving writes silently: no confirmation. The form clears, the mode stays,
+  // and the two cards recalculate in place. The period card's undo is the only
+  // escape hatch afterwards.
+  clearMobileOperationsDraft(kind);
+  await refreshAll();
   switchView("operations");
-  const current = accountById(account.id) || account;
-  const messages = {
-    spend: `The expense was written to ${current.name} · ${current.asset.code}. Available today was recalculated.`,
-    add: `The funds were added to ${current.name} · ${current.asset.code}. Balance and Available today were recalculated.`,
-    transfer: "The transfer was recorded. Both accounts were updated — total capital is unchanged.",
-  };
-  openMobileConfirmation({
-    title: "Saved",
-    body: messages[kind],
-    variant: "saved",
-    onAction: async () => {
-      clearMobileOperationsDraft(kind);
-      await refreshAll();
-      switchView("operations");
-    },
-  }, document.activeElement);
 }
 
 async function mobileOperationCommand(path, body, confirmationTitle, confirmationBody, onConfirmed) {
@@ -1737,10 +1741,10 @@ async function saveOperationsSingle(event, kind) {
         body,
         "Save this operation?",
         "It changes an ended account period. Balances and period history will be recalculated.",
-        () => finishMobileOperation(kind === "spend" ? "spend" : "add", account, body),
+        () => finishMobileOperation(kind === "spend" ? "spend" : "add"),
       );
       if (!completed) return;
-      await finishMobileOperation(kind === "spend" ? "spend" : "add", account, body);
+      await finishMobileOperation(kind === "spend" ? "spend" : "add");
       return;
     }
     if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;
@@ -1809,10 +1813,10 @@ async function saveOperationsTransfer(event) {
         body,
         "Save this transfer?",
         "It changes an ended account period. Both account histories will be recalculated.",
-        () => finishMobileOperation("transfer", source, body),
+        () => finishMobileOperation("transfer"),
       );
       if (!completed) return;
-      await finishMobileOperation("transfer", source, body);
+      await finishMobileOperation("transfer");
       return;
     }
     if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;
@@ -3999,14 +4003,34 @@ function canLinkTransactionToPlan(transaction) {
     && ["expense", "income", "transfer"].includes(transaction.type);
 }
 
+async function fetchMobileTransactionFeedPage(filter, cursor = null, visibleLimit = 50) {
+  let sourceCursor = cursor;
+  const persisted = [];
+  do {
+    const remaining = visibleLimit - persisted.length;
+    const query = new URLSearchParams({ filter, limit: String(remaining) });
+    if (sourceCursor) query.set("cursor", sourceCursor);
+    const page = await api(`/api/v1/transaction-feed?${query}`);
+    if (filter !== "all") return page;
+    persisted.push(...page.items.filter((item) => item.kind === "transaction"));
+    if (!page.next_cursor || page.next_cursor === sourceCursor) {
+      sourceCursor = null;
+      break;
+    }
+    sourceCursor = page.next_cursor;
+  } while (persisted.length < visibleLimit);
+  return { items: persisted, next_cursor: sourceCursor };
+}
+
 async function loadMobileTransactionFeed(append = false) {
   if (state.transactionFeedLoading) return false;
   state.transactionFeedLoading = true;
   setLoading(true);
   try {
-    const query = new URLSearchParams({ filter: state.transactionFeedFilter, limit: "50" });
-    if (append && state.transactionFeedCursor) query.set("cursor", state.transactionFeedCursor);
-    const page = await api(`/api/v1/transaction-feed?${query}`);
+    const page = await fetchMobileTransactionFeedPage(
+      state.transactionFeedFilter,
+      append ? state.transactionFeedCursor : null,
+    );
     state.transactionFeedItems = append ? [...state.transactionFeedItems, ...page.items] : page.items;
     state.transactionFeedCursor = page.next_cursor;
     renderTransactions();
@@ -4070,6 +4094,9 @@ function mobileFeedRow(item) {
     remove.addEventListener("click", () => openMobileDeleteTransaction(transaction, remove));
     actions.append(remove);
   }
+  // The lane reveals one 64px action per button, so the body must travel the
+  // full width of the actions it actually has.
+  row.style.setProperty("--mobile-swipe-offset", `-${actions.childElementCount * 64}px`);
   const body = document.createElement("button");
   body.type = "button";
   body.className = "mobile-transaction-body mobile-interactive";
@@ -5115,6 +5142,9 @@ $("mobile-overlay-root").addEventListener("focusin", (event) => {
   }
 });
 document.querySelectorAll(".primary-nav button").forEach((button) => button.addEventListener("click", () => switchView(button.dataset.view)));
+window.addEventListener("resize", () => {
+  if (state.context) placePrimaryNavForViewport();
+});
 document.querySelectorAll("[data-operation-action]").forEach((button) => {
   button.addEventListener("click", () => setOperationsAction(button.dataset.operationAction));
   button.addEventListener("keydown", (event) => {
@@ -5168,7 +5198,12 @@ $("operations-close-period").addEventListener("click", () => closeOperationsPeri
 $("operations-period-history").addEventListener("click", openPeriodHistory);
 $("operations-period-retry").addEventListener("click", loadOperationsPeriods);
 $("period-form").addEventListener("submit", saveOperationsPeriod);
-$("operations-undo").addEventListener("click", undoLatestOperation);
+$("operations-undo").addEventListener("click", () => undoLatestOperation($("operations-undo")));
+$("operations-undo-mobile").addEventListener("click", (event) => {
+  // Never let the period card's full-card trigger open period details instead.
+  event.stopPropagation();
+  void undoLatestOperation($("operations-undo-mobile"));
+});
 
 $("toggle-auth").addEventListener("click", () => {
   state.registerMode = !state.registerMode;

@@ -75,7 +75,7 @@ rows remain blocked until their accepted dependencies land.
 | [T-027B](tasks/T-027B-mobile-periods.md) | Account-period cards and lifecycle | done | M | design §03.3, §04–§05 | T-027A |
 | [T-028](tasks/T-028-mobile-plan-analytics.md) | Plan rule/occurrence flows and Analytics placeholder | done | M | spec §8, design §03.4–§03.5 | T-019, T-024B |
 | [T-029](tasks/T-029-navigation-accessibility.md) | Integrate navigation, keyboard, motion, and accessibility | done | M | design §05, §08 | T-025B, T-026, T-027B, T-028 |
-| [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the 390×844 mobile acceptance matrix | backlog | M | design §01–§08 | T-029 |
+| [T-030A](tasks/T-030A-mobile-acceptance.md) | Pass the core iPhone 15 mobile acceptance matrix | done | M | design §01–§08, core scope | T-029 |
 | [T-030B](tasks/T-030B-desktop-regression.md) | Preserve desktop and run the Phase 15 regression gate | backlog | M | build plan Phase 15 | T-030A |
 | [T-031](tasks/T-031-phase15-close.md) | Assemble Phase 15 closure evidence | backlog | S | all Phase 15 | T-030B |
 
@@ -99,6 +99,7 @@ Not scheduled. Rows here are notes, not commitments.
 |----|------|------|
 | T-032 | Implement Owner invitation and safe ownership/workspace transfer | Explicitly deferred until after the mobile redesign; Phase 15 shows disabled `Owner · Coming soon`. |
 | T-033 | External automatic daily rates | Explicitly deferred; Phase 15 supports manual input and a disabled `Auto · Coming soon` option. |
+| T-034 | Seed THB in the default asset catalogue | Owner needs a Thai baht account. `DEFAULT_ASSETS` in `app/assets.py` is the only durable place: `seed_default_assets()` is idempotent and backfills missing codes on every start, while `POST /api/v1/assets` only touches the currently attached database. |
 
 ## Closed evidence
 
