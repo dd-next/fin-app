@@ -1,7 +1,7 @@
 ---
 id: T-030A
 title: Pass the core iPhone 15 mobile acceptance matrix
-status: in-progress
+status: done
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md through spec/06-content.md; spec/08-acceptance.md scoped to Accounts, Transactions, and Operations
 blocked-by: [T-029]
@@ -354,6 +354,32 @@ CSS transitions while it is not the front tab, so the swipe measurement was
 taken with the 160ms transition disabled; the settled transform and both
 action boxes were then read directly.
 
+## Owner acceptance — 2026-08-15
+
+The repository owner accepted T-030A and instructed the merge into
+`finapp-v2-develop`, which fast-forwarded to `8bfa353` with no merge commit.
+Status is `done` on that instruction.
+
+Accepted on this evidence: full pytest **426 passed**, `node --check`,
+`git diff --check`, and the disposable-database `393×852` matrix plus `390×844`
+smoke recorded above, all re-run on `finapp-v2-develop` after the merge.
+
+Waived by the owner rather than satisfied, and therefore still true of the
+build:
+
+- No independent implementation review of the round-2, 2b or 2c fixes. The
+  round-1 review predates all of them.
+- No actual iPhone 15 Safari matrix. The device could not receive any fix until
+  the Round 2c cache-header change, so the unchecked acceptance boxes above —
+  the full `spec/08` walk, the focus-zoom check on device, contrast and reduced
+  motion, and the P2/P3 enumeration — were never exercised on real Safari.
+- The `app/main.py` cache header stands as an accepted exception to `Touches`.
+- The replaced design specification is still uncommitted and unresolved; the
+  owner deferred that decision to 2026-08-15 or later. The reverted Phase 14
+  areas keep their accepted behaviour in code.
+
+T-030B still owns desktop regression and the full Phase 15 runtime gate.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-030; not claimed.
@@ -400,3 +426,8 @@ action boxes were then read directly.
   heuristically cached copy holding the old asset version tokens. `app/main.py`
   now serves it with `no-cache`. Recorded as **Round 2c**; it is the one change
   outside `Touches` and needs owner sign-off. Full pytest 426.
+- 2026-08-15 repository owner: accepted T-030A and instructed the merge into
+  `finapp-v2-develop` (fast-forward to `8bfa353`). Status set to `done`. The
+  independent round-2 review and the real iPhone 15 Safari matrix were waived,
+  not satisfied — see **Owner acceptance** above. The design-specification
+  decision is deferred to a later session.
