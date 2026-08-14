@@ -99,6 +99,7 @@ Not scheduled. Rows here are notes, not commitments.
 |----|------|------|
 | T-032 | Implement Owner invitation and safe ownership/workspace transfer | Explicitly deferred until after the mobile redesign; Phase 15 shows disabled `Owner · Coming soon`. |
 | T-033 | External automatic daily rates | Explicitly deferred; Phase 15 supports manual input and a disabled `Auto · Coming soon` option. |
+| T-034 | Seed THB in the default asset catalogue | Owner needs a Thai baht account. `DEFAULT_ASSETS` in `app/assets.py` is the only durable place: `seed_default_assets()` is idempotent and backfills missing codes on every start, while `POST /api/v1/assets` only touches the currently attached database. |
 
 ## Closed evidence
 
