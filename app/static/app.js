@@ -1682,24 +1682,13 @@ function clearMobileOperationsDraft(kind) {
   renderMobileOperationsControls();
 }
 
-async function finishMobileOperation(kind, account, body) {
+async function finishMobileOperation(kind) {
+  // Saving writes silently: no confirmation. The form clears, the mode stays,
+  // and the two cards recalculate in place. The period card's undo is the only
+  // escape hatch afterwards.
+  clearMobileOperationsDraft(kind);
+  await refreshAll();
   switchView("operations");
-  const current = accountById(account.id) || account;
-  const messages = {
-    spend: `The expense was written to ${current.name} · ${current.asset.code}. Available today was recalculated.`,
-    add: `The funds were added to ${current.name} · ${current.asset.code}. Balance and Available today were recalculated.`,
-    transfer: "The transfer was recorded. Both accounts were updated — total capital is unchanged.",
-  };
-  openMobileConfirmation({
-    title: "Saved",
-    body: messages[kind],
-    variant: "saved",
-    onAction: async () => {
-      clearMobileOperationsDraft(kind);
-      await refreshAll();
-      switchView("operations");
-    },
-  }, document.activeElement);
 }
 
 async function mobileOperationCommand(path, body, confirmationTitle, confirmationBody, onConfirmed) {
@@ -1752,10 +1741,10 @@ async function saveOperationsSingle(event, kind) {
         body,
         "Save this operation?",
         "It changes an ended account period. Balances and period history will be recalculated.",
-        () => finishMobileOperation(kind === "spend" ? "spend" : "add", account, body),
+        () => finishMobileOperation(kind === "spend" ? "spend" : "add"),
       );
       if (!completed) return;
-      await finishMobileOperation(kind === "spend" ? "spend" : "add", account, body);
+      await finishMobileOperation(kind === "spend" ? "spend" : "add");
       return;
     }
     if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;
@@ -1824,10 +1813,10 @@ async function saveOperationsTransfer(event) {
         body,
         "Save this transfer?",
         "It changes an ended account period. Both account histories will be recalculated.",
-        () => finishMobileOperation("transfer", source, body),
+        () => finishMobileOperation("transfer"),
       );
       if (!completed) return;
-      await finishMobileOperation("transfer", source, body);
+      await finishMobileOperation("transfer");
       return;
     }
     if (await apiWithEndedPeriodConfirmation(route, "POST", body) === SHARED_ACTION_CANCELLED) return;

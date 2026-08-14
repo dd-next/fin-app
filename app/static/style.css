@@ -629,7 +629,11 @@ dialog::backdrop { background: rgba(3, 5, 8, .74); backdrop-filter: blur(8px); }
   #view-operations .operations-workspace > section > .eyebrow,
   #view-operations .operations-workspace > section > h3 { display: none; }
   #view-operations .operations-form { max-width: none; margin: 0; }
-  #operation-panel-spend .operations-form, #operation-panel-add-funds .operations-form { margin-top: 10px; }
+  /* The 10px the clearance budget puts between the segmented control and the
+     amount field — every mode, Transfer included. */
+  #operation-panel-spend .operations-form,
+  #operation-panel-add-funds .operations-form,
+  #operation-panel-transfer .operations-form { margin-top: 10px; }
   #view-operations .operations-form .form-grid { display: grid; margin: 0; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; }
   #view-operations .operations-form label { min-width: 0; gap: 0; }
   #view-operations .operations-form label > span:first-child:not(.mobile-ops-amount-control) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

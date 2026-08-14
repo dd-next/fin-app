@@ -181,5 +181,5 @@ def test_every_editable_control_prevents_safari_auto_zoom_without_disabling_zoom
 def test_mobile_assets_are_cache_busted_for_real_device_recheck():
     html = source("index.html")
 
-    assert '/style.css?v=phase15-t030a-2' in html
-    assert '/app.js?v=phase15-t030a-2' in html
+    assert '/style.css?v=phase15-t030a-3' in html
+    assert '/app.js?v=phase15-t030a-3' in html

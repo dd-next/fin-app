@@ -270,8 +270,22 @@ intended before anything acts on them.
 | 14 | A single low-specificity `input, textarea, select { font-size: 16px }` inside the mobile block replaces the three view-scoped rules; the 28px amount field keeps its size | `style.css` |
 | 16 | The avatar tile paints a measured 10px accent dot through `::before`, immune to the `color: transparent` on `.view-heading > button` | `style.css` |
 
-Asset cache-bust moved `phase15-t030a-1` → `phase15-t030a-2` so the owner's
+Asset cache-bust moved `phase15-t030a-1` → `phase15-t030a-3` so the owner's
 device reloads both files.
+
+### Round 2b — two further owner corrections, 2026-08-14
+
+| # | Screen | Expected | Observed | Authority |
+|---|---|---|---|---|
+| 17 | Operations, all save modes | Save writes silently; the form clears, the mode stays and the cards recalculate in place | A **Saved** confirmation with a `Done` button interrupted every save | `spec/03` §3.3, `spec/05` Success, `spec/08` |
+| 18 | Operations → Transfer | 10px between the segmented control and the amount field, as in every other mode | Transfer had no gap; the amount field touched the control | `spec/03` §3.3 clearance budget |
+
+`finishMobileOperation` now clears the draft, refreshes and leaves the mode
+untouched with no dialog, and its `Saved` copy is deleted; the period card's
+`↺` remains the only escape hatch, which is what the updated spec intends.
+`#operation-panel-transfer .operations-form` joins the 10px `margin-top` rule.
+The repository owner also confirmed on 2026-08-14 that desktop behaviour is
+not a priority for this task and must simply keep working.
 
 ## Round 2 verification evidence — 2026-08-14
 
@@ -303,6 +317,18 @@ from the live DOM:
 
 `390×844` smoke: both cards 96px, segments 87×38, undo 26×26, no horizontal
 overflow, no editable control below 16px, avatar dot 10×10.
+
+Round 2b re-verification at `393×852`, driven through the real controls:
+
+| Finding | Observed |
+|---|---|
+| 17 | Spend 50,000: no confirmation, no sheet, `overlay-active` false, amount and note cleared, mode stays Spend, balance and Available both 2,749,000 → 2,699,000, undo still offered. Add funds 25,000: silent, cleared, mode stays Add funds, balance → 2,724,000. Transfer 24,000 to a same-asset account through the mobile picker: silent, amount cleared, destination reset to `Choose destination`, mode stays Transfer, balance → 2,700,000, quote and execute both 201 |
+| 18 | Gap after the segmented control is 10px in Spend, Add funds **and** Transfer; the amount field starts at y 178 and the submit ends at y 404 in all three, so the modes share one layout |
+
+The two 422s in the console are deliberate bad-input transfer attempts from
+the harness (no destination, then a cross-asset amount the exact-Decimal quote
+rejects); both surfaced as inline form errors, and the successful transfer is
+201 + 201.
 
 Console and network are clean in the authenticated session — every request
 200; the single 401 is the pre-login `auth/me` bootstrap probe.
@@ -347,3 +373,9 @@ action boxes were then read directly.
   replacement conflict above, and whether `openCategories` routing desktop into
   the mobile sheet is intended (a T-030B question). Independent implementation
   review and real iPhone 15 Safari evidence are still outstanding.
+- 2026-08-14 Claude Opus 5: owner returned two further corrections after seeing
+  the fixes on device — remove the **Saved** confirmation so saving is silent,
+  and restore the missing 10px gap in Transfer. Both are fixed and verified
+  through the real controls for all three save modes; full pytest stays at 425.
+  The owner also stated that desktop is not a priority for this task, so the
+  `openCategories` desktop-routing question is left entirely to T-030B.

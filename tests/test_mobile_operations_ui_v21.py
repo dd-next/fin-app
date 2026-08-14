@@ -75,12 +75,15 @@ def test_mobile_spend_add_defaults_and_saved_copy_are_exact():
     assert 'item.label.toLowerCase() === "groceries"' in javascript
     assert 'item.label.toLowerCase() === "salary"' in javascript
     assert 'placeholder: "Uncategorized"' in javascript
-    assert "The expense was written to ${current.name} · ${current.asset.code}. Available today was recalculated." in javascript
-    assert "The funds were added to ${current.name} · ${current.asset.code}. Balance and Available today were recalculated." in javascript
+    # Saving writes silently: no Saved dialog and none of its copy survives.
     finish = javascript[javascript.index("async function finishMobileOperation"):javascript.index("async function mobileOperationCommand")]
-    assert 'title: "Saved"' in finish
-    assert "body: messages[kind]" in finish
-    assert 'variant: "saved"' in finish
+    assert "openMobileConfirmation" not in finish
+    assert "Saved" not in finish
+    assert "The expense was written to" not in javascript
+    assert "The funds were added to" not in javascript
+    assert "The transfer was recorded" not in javascript
+    assert "clearMobileOperationsDraft(kind)" in finish
+    assert "await refreshAll()" in finish
 
 
 def test_mobile_transfer_uses_one_exact_amount_and_quote_execute_only():
@@ -173,12 +176,11 @@ def test_mobile_no_period_host_and_success_reset_are_stable():
     assert '$("operations-transfer-to").value = ""' in reset
     assert "state.operationsAction" not in reset
     assert "state.operationsAccountId" not in reset
+    # The silent save clears the draft first, then recalculates the cards in
+    # place and leaves the mode untouched.
     finish = javascript[javascript.index("async function finishMobileOperation"):javascript.index("async function mobileOperationCommand")]
-    before_saved = finish[:finish.index("openMobileConfirmation")]
-    assert "await refreshAll()" not in before_saved
-    assert 'variant: "saved"' in finish
-    done_action = finish[finish.index("onAction: async () => {"):]
-    assert done_action.index("clearMobileOperationsDraft(kind)") < done_action.index("await refreshAll()")
+    assert finish.index("clearMobileOperationsDraft(kind)") < finish.index("await refreshAll()")
+    assert finish.rstrip().endswith('switchView("operations");\n}')
     start = javascript.index('$("operations-add-period-mobile").addEventListener')
     mobile_period_listener = javascript[start:javascript.index('$("operations-edit-period").addEventListener', start)]
     assert "else openPeriodDialog()" in mobile_period_listener
