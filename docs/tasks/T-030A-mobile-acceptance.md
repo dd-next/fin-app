@@ -287,6 +287,21 @@ untouched with no dialog, and its `Saved` copy is deleted; the period card's
 The repository owner also confirmed on 2026-08-14 that desktop behaviour is
 not a priority for this task and must simply keep working.
 
+### Round 2c — the device could not receive any fix
+
+| # | Surface | Expected | Observed | Cause |
+|---|---|---|---|---|
+| 19 | SPA entry document | A reload after a deploy loads the current `style.css`/`app.js` | The owner's iPhone kept rendering the pre-fix build over a tunnel to a local `uvicorn --reload`, while the same build was correct in the desktop preview | `StaticFiles(html=True)` sends `index.html` with no `Cache-Control`, so iOS Safari caches it heuristically. The asset version tokens live **inside** that document, so bumping them could never reach a device that never re-fetched it. |
+
+`app/main.py` now serves `/` and `/index.html` through an explicit route with
+`Cache-Control: no-cache`, so the entry document is always revalidated while
+the versioned assets stay cacheable. This is the one change in this task
+outside the `Touches` list — it edits a backend file — and it is a static
+response header only: no API, schema, contract or behaviour change. Without
+it the task's own acceptance criterion of actual iPhone 15 Safari evidence is
+unreachable, so it needs owner sign-off as a bounded exception.
+`test_spa_entry_document_is_always_revalidated` covers it.
+
 ## Round 2 verification evidence — 2026-08-14
 
 Disposable scratch database, fresh Alembic upgrade to `0004_transfer_quotes`,
@@ -379,3 +394,9 @@ action boxes were then read directly.
   through the real controls for all three save modes; full pytest stays at 425.
   The owner also stated that desktop is not a priority for this task, so the
   `openCategories` desktop-routing question is left entirely to T-030B.
+- 2026-08-14 Claude Opus 5: the owner reported that nothing changed on device
+  even after both fix rounds. Root cause was delivery, not the fixes: the SPA
+  entry document was served without `Cache-Control`, so iOS Safari kept a
+  heuristically cached copy holding the old asset version tokens. `app/main.py`
+  now serves it with `no-cache`. Recorded as **Round 2c**; it is the one change
+  outside `Touches` and needs owner sign-off. Full pytest 426.
