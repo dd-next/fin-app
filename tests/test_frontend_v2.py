@@ -26,7 +26,7 @@ class DomSmokeParser(HTMLParser):
 
 
 def test_spa_has_five_sections_and_financial_dialogs():
-    html = (STATIC / "index.html").read_text()
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
     parser = DomSmokeParser()
     parser.feed(html)
     assert parser.views == {"accounts", "transactions", "operations", "plan", "analytics"}
@@ -66,8 +66,7 @@ def test_spa_has_five_sections_and_financial_dialogs():
         "operations-period-history",
         "operations-period-retry",
         "operations-period-available",
-        "operations-period-remaining",
-        "operations-period-planned",
+        "operations-period-current-balance",
         "period-dialog",
         "period-form",
         "period-save",
@@ -91,7 +90,7 @@ def test_spa_has_five_sections_and_financial_dialogs():
 
 
 def test_spa_wires_account_transaction_and_invitation_api_flows():
-    javascript = (STATIC / "app.js").read_text()
+    javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     for route in (
         "/api/v1/accounts/summary",
         "/api/v1/accounts/${account.id}/archive",
@@ -131,10 +130,15 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
     assert "saveOperationsTransfer" in javascript
     assert "Cross-asset exchange" in javascript
     assert "This transaction needs explicit confirmation. Continue?" in javascript
-    assert "This period needs explicit confirmation. Continue?" in javascript
+    assert "This period needs explicit confirmation. Continue?" not in javascript
     assert "This changes an ended account period" not in javascript
     assert 'canUseAccount(account, "owner")' in javascript
-    assert "period?.funding_amount ?? account.balance" in javascript
+    assert "period-funding" not in javascript
+    assert "period.funding_amount" not in javascript
+    assert "period.remaining" not in javascript
+    assert "current.remaining" not in javascript
+    assert "current.planned" not in javascript
+    assert "occurrence.planned_amount" in javascript
     assert 'period.status === "current"' in javascript
     assert "operationsPeriodRequestId" in javascript
     assert "Period data could not be loaded. Try again." in javascript
@@ -153,7 +157,7 @@ def test_spa_wires_account_transaction_and_invitation_api_flows():
 
 
 def test_spa_keeps_archived_categories_for_history_but_not_new_choices():
-    javascript = (STATIC / "app.js").read_text()
+    javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "/categories?include_archived=true" in javascript
     assert 'category.archived_at ? " (archived)" : ""' in javascript
     assert ".filter((category) => !category.archived_at)" in javascript
@@ -161,24 +165,24 @@ def test_spa_keeps_archived_categories_for_history_but_not_new_choices():
 
 
 def test_responsive_styles_keep_mobile_controls_tappable():
-    css = (STATIC / "style.css").read_text()
+    css = (STATIC / "style.css").read_text(encoding="utf-8")
     assert "min-height: 44px" in css
     assert "@media (max-width: 640px)" in css
-    assert ".primary-nav { position: fixed" in css
+    assert re.search(r"\.primary-nav\s*\{[^}]*position:\s*fixed", css)
     assert ".operations-selector" in css
     assert "tracker" not in css.lower()
 
 
 def test_money_formatting_uses_explicit_asset_precision():
-    javascript = (STATIC / "app.js").read_text()
+    javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     assert "assetByCode(code)?.decimals" in javascript
     assert 'fraction.padEnd(precision, "0")' in javascript
-    assert "formatMoney(account.valued_balance, base)" in javascript
+    assert "moneyMarkup(account.valued_balance, base)" in javascript
 
 
 def test_plan_renders_one_card_per_rule_with_nearest_occurrences_only():
-    html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     # One card per rule; global occurrence groups and the long lists are gone.
     assert "plan-occurrence-groups" not in html
     assert "plan-occurrence-groups" not in javascript
@@ -206,15 +210,15 @@ def test_plan_renders_one_card_per_rule_with_nearest_occurrences_only():
     assert 'id="plan-rule-detail-dialog"' in html
     assert 'id="plan-detail-filter"' in html
     for option in ("all", "open", "completed", "skipped"):
-        assert f'<option value="{option}"' in html
+        assert f'{{ value: "{option}",' in javascript
     # Compact Open/Completed summary stays.
     assert 'id="plan-open-count"' in html
     assert 'id="plan-completed-count"' in html
 
 
 def test_operations_accessibility_and_loading_contract():
-    html = (STATIC / "index.html").read_text()
-    javascript = (STATIC / "app.js").read_text()
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    javascript = (STATIC / "app.js").read_text(encoding="utf-8")
     assert html.count('role="tab"') == 4
     assert html.count('role="tabpanel"') == 4
     for action in ("spend", "add-funds", "transfer", "scan"):
@@ -228,7 +232,7 @@ def test_operations_accessibility_and_loading_contract():
         "operations-transfer-error",
         "period-error",
     ):
-        assert f'id="{error_id}" class="form-error" role="alert"' in html
+        assert re.search(rf'id="{error_id}" class="[^"]*form-error[^"]*" role="alert"', html)
     assert "operationsPeriodLoading" in javascript
     assert "operationsPeriodError" in javascript
     assert "operations-period-retry" in javascript

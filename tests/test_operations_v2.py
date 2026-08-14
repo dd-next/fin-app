@@ -69,8 +69,8 @@ async def test_operations_actions_replay_selected_account_periods(client):
     await register(client)
     source = await create_account(client, "Period Operations source", "USD")
     target = await create_account(client, "Period Operations target", "USD")
-    source_period = await create_period(client, source["id"], "500")
-    target_period = await create_period(client, target["id"], "100")
+    source_period = await create_period(client, source["id"])
+    target_period = await create_period(client, target["id"])
 
     transfer = await client.post(
         "/api/v1/operations/transfer",
@@ -93,10 +93,10 @@ async def test_operations_actions_replay_selected_account_periods(client):
     assert added.status_code == 201, added.text
     assert (
         await client.get(f"/api/v1/account-periods/{source_period['id']}")
-    ).json()["remaining"] == "440"
+    ).json()["current_balance"] == "-60.00"
     assert (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
-    ).json()["remaining"] == "155"
+    ).json()["current_balance"] == "55.00"
 
 
 async def test_operations_routes_keep_transaction_validation(client):
@@ -138,7 +138,7 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
     await create_period(
         client,
         editor_source["id"],
-        "100",
+
         ended_date - timedelta(days=2),
         ended_date + timedelta(days=2),
     )
@@ -224,7 +224,7 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
         )
     ).status_code == 403
 
-    guarded = await client.post(
+    hidden_period_create = await client.post(
         "/api/v1/operations/spend",
         json={
             "account_id": editor_source["id"],
@@ -232,8 +232,8 @@ async def test_operations_enforce_every_account_role_and_keep_periods_private(cl
             "local_date": ended_date.isoformat(),
         },
     )
-    assert guarded.status_code == 409
-    assert guarded.json()["detail"] == "Transaction change requires explicit confirmation"
+    assert hidden_period_create.status_code == 201, hidden_period_create.text
+    assert hidden_period_create.json()["has_hidden_legs"] is False
 
     await login(client, "alice")
     assert await account_balance(client, private_target["id"]) == Decimal("0")

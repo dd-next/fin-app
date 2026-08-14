@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import require_workspace_owner
 from app.db import get_session
-from app.ledger import decimal_quotient, require_asset_code
+from app.ledger import manual_rate_asset_to_main, require_asset_code
 from app.models import Asset, ManualValuationRate, Workspace
 from app.schemas import (
     AssetOut,
@@ -24,14 +24,12 @@ router = APIRouter(
 )
 
 
-def reciprocal(displayed_rate: Decimal) -> Decimal:
-    """Return the exact high-precision asset-to-main valuation direction."""
-    value = Decimal(displayed_rate)
-    if not value.is_finite() or value <= 0:
-        raise HTTPException(
-            status_code=422, detail="Valuation rate must be positive and finite"
-        )
-    return decimal_quotient(Decimal(1), value)
+def decimal_string(value: Decimal) -> str:
+    """Serialize an exact Decimal without exponent notation or padding."""
+    rendered = format(Decimal(value), "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered
 
 
 async def rate_out(
@@ -45,11 +43,10 @@ async def rate_out(
     return ManualValuationRateOut(
         id=rate.id,
         workspace_id=rate.workspace_id,
-        main_asset=AssetOut.model_validate(main_asset),
-        asset=AssetOut.model_validate(asset),
-        displayed_rate=rate.displayed_rate,
-        effective_valuation_rate=reciprocal(rate.displayed_rate),
-        active=rate.main_asset_id == workspace.base_asset_id,
+        from_asset=AssetOut.model_validate(asset),
+        to_asset=AssetOut.model_validate(main_asset),
+        rate=decimal_string(manual_rate_asset_to_main(rate)),
+        source="manual",
         created_at=rate.created_at,
         updated_at=rate.updated_at,
     )
@@ -89,7 +86,7 @@ async def save_manual_valuation_rate(
             status_code=422,
             detail="Main currency always values itself at exactly 1",
         )
-    reciprocal(body.displayed_rate)
+    canonical_rate = Decimal(body.rate)
     rate = (
         await session.execute(
             select(ManualValuationRate).where(
@@ -104,11 +101,13 @@ async def save_manual_valuation_rate(
             workspace_id=workspace.id,
             main_asset_id=workspace.base_asset_id,
             asset_id=asset.id,
-            displayed_rate=body.displayed_rate,
+            rate_value=canonical_rate,
+            direction="asset_to_main",
         )
         session.add(rate)
     else:
-        rate.displayed_rate = body.displayed_rate
+        rate.rate_value = canonical_rate
+        rate.direction = "asset_to_main"
     try:
         await session.commit()
     except IntegrityError:

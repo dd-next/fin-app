@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -43,6 +44,23 @@ class ExactDecimal(TypeDecorator):
 
     def process_result_value(self, value, dialect):
         return None if value is None else Decimal(str(value))
+
+
+class CanonicalExactDecimal(ExactDecimal):
+    """Quote Decimal storage with one plain-text representation on SQLite."""
+
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        decimal = Decimal(value)
+        if dialect.name != "sqlite":
+            return decimal
+        rendered = format(decimal, "f")
+        if "." in rendered:
+            rendered = rendered.rstrip("0").rstrip(".")
+        return rendered
 
 
 class Base(DeclarativeBase):
@@ -156,6 +174,9 @@ class Workspace(Base):
     exchange_rates: Mapped[list["ExchangeRate"]] = relationship(
         back_populates="workspace", cascade="all, delete-orphan"
     )
+    transfer_quotes: Mapped[list["TransferQuote"]] = relationship(
+        back_populates="workspace", cascade="all, delete-orphan"
+    )
 
 
 class ManualValuationRate(Base):
@@ -166,6 +187,10 @@ class ManualValuationRate(Base):
             "main_asset_id",
             "asset_id",
             name="uq_manual_rate_workspace_pair",
+        ),
+        CheckConstraint(
+            "direction IN ('asset_to_main', 'main_to_asset_legacy')",
+            name="ck_manual_valuation_rate_direction",
         ),
     )
 
@@ -179,7 +204,8 @@ class ManualValuationRate(Base):
     asset_id: Mapped[int] = mapped_column(
         ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False, index=True
     )
-    displayed_rate: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    rate_value: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    direction: Mapped[str] = mapped_column(String(24), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )
@@ -435,6 +461,243 @@ class ExchangeRate(Base):
     source_transaction: Mapped[Transaction] = relationship(back_populates="rates")
 
 
+def _sqlite_positive_quote_decimal(column: str) -> str:
+    """Exact canonical positive Decimal text for SQLite-backed quote values."""
+    integer_digits = (
+        f"CASE WHEN instr({column}, '.') = 0 THEN length({column}) "
+        f"ELSE instr({column}, '.') - 1 END"
+    )
+    fraction_digits = (
+        f"CASE WHEN instr({column}, '.') = 0 THEN 0 "
+        f"ELSE length({column}) - instr({column}, '.') END"
+    )
+    return (
+        f"typeof({column}) = 'text' AND length({column}) > 0 AND "
+        f"{column} NOT GLOB '*[^0-9.]*' AND "
+        f"{column} NOT LIKE '%.%.%' AND "
+        f"substr({column}, 1, 1) <> '.' AND substr({column}, -1, 1) <> '.' AND "
+        f"(substr({column}, 1, 1) <> '0' OR length({column}) = 1 OR "
+        f"substr({column}, 2, 1) = '.') AND "
+        f"(instr({column}, '.') = 0 OR substr({column}, -1, 1) <> '0') AND "
+        f"{column} GLOB '*[1-9]*' AND ({integer_digits}) BETWEEN 1 AND 20 AND "
+        f"({fraction_digits}) BETWEEN 0 AND 18"
+    )
+
+
+def _dialect_check(sql: str, name: str, dialect: str) -> CheckConstraint:
+    return CheckConstraint(sql, name=name).ddl_if(dialect=dialect)
+
+
+def _postgres_positive_finite_quote_decimal(column: str) -> str:
+    return (
+        f"{column} > 0 AND "
+        f"{column}::text NOT IN ('NaN', 'Infinity', '-Infinity')"
+    )
+
+
+class TransferQuote(Base):
+    __tablename__ = "transfer_quote"
+    __table_args__ = (
+        UniqueConstraint(
+            "executed_transaction_id",
+            name="uq_transfer_quote_executed_transaction",
+        ),
+        CheckConstraint(
+            "from_account_id <> to_account_id",
+            name="ck_transfer_quote_accounts_distinct",
+        ),
+        _dialect_check(
+            " AND ".join(
+                _sqlite_positive_quote_decimal(column)
+                for column in ("from_amount", "to_amount", "rate")
+            ),
+            "ck_transfer_quote_positive_values",
+            "sqlite",
+        ),
+        _dialect_check(
+            " AND ".join(
+                _postgres_positive_finite_quote_decimal(column)
+                for column in ("from_amount", "to_amount", "rate")
+            ),
+            "ck_transfer_quote_positive_values",
+            "postgresql",
+        ),
+        CheckConstraint(
+            "rate_source = 'manual'",
+            name="ck_transfer_quote_rate_source",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'executed')",
+            name="ck_transfer_quote_status",
+        ),
+        CheckConstraint(
+            "expires_at > created_at",
+            name="ck_transfer_quote_expiry",
+        ),
+        CheckConstraint(
+            "(status = 'open' AND executed_at IS NULL AND "
+            "executed_transaction_id IS NULL) OR "
+            "(status = 'executed' AND executed_at IS NOT NULL AND "
+            "executed_transaction_id IS NOT NULL)",
+            name="ck_transfer_quote_execution_state",
+        ),
+        _dialect_check(
+            "(source_manual_rate_id IS NULL AND "
+            "source_manual_rate_value IS NULL AND "
+            "source_manual_rate_direction IS NULL AND "
+            "source_manual_rate_updated_at IS NULL) OR "
+            "(source_manual_rate_id IS NOT NULL AND source_manual_rate_id > 0 AND "
+            "source_manual_rate_value IS NOT NULL AND "
+            f"{_sqlite_positive_quote_decimal('source_manual_rate_value')} AND "
+            "source_manual_rate_direction IS NOT NULL AND "
+            "source_manual_rate_direction = 'asset_to_main' AND "
+            "source_manual_rate_updated_at IS NOT NULL)",
+            "ck_transfer_quote_source_dependency",
+            "sqlite",
+        ),
+        _dialect_check(
+            "(source_manual_rate_id IS NULL AND "
+            "source_manual_rate_value IS NULL AND "
+            "source_manual_rate_direction IS NULL AND "
+            "source_manual_rate_updated_at IS NULL) OR "
+            "(source_manual_rate_id IS NOT NULL AND source_manual_rate_id > 0 AND "
+            "source_manual_rate_value IS NOT NULL AND "
+            f"{_postgres_positive_finite_quote_decimal('source_manual_rate_value')} AND "
+            "source_manual_rate_direction IS NOT NULL AND "
+            "source_manual_rate_direction = 'asset_to_main' AND "
+            "source_manual_rate_updated_at IS NOT NULL)",
+            "ck_transfer_quote_source_dependency",
+            "postgresql",
+        ),
+        _dialect_check(
+            "(target_manual_rate_id IS NULL AND "
+            "target_manual_rate_value IS NULL AND "
+            "target_manual_rate_direction IS NULL AND "
+            "target_manual_rate_updated_at IS NULL) OR "
+            "(target_manual_rate_id IS NOT NULL AND target_manual_rate_id > 0 AND "
+            "target_manual_rate_value IS NOT NULL AND "
+            f"{_sqlite_positive_quote_decimal('target_manual_rate_value')} AND "
+            "target_manual_rate_direction IS NOT NULL AND "
+            "target_manual_rate_direction = 'asset_to_main' AND "
+            "target_manual_rate_updated_at IS NOT NULL)",
+            "ck_transfer_quote_target_dependency",
+            "sqlite",
+        ),
+        _dialect_check(
+            "(target_manual_rate_id IS NULL AND "
+            "target_manual_rate_value IS NULL AND "
+            "target_manual_rate_direction IS NULL AND "
+            "target_manual_rate_updated_at IS NULL) OR "
+            "(target_manual_rate_id IS NOT NULL AND target_manual_rate_id > 0 AND "
+            "target_manual_rate_value IS NOT NULL AND "
+            f"{_postgres_positive_finite_quote_decimal('target_manual_rate_value')} AND "
+            "target_manual_rate_direction IS NOT NULL AND "
+            "target_manual_rate_direction = 'asset_to_main' AND "
+            "target_manual_rate_updated_at IS NOT NULL)",
+            "ck_transfer_quote_target_dependency",
+            "postgresql",
+        ),
+        _dialect_check(
+            "(from_asset_id = to_asset_id AND "
+            "from_amount = to_amount AND rate = '1' AND "
+            "source_manual_rate_id IS NULL AND target_manual_rate_id IS NULL) "
+            "OR (from_asset_id <> to_asset_id AND "
+            "((from_asset_id = main_asset_id AND source_manual_rate_id IS NULL) OR "
+            "(from_asset_id <> main_asset_id AND source_manual_rate_id IS NOT NULL)) AND "
+            "((to_asset_id = main_asset_id AND target_manual_rate_id IS NULL) OR "
+            "(to_asset_id <> main_asset_id AND target_manual_rate_id IS NOT NULL)))",
+            "ck_transfer_quote_conversion_shape",
+            "sqlite",
+        ),
+        _dialect_check(
+            "(from_asset_id = to_asset_id AND "
+            "from_amount = to_amount AND rate = 1 AND "
+            "source_manual_rate_id IS NULL AND target_manual_rate_id IS NULL) "
+            "OR (from_asset_id <> to_asset_id AND "
+            "((from_asset_id = main_asset_id AND source_manual_rate_id IS NULL) OR "
+            "(from_asset_id <> main_asset_id AND source_manual_rate_id IS NOT NULL)) AND "
+            "((to_asset_id = main_asset_id AND target_manual_rate_id IS NULL) OR "
+            "(to_asset_id <> main_asset_id AND target_manual_rate_id IS NOT NULL)))",
+            "ck_transfer_quote_conversion_shape",
+            "postgresql",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(
+        ForeignKey("workspace.id", ondelete="CASCADE"), nullable=False
+    )
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"), nullable=False
+    )
+    from_account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="RESTRICT"), nullable=False
+    )
+    to_account_id: Mapped[int] = mapped_column(
+        ForeignKey("account.id", ondelete="RESTRICT"), nullable=False
+    )
+    from_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
+    )
+    to_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
+    )
+    main_asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id", ondelete="RESTRICT"), nullable=False
+    )
+    from_amount: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
+    to_amount: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
+    rate: Mapped[Decimal] = mapped_column(CanonicalExactDecimal, nullable=False)
+    rate_source: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_manual_rate_id: Mapped[int | None] = mapped_column(nullable=True)
+    source_manual_rate_value: Mapped[Decimal | None] = mapped_column(
+        CanonicalExactDecimal, nullable=True
+    )
+    source_manual_rate_direction: Mapped[str | None] = mapped_column(
+        String(24), nullable=True
+    )
+    source_manual_rate_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    target_manual_rate_id: Mapped[int | None] = mapped_column(nullable=True)
+    target_manual_rate_value: Mapped[Decimal | None] = mapped_column(
+        CanonicalExactDecimal, nullable=True
+    )
+    target_manual_rate_direction: Mapped[str | None] = mapped_column(
+        String(24), nullable=True
+    )
+    target_manual_rate_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="open")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    executed_transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("financial_transaction.id", ondelete="RESTRICT"), nullable=True
+    )
+
+    workspace: Mapped[Workspace] = relationship(back_populates="transfer_quotes")
+    creator: Mapped[User] = relationship(foreign_keys=[created_by_user_id])
+    from_account: Mapped[Account] = relationship(foreign_keys=[from_account_id])
+    to_account: Mapped[Account] = relationship(foreign_keys=[to_account_id])
+    from_asset: Mapped[Asset] = relationship(foreign_keys=[from_asset_id])
+    to_asset: Mapped[Asset] = relationship(foreign_keys=[to_asset_id])
+    main_asset: Mapped[Asset] = relationship(foreign_keys=[main_asset_id])
+    executed_transaction: Mapped[Transaction | None] = relationship(
+        foreign_keys=[executed_transaction_id]
+    )
+
+
+Index(
+    "ix_transfer_quote_workspace_creator_status_expiry",
+    TransferQuote.workspace_id,
+    TransferQuote.created_by_user_id,
+    TransferQuote.status,
+    TransferQuote.expires_at,
+)
+
+
 class PlanRule(Base):
     __tablename__ = "plan_rule"
 
@@ -512,6 +775,21 @@ class PlanOccurrence(Base):
 
 class AccountPeriod(Base):
     __tablename__ = "account_period"
+    __table_args__ = (
+        CheckConstraint(
+            "end_date >= start_date", name="ck_account_period_date_order"
+        ),
+        CheckConstraint(
+            "rollover_policy IN ('carry_next_day', "
+            "'redistribute_remaining_days')",
+            name="ck_account_period_rollover_policy",
+        ),
+        CheckConstraint(
+            "(closed_at IS NULL AND closing_balance IS NULL) OR "
+            "(closed_at IS NOT NULL AND closing_balance IS NOT NULL)",
+            name="ck_account_period_closing_pair",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     account_id: Mapped[int] = mapped_column(
@@ -525,11 +803,16 @@ class AccountPeriod(Base):
     )
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    funding_amount: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    snapshot_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    opening_balance: Mapped[Decimal] = mapped_column(ExactDecimal, nullable=False)
+    rollover_policy: Mapped[str] = mapped_column(
+        String(40), nullable=False, default="redistribute_remaining_days"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closing_balance: Mapped[Decimal | None] = mapped_column(ExactDecimal, nullable=True)
 
     account: Mapped[Account] = relationship(back_populates="periods")
     creator: Mapped[User] = relationship(foreign_keys=[created_by_user_id])

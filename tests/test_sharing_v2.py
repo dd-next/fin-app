@@ -1,5 +1,6 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 import app.sharing as sharing
 from tests.conftest import register
@@ -222,6 +223,16 @@ async def test_hidden_legs_are_redacted_and_block_multi_account_mutation(client)
     await register(client)
     shared = await create_account(client, "Shared USD", "USD", "100")
     private = await create_account(client, "Private USD", "USD", "0")
+    today = datetime.now(UTC).astimezone(ZoneInfo("Asia/Ho_Chi_Minh")).date()
+    historical = today - timedelta(days=7)
+    period = await client.post(
+        f"/api/v1/accounts/{shared['id']}/periods",
+        json={
+            "start_date": (today - timedelta(days=10)).isoformat(),
+            "end_date": (today - timedelta(days=5)).isoformat(),
+        },
+    )
+    assert period.status_code == 201, period.text
     private_expense = (
         await client.post(
             "/api/v1/operations/spend",
@@ -235,6 +246,8 @@ async def test_hidden_legs_are_redacted_and_block_multi_account_mutation(client)
                 "from_account_id": shared["id"],
                 "to_account_id": private["id"],
                 "amount": "25",
+                "local_date": historical.isoformat(),
+                "confirm_ended_period": True,
             },
         )
     ).json()
@@ -254,14 +267,16 @@ async def test_hidden_legs_are_redacted_and_block_multi_account_mutation(client)
         "has_hidden_legs"
     ] is True
     assert (await client.get(f"/api/v1/transactions/{private_expense['id']}")).status_code == 404
-    assert (
-        await client.patch(
-            f"/api/v1/transactions/{transfer['id']}", json={"note": "Blocked"}
-        )
-    ).status_code == 404
-    assert (
-        await client.post(f"/api/v1/transactions/{transfer['id']}/delete")
-    ).status_code == 404
+    blocked_patch = await client.patch(
+        f"/api/v1/transactions/{transfer['id']}", json={"note": "Blocked"}
+    )
+    assert blocked_patch.status_code == 404
+    assert blocked_patch.json() == {"detail": "Account not found"}
+    blocked_delete = await client.post(
+        f"/api/v1/transactions/{transfer['id']}/delete"
+    )
+    assert blocked_delete.status_code == 404
+    assert blocked_delete.json() == {"detail": "Account not found"}
     filtered = (
         await client.get(f"/api/v1/transactions?account_id={shared['id']}")
     ).json()

@@ -127,6 +127,36 @@ def quantize_exchange_rate(value: Decimal) -> Decimal:
     return quantized
 
 
+def manual_rate_semantics(rate: ManualValuationRate) -> tuple[str, Decimal]:
+    """Resolve the only direction-aware branch shared by API and valuation."""
+    if rate.direction == "asset_to_main":
+        return "multiply", Decimal(rate.rate_value)
+    if rate.direction == "main_to_asset_legacy":
+        return "divide", Decimal(rate.rate_value)
+    raise ValueError(f"Unsupported manual valuation-rate direction: {rate.direction}")
+
+
+def manual_rate_asset_to_main(rate: ManualValuationRate) -> Decimal:
+    """Expose one exact asset-to-Main value for either storage generation."""
+    operation, value = manual_rate_semantics(rate)
+    if operation == "divide":
+        return quantize_exchange_rate(
+            decimal_quotient(Decimal(1), value)
+        )
+    return value
+
+
+def apply_manual_valuation(
+    balance: Decimal,
+    rate: ManualValuationRate,
+) -> Decimal:
+    """Value a balance without rounding an intermediate money amount."""
+    operation, value = manual_rate_semantics(rate)
+    if operation == "multiply":
+        return decimal_product(balance, value)
+    return decimal_quotient(balance, value)
+
+
 def normalize_name(value: str) -> str:
     return " ".join(value.strip().split()).casefold()
 
@@ -221,17 +251,23 @@ def financial_times(
     return utc_naive, financial_date
 
 
-async def account_balance(session: AsyncSession, account_id: int) -> Decimal:
-    amounts = (
-        await session.execute(
-            select(TransactionLeg.amount)
-            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
-            .where(
-                TransactionLeg.account_id == account_id,
-                Transaction.status == "posted",
-            )
+async def account_balance(
+    session: AsyncSession,
+    account_id: int,
+    *,
+    through: datetime | None = None,
+) -> Decimal:
+    statement = (
+        select(TransactionLeg.amount)
+        .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+        .where(
+            TransactionLeg.account_id == account_id,
+            Transaction.status == "posted",
         )
-    ).scalars()
+    )
+    if through is not None:
+        statement = statement.where(TransactionLeg.created_at <= through)
+    amounts = (await session.execute(statement)).scalars()
     return decimal_sum(Decimal(value) for value in amounts)
 
 
@@ -279,7 +315,7 @@ async def valued_balance(
             )
         ).scalar_one_or_none()
         if manual_rate is not None:
-            valued = decimal_quotient(balance, manual_rate.displayed_rate)
+            valued = apply_manual_valuation(balance, manual_rate)
         else:
             rate = await latest_rate(
                 session,

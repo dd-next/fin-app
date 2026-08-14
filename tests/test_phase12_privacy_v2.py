@@ -23,14 +23,12 @@ async def test_deleting_linked_transfer_replays_both_periods_and_reopens_plan(cl
     source_period = await create_period(
         client,
         source["id"],
-        "500",
         start=today - timedelta(days=1),
         end=today + timedelta(days=1),
     )
     reserve_period = await create_period(
         client,
         reserve["id"],
-        "0",
         start=today - timedelta(days=1),
         end=today + timedelta(days=1),
     )
@@ -64,13 +62,13 @@ async def test_deleting_linked_transfer_replays_both_periods_and_reopens_plan(cl
     )
     assert linked.status_code == 200, linked.text
 
-    async def remaining(period_id):
+    async def current_balance(period_id):
         response = await client.get(f"/api/v1/account-periods/{period_id}")
         assert response.status_code == 200, response.text
-        return Decimal(response.json()["remaining"])
+        return Decimal(response.json()["current_balance"])
 
-    assert await remaining(source_period["id"]) == Decimal("380")
-    assert await remaining(reserve_period["id"]) == Decimal("120")
+    assert await current_balance(source_period["id"]) == Decimal("380")
+    assert await current_balance(reserve_period["id"]) == Decimal("120")
 
     # Linking must not move the transaction between periods: the transfer's
     # own legs still decide membership in both period filters.
@@ -83,13 +81,19 @@ async def test_deleting_linked_transfer_replays_both_periods_and_reopens_plan(cl
 
     deleted = await client.post(f"/api/v1/transactions/{transfer['id']}/delete")
     assert deleted.status_code == 200, deleted.text
-    assert await remaining(source_period["id"]) == Decimal("500")
-    assert await remaining(reserve_period["id"]) == Decimal("0")
+    assert await current_balance(source_period["id"]) == Decimal("500")
+    assert await current_balance(reserve_period["id"]) == Decimal("0")
     for period in (source_period, reserve_period):
         listed = await client.get(
             f"/api/v1/transactions?period_id={period['id']}"
         )
-        assert listed.json()["items"] == []
+        items = listed.json()["items"]
+        assert transfer["id"] not in {item["id"] for item in items}
+        assert all(item["status"] == "posted" for item in items)
+        assert all(
+            any(leg["account_id"] == period["account_id"] for leg in item["legs"])
+            for item in items
+        )
 
     reopened = (await occurrences_for_rule(client, workspace_id, rule["id"]))[0]
     assert reopened["status"] in {"planned", "overdue"}

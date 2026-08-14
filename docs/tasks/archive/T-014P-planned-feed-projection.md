@@ -1,0 +1,329 @@
+---
+id: T-014P
+title: Project open Plan occurrences through Transaction details
+status: done
+size: M
+spec: design/MOBILE-BACKEND-GAP-AUDIT.md planned ledger rows
+blocked-by: [T-014F]
+branch: task/T-014P-planned-feed-projection
+base-commit: b5984f59123904e1b7899e5b632b3b3b32415548
+implementer: Codex
+readiness-reviewed-by: /root/t014_split_final_review (Codex same-vendor fallback)
+readiness-reviewed-commit: 5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b
+readiness-verdict: ready
+---
+
+## Goal
+
+The stable financial-date feed includes owner-private open Plan occurrences as
+explicit non-ledger projections whose rows open the common Transaction-details
+data route with Plan-specific actions.
+
+## Acceptance
+
+- [x] Extend `GET /api/v1/transaction-feed` with exact `filter=planned` and a
+      closed `kind="planned"` item branch. `filter=planned` returns only Plan
+      projections; `filter=all` unions persisted T-014F items with Plan
+      projections; the persisted `income|expense|transfer` filters remain
+      unchanged and never return planned items.
+- [x] Before the feed query, synchronously materialize the authenticated user's
+      primary workspace through the accepted idempotent Plan horizon logic.
+      Strictly validate the complete query shape and decode/version-check the
+      cursor before materialization or any write. Then capture one server clock
+      for materialization/status/order decisions.
+      Repeated reads at the same clock create no duplicate occurrence and no
+      transaction, leg, exchange-rate, account-period, balance, summary, or
+      Undo mutation. Materialized `PlanOccurrence` rows are not fake ledger
+      rows and never affect capital or Available today.
+- [x] Include only unresolved occurrence states `planned|overdue`. Completed
+      occurrences are represented by their linked persisted transaction;
+      skipped occurrences are absent. Inactive/archived rules generate no new
+      projections. Archiving a rule marks every existing open occurrence
+      `skipped`, so those occurrences are absent from both `all` and `planned`
+      feeds and cannot open through feed detail.
+- [x] Every planned list item is exactly: `kind="planned"`, stable
+      `key="planned:<positive occurrence id>"`,
+      `financial_date=due_date`, `mobile_type="planned"`, required property
+      `mobile_status` with exact enum `planned|required|overdue`: `overdue`
+      when the occurrence is overdue, otherwise `required` when
+      `rule.is_required`, otherwise `planned`; and the existing full
+      `PlanOccurrenceOut` under `occurrence`. Planned amount/asset/account/rule
+      data stays Decimal/exact and owner-private.
+- [x] Planned ordering uses the T-014F total cursor key with
+      `sort_at=workspace_day_boundary(due_date)`, `kind_rank=0`, and
+      `item_id=PlanOccurrence.id`. Transaction and planned keys merge under one
+      descending comparator and one opaque version-1 continuation cursor.
+      Same-date/timestamp/kind ties are deterministic; fixed-dataset paging has
+      no duplicates or omissions across the union.
+- [x] Extend the common detail route with authenticated
+      `GET /api/v1/transaction-feed/planned/{occurrence_id}`. It returns the
+      closed planned projection plus exact ordered
+      `available_actions=["edit_rule","skip","link_transaction"]` for an
+      unresolved item. It never returns transaction Edit/Delete actions and
+      never redirects to a Plan route. Completed/skipped, foreign, hidden, or
+      unknown occurrences return generic `404 Feed item not found` without
+      revealing owner-private Plan state.
+- [x] The action names bind to existing accepted commands: Edit rule uses the
+      occurrence's `plan_rule_id`; Skip affects only this occurrence; Link
+      transaction attaches an eligible posted root. Executing those existing
+      commands changes subsequent feed/detail results through domain state; the
+      feed adds no duplicate write command and performs no action itself.
+- [x] Shared-account editor/contributor/viewer and unrelated users never see or
+      infer another workspace's Plan projections through `filter=all`,
+      `filter=planned`, cursor contents, counts, ordering gaps, detail IDs, or
+      errors. They continue to see persisted shared-leg transactions according
+      to T-014F without gaining Plan access.
+- [x] OpenAPI freezes the expanded filter enum, discriminated page union,
+      exact planned list/detail property/required/type/format/enum/bound sets,
+      `additionalProperties: false`, nested `PlanOccurrenceOut` reference,
+      ordered action enum, common cursor shape, and documented `404`/`422`.
+- [x] Invalid/duplicate/unknown query parameters and malformed or unsupported
+      cursors are rejected before Plan materialization. Those `422` responses
+      leave rules, occurrences, transactions, legs, periods, balances,
+      captured rates, and Undo rows unchanged.
+- [x] Correction/Delete of persisted transactions and Skip/Link/rule archival
+      of Plan occurrences produce the exact next fresh feed order/content.
+      Deleting a transaction linked to a Plan occurrence keeps the deleted
+      transaction history row and reopens the occurrence as `planned` or
+      `overdue`; `filter=all` therefore returns both rows, ordered solely by the
+      common total key even when they share a financial date.
+      Pagination tests cover transaction/planned interleaving at equal dates,
+      page boundaries, and owner-private filtering without creating ledger
+      movements.
+- [x] Existing `/workspaces/{workspace_id}/plan-occurrences`, rule endpoints,
+      Skip/Link commands, `/transactions`, T-014F transaction-only projections,
+      richer desktop filters, balances, periods, and Undo remain compatible.
+- [x] Focused union/detail/privacy/no-ledger/pagination/OpenAPI tests, existing
+      Plan/transaction tests, full pytest, Node syntax, and diff/status gates
+      pass on isolated fixtures.
+
+## Touches
+
+- `app/transaction_feed.py`
+- `app/schemas.py`
+- `app/plan.py` only for bounded reuse/extraction of existing materialization
+  and owner-private occurrence projection helpers if necessary
+- `tests/test_planned_transaction_feed_v21.py`
+- existing Plan/feed tests only for direct compatibility assertions
+- `docs/tasks/T-014P-planned-feed-projection.md`
+- `docs/BACKLOG.md` and `docs/PROGRESS.md` for lifecycle only
+
+## Out of scope
+
+- Fake financial transactions, automatic Plan payment/receipt, new Skip/Link
+  semantics, Plan-rule mobile create/edit mapping (T-019), type conversion
+  (T-015), category/account lifecycle, mobile UI, migrations, background jobs,
+  or `finapp.db` mutation.
+- Replacing the Plan screen/detail APIs or altering persisted T-014F transaction
+  mapping and the existing desktop `/transactions` contract.
+
+## Verification
+
+```bash
+.\.venv\Scripts\python.exe -m pytest tests/test_planned_transaction_feed_v21.py tests/test_transaction_feed_v21.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_plan_v2.py tests/test_ledger_v2.py tests/test_periods_v2.py -q
+.\.venv\Scripts\python.exe -m pytest -q
+node --check app/static/app.js
+git diff --check
+git status --short
+```
+
+All database-backed tests use isolated fixtures and never open, replace, or
+delete `finapp.db`.
+
+## Readiness review
+
+Append-only readiness passes against the audit, frozen Transactions/Plan tap
+map/data model, accepted Plan/ledger/privacy behavior, T-014F, AGENTS,
+BUILD_PLAN, and REVIEW_PROTOCOL.
+
+### Split-contract review Pass 1
+
+- Reviewer task name/vendor: `/root/t014_split_review`, fresh Codex same-vendor
+  fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `36f3366` plus modified BACKLOG and both
+  untracked T-014 split task files.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014 split review verdict: NOT READY; P0 none, three P1 and two P2 contract gaps.
+  >
+  > P0: none.
+  >
+  > P1 — T-014F promises exchange data that its frozen payload cannot contain, and that deleted exchanges no longer retain. `docs/tasks/T-014F-financial-date-transaction-feed.md:30-40` closes each item to the listed projection with the existing full `TransactionOut` under `transaction`, yet also requires “both exact legs/rates in the nested detail.” Existing `TransactionOut` has legs but no rates (`app/schemas.py:360-386`; `app/ledger.py:389-443`); rates are a separate `ExchangeRateOut`/`GET /exchange-rates` contract (`app/schemas.py:462-467`; `app/transactions.py:953-973`). More importantly, soft Delete physically removes the exchange’s captured-rate rows (`app/transactions.py:890-915`), while T-014F also requires deleted history to remain at the same position (`T-014F:56-59`) and places captured-rate behavior out of scope (`:95-96`). The implementer therefore cannot meet the closed item shape, exact rates, deletion, and out-of-scope clauses simultaneously. The audit only requires preservation of the two-amount detail. Resolve explicitly: either require the exact nested signed legs only, or define an additional exact captured-rate field/schema, privacy behavior, and deleted-history persistence and widen scope accordingly.
+  >
+  > P1 — T-014P does not name the required planned-status property, so the supposedly closed schema is not executable. `docs/tasks/T-014P-planned-feed-projection.md:42-48` lists exact fields, then says only “mobile status `overdue|required|planned`” without saying whether the JSON property is `status`, `mobile_status`, or something else; `:73-76` nevertheless requires OpenAPI to freeze exact property/required sets. Name the property and its exact enum/requiredness in list and detail.
+  >
+  > P1 — Cursor validation/write neutrality conflicts with Plan materialization sequencing. T-014F requires every malformed/unsupported cursor to return 422 with no database write (`T-014F:24-29`). T-014P says to materialize before the feed query (`T-014P:29-35`), while cursor version/payload validation must occur in application code and the existing `materialize_workspace` commits (`app/plan.py:419-435`). A direct implementation can persist occurrences before discovering a bad cursor, violating the inherited T-014F contract. Require strict unknown/duplicate/query/cursor validation and cursor decoding before any materialization/write, and add a T-014P regression proving malformed/unsupported cursors leave Plan rows unchanged.
+  >
+  > P2 — The archival criterion is deliberately non-exact. `T-014P:36-41` says an already-open occurrence is handled “exactly as [the accepted archival] policy specifies,” but does not state that policy, so it fails the task-template requirement that acceptance be checkable without judgment. Current accepted behavior archives a rule by marking every open occurrence `skipped` (`app/plan.py:180-204,399-417`), which makes it absent from this feed. Freeze that result (or name a different controlling contract) and test it; do not leave a future implementer to reinterpret retained open rows.
+  >
+  > P2 — Linked-transaction Delete has an important two-row outcome that the task asks to test but never defines. Current Delete keeps the persisted transaction as `deleted` and reopens its linked occurrence as `planned|overdue` (`app/transactions.py:890-929`). Under the proposed union, a fresh `filter=all` should therefore contain both the deleted transaction history row and the reopened planned projection. `T-014P:36-38,77-80` only says Delete produces the “exact” next content without specifying that result. State and test the two-row outcome, including deterministic ordering/pagination if both share a financial date.
+  >
+  > P3: none.
+  >
+  > The L→M/M split itself is bounded, ordered correctly (`T-014P` blocked by `T-014F`, downstream T-015/T-021 rewired), and consistent with BUILD_PLAN Phase 14 block 5. After the findings above are corrected, both task definitions need a fresh read-only readiness re-review before owner promotion.
+- Resolution: removed the impossible captured-rate promise from T-014F; named
+  required `mobile_status`; moved validation before materialization; froze
+  archival-to-skipped absence and linked-Delete's deleted+reopened two-row
+  outcome with mutation/order coverage.
+- Verdict: not ready; all three P1 and both P2 findings corrected for fresh
+  re-review.
+
+### Split-contract review Pass 2
+
+- Reviewer task name/vendor: `/root/t014_split_rereview`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `36f3366` plus modified BACKLOG and both
+  untracked corrected task files.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014 split re-review verdict: **NOT READY**; all previous findings are closed, but one new P1 contract contradiction remains.
+  >
+  > P0: none.
+  >
+  > P1 — T-014F simultaneously requires the existing full `TransactionOut` and forbids the Plan query/value that this accepted response already contains. `docs/tasks/T-014F-financial-date-transaction-feed.md:30-35,43-48` requires the full existing nested response and exact reuse of accepted transaction list/detail behavior, but also says owner-private Plan state is “neither queried nor exposed.” `TransactionOut` includes `plan_occurrence_id` (`app/schemas.py:368-386`), and its accepted serializer queries `PlanOccurrence` for owner-visible transactions and returns that ID (`app/ledger.py:422-449`). T-014P cannot resolve this later because it explicitly places alteration of the T-014F transaction mapping out of scope (`docs/tasks/T-014P-planned-feed-projection.md:117-118`). Freeze one executable result. The compatibility-preserving option is to retain the existing owner-visible `plan_occurrence_id`, keep it `null` for shared/redacted projections, and narrow the isolation clause to prohibit Plan materialization and new Plan projection/detail fields in T-014F. Alternatively, require `plan_occurrence_id=null` and no Plan query explicitly, acknowledge that this is narrower than existing owner detail behavior, and allow T-014P to define the later mapping.
+  >
+  > P2: none.
+  >
+  > P3: none.
+  >
+  > Confirmed closed from Pass 1:
+  >
+  > - Exchange mapping now promises the audit-required exact signed legs, not captured rates.
+  > - `mobile_status` is explicitly named, required, and enum-bounded.
+  > - Complete query/cursor validation precedes materialization and any write.
+  > - Rule archival explicitly skips and removes every open occurrence from feed/detail.
+  > - Deleting a linked transaction explicitly produces both the retained deleted transaction and reopened planned projection.
+  >
+  > The remaining cursor total order, financial-date correction/Delete behavior, permission/redaction boundaries, write neutrality, OpenAPI requirements, Touches, dependencies, and the M/M split are otherwise readiness-complete. `git diff --check` passed for the tracked BACKLOG change; both untracked task files were inspected directly. No files were edited.
+- Resolution: T-014F now preserves the accepted owner-visible
+  `plan_occurrence_id` and shared `null`, while prohibiting only new Plan
+  materialization/projection/detail behavior before T-014P.
+- Verdict: not ready; the sole P1 is corrected for fresh re-review.
+
+### Split-contract review Pass 3
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: integration HEAD `36f3366` plus modified BACKLOG and both
+  untracked fully corrected task files.
+- Findings (verbatim, P0–P3):
+
+  > Read-only final re-review verdict: APPROVED / readiness-complete for both T-014F and T-014P. P0: none. P1: none. P2: none. P3: none. The sole Pass2 P1 is closed: T-014F now explicitly preserves the accepted owner-visible `plan_occurrence_id` and existing serializer lookup, keeps it `null` for shared/redacted projections, and prohibits only Plan materialization plus new Plan projection/detail fields (T-014F:43-52), matching `TransactionOut`/`transaction_out` behavior in app/schemas.py:368-386 and app/ledger.py:422-449. Reconfirmed closed: exact signed exchange legs rather than unavailable captured rates; required enum-bounded `mobile_status`; complete validation/cursor decoding before materialization/write; archival-to-skipped absence; linked Delete’s retained-deleted + reopened-planned two-row result; Decimal-preserving nested models; T-014F/T-014P dependency and Touches boundaries; stable total cursor/order; privacy/redaction and generic 404s; write neutrality; and exact OpenAPI/test gates. BACKLOG rewiring is coherent, `git diff --check` passes, and both untracked task files were inspected directly. T-014F is ready for owner promotion; T-014P is readiness-approved but remains blocked from promotion/claim until T-014F is accepted. No files edited.
+- Resolution: none required; every Pass 1/2 finding is closed.
+- Verdict: readiness-complete with no open P0–P3; T-014P remains blocked by
+  accepted T-014F implementation.
+
+### Exact committed-task confirmation
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed task-file commit: `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`.
+- Findings (verbatim, P0–P3):
+
+  > Exact committed-task readiness confirmation for `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b` (`T-014: define bounded transaction feed tasks`): APPROVED. P0: none. P1: none. P2: none. P3: none. The committed BACKLOG rewiring and T-014F/T-014P contracts preserve the previously approved manifest unchanged in substance, including the closed `plan_occurrence_id` compatibility clause and all Pass 1/2 resolutions; Pass 3 evidence is recorded verbatim. T-014F is readiness-complete and ready for owner `backlog`→`todo` promotion. T-014P is readiness-approved but remains blocked from promotion/claim until T-014F is accepted. HEAD is the exact commit and the worktree is clean. No files edited.
+- Resolution: none required.
+- Verdict: ready with no open P0–P3; T-014P remains blocked by T-014F.
+
+### Readiness metadata review
+
+- Reviewer task name/vendor: `/root/t014_split_final_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: only both task front matters/evidence and PROGRESS after
+  exact commit confirmation; BACKLOG/application/tests unchanged.
+- Findings (verbatim, P0–P3):
+
+  > Read-only lifecycle evidence verdict: APPROVED. P0: none. P1: none. P2: none. P3: none. Both task front matters name `/root/t014_split_final_review (Codex same-vendor fallback)`, cite exact reviewed commit `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, and set `readiness-verdict: ready`. The appended exact-commit evidence is accurate and preserves the lifecycle distinction: T-014F remains `backlog` awaiting owner promotion; T-014P is readiness-approved but remains `backlog`/blocked-by T-014F. `docs/PROGRESS.md` states the same current release state without claiming implementation or acceptance. The complete manifest contains only these three expected documentation changes; BACKLOG and application/test files are unchanged. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
+## Review
+
+Append-only implementation review passes. The implementer records each fresh
+read-only reviewer response verbatim following `REVIEW_PROTOCOL-v2.md`.
+
+### Initial claim review
+
+- Reviewer task name/vendor: `/root/t014p_claim_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed manifest: modified BACKLOG, PROGRESS, and T-014P task documentation.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014P initial-claim review verdict: APPROVED. Exact manifest: `M docs/BACKLOG.md`; `M docs/PROGRESS.md`; `M docs/tasks/T-014P-planned-feed-projection.md`. P0: none. P1: none. P2: none. P3: none. Verified current branch is exactly `task/T-014P-planned-feed-projection`; current HEAD is accepted integration `b5984f59123904e1b7899e5b632b3b3b32415548`; branch reflog records `branch: Created from HEAD` at that exact commit, after the accepted T-014F fast-forward. The base commit has T-014F `done`, T-014P `todo`, readiness reviewer `/root/t014_split_final_review (Codex same-vendor fallback)`, reviewed commit `5b47c9288b0a7dc9d65f270e8b4a8cd36275cc3b`, verdict `ready`, and dependency `[T-014F]` satisfied. The bounded uncommitted claim manifest only changes lifecycle docs: task/backlog to `in-progress`, immutable `base-commit` to the exact accepted HEAD, implementer `Codex`, current branch/release-state text, and an append-only claim session entry. No app/test/schema/database files are changed; `git diff --check` passes. This is a valid first-commit claim manifest and implementation may proceed after committing it. No files edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
+### Implementation review
+
+- Reviewer task name/vendor: `/root/t014p_impl_review`, fresh Codex
+  same-vendor fallback; cross-vendor reviewer unavailable in this session.
+- Reviewed HEAD: `059ace7f240d236af033d34894eb9e28c25ffbbf`.
+- Reviewed manifest: modified `app/plan.py`, `app/schemas.py`,
+  `app/transaction_feed.py`, `tests/test_transaction_feed_v21.py`; untracked
+  `tests/test_planned_transaction_feed_v21.py`.
+- Findings (verbatim, P0–P3):
+
+  > Read-only T-014P implementation review verdict: **APPROVED**.
+  >
+  > P0: none. P1: none. P2: none. P3: none.
+  >
+  > Evidence:
+  >
+  > - The union uses the required descending total key `(financial_date, sort_at, kind_rank, item_id)`, with planned rows fixed at workspace-day boundary/rank 0. Both source queries apply compatible continuation predicates and fetch `limit + 1` before the bounded merge.
+  > - Query-shape and versioned-cursor validation occur before Plan materialization or domain writes.
+  > - One captured clock supplies the workspace date to materialization and mobile-status projection.
+  > - Only active-rule `planned|overdue` occurrences are exposed; skip, link, archive, and linked-transaction Delete transitions produce the required fresh results.
+  > - Planned data is restricted to the authenticated user’s primary workspace. Shared users retain accepted T-014F shared-leg transaction visibility without Plan exposure; hidden detail returns the generic 404.
+  > - Planned amounts and nested rule/occurrence data reuse Decimal-backed `PlanOccurrenceOut`/`PlanRuleOut`; no fake ledger movement or balance path was added.
+  > - The closed discriminated schemas and fixed three-action tuple produce the required OpenAPI union, exact outer property sets, bounds, enums, and ordered actions.
+  > - Accepted T-014F behavior remains covered by its complete focused test file.
+  >
+  > Reviewer rerun: focused union/feed `8 passed in 3.99s`; `git diff --check` passed with line-ending conversion warnings only. Supplied adjacent gate: `30 passed in 10.50s`. No files were edited.
+- Resolution: none required.
+- Verdict: approved with no open P0–P3.
+
+## Session log
+
+- 2026-08-11 Codex: split the L-sized T-014 into bounded persisted-feed and
+  Planned-projection tasks and drafted this dependent contract. Readiness
+  review, owner promotion after T-014F, branch claim, implementation, and review
+  remain; no application or database file changed.
+- 2026-08-11 Codex: split-contract Pass 1 found three P1 and two P2 executable
+  contract gaps. Exchange detail, named planned status, pre-write validation,
+  archival absence, and linked-Delete two-row behavior are now exact. Fresh
+  read-only re-review remains; no application or database file changed.
+- 2026-08-11 Codex: Pass 2 confirmed all prior findings closed and found one
+  P1 compatibility contradiction around nested `plan_occurrence_id`. The
+  accepted owner/shared redaction behavior is now explicit; fresh re-review
+  remains and no application or database file changed.
+- 2026-08-11 Codex: Pass 3 approved both bounded contracts with no open P0–P3.
+  Exact committed-task confirmation remains before readiness metadata and owner
+  promotion; no application or database file changed.
+- 2026-08-11 Codex: exact commit `5b47c92` was readiness-confirmed with no open
+  P0–P3. T-014F awaits owner promotion; T-014P is ready but remains blocked.
+- 2026-08-11 repository owner: accepted T-014F commit `20c37c9` and promoted
+  readiness-approved T-014P from `backlog` to `todo`. Exact branch claim from
+  the resulting accepted integration HEAD is next.
+- 2026-08-11 Codex: confirmed accepted integration HEAD
+  `b5984f59123904e1b7899e5b632b3b3b32415548`, verified the exact task branch
+  was absent, and atomically claimed `task/T-014P-planned-feed-projection`.
+  Recorded the immutable base and implementer; implementation is next.
+- 2026-08-11 Codex: implemented owner-private planned projections, bounded
+  one-clock materialization reuse, common-cursor union pagination, closed
+  planned detail/actions, and exact transition/privacy/OpenAPI coverage.
+  Focused union/feed `8 passed`; adjacent Plan/ledger/period `30 passed`; fresh
+  implementation review approved with no open P0–P3. Full final gates remain.
+- 2026-08-12 Claude Code: ran the remaining final gates on the unchanged
+  implementation. Full pytest `337 passed in 130.58s` (`333` T-014F baseline
+  plus the four new T-014P tests) and `git diff --check` passed. The suite needs
+  a writable `--basetemp`; the default Windows temp path raised
+  `PermissionError [WinError 5]` on `tmp_path` for 61 filesystem-backed tests
+  before the run was repeated correctly. `node --check app/static/app.js` could
+  not be executed because Node is not installed on this machine; T-014P changes
+  no JavaScript, so `app/static/app.js` is byte-identical to the commit where
+  that gate last passed. No database-backed test opened `finapp.db`.
+- 2026-08-12 repository owner: accepted independently approved commit
+  `6cf041d`; T-014P is `done` and `finapp-v2-develop` fast-forwards onto it.
+  Every Phase 14 task branch through T-014P is merged and deleted. T-015
+  remains `backlog` and must be split before it is claimed, so no row is
+  promoted by this acceptance.

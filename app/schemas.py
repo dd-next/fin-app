@@ -53,7 +53,7 @@ class AssetCreate(BaseModel):
 
 
 class AssetOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, extra="forbid")
 
     id: int
     code: str
@@ -84,19 +84,123 @@ class WorkspacePatch(BaseModel):
 
 
 class ManualValuationRateUpsert(BaseModel):
-    displayed_rate: PositiveAmount
+    model_config = ConfigDict(extra="forbid")
+
+    rate: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+
+    @field_validator("rate")
+    @classmethod
+    def validate_rate(cls, value: str) -> str:
+        integer, separator, fraction = value.partition(".")
+        decimal = Decimal(value)
+        if not decimal.is_finite() or decimal <= 0:
+            raise ValueError("Valuation rate must be positive and finite")
+        integer_digits = len(integer.lstrip("0"))
+        if integer_digits > 20 or len(fraction) > 18:
+            raise ValueError("Valuation rate exceeds Numeric(38,18)")
+        normalized_fraction = fraction.rstrip("0") if separator else ""
+        return (
+            f"{integer}.{normalized_fraction}"
+            if normalized_fraction
+            else integer
+        )
 
 
 class ManualValuationRateOut(BaseModel):
     id: int
     workspace_id: int
-    main_asset: AssetOut
-    asset: AssetOut
-    displayed_rate: Decimal
-    effective_valuation_rate: Decimal
-    active: bool
+    from_asset: AssetOut
+    to_asset: AssetOut
+    rate: str
+    source: Literal["manual"]
     created_at: datetime
     updated_at: datetime
+
+
+class TransferQuoteCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_account_id: int = Field(strict=True, gt=0)
+    to_account_id: int = Field(strict=True, gt=0)
+    from_amount: str = Field(
+        strict=True,
+        pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$",
+    )
+    rate_source: Literal["manual"]
+
+    @field_validator("from_amount")
+    @classmethod
+    def validate_from_amount(cls, value: str) -> str:
+        integer, separator, fraction = value.partition(".")
+        decimal = Decimal(value)
+        if not decimal.is_finite() or decimal <= 0:
+            raise ValueError("Transfer amount must be positive and finite")
+        integer_digits = len(integer.lstrip("0"))
+        if integer_digits > 20 or len(fraction) > 18:
+            raise ValueError("Transfer amount exceeds Numeric(38,18)")
+        normalized_fraction = fraction.rstrip("0") if separator else ""
+        return (
+            f"{integer}.{normalized_fraction}"
+            if normalized_fraction
+            else integer
+        )
+
+
+class TransferQuoteAccountOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(gt=0)
+    name: str
+    asset: AssetOut
+
+
+class TransferQuoteOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: int = Field(gt=0)
+    workspace_id: int = Field(gt=0)
+    created_by_user_id: int = Field(gt=0)
+    from_account: TransferQuoteAccountOut
+    to_account: TransferQuoteAccountOut
+    from_amount: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    to_amount: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    rate: str = Field(pattern=r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+    rate_source: Literal["manual"]
+    created_at: datetime
+    expires_at: datetime
+
+
+class TransferQuoteExecute(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    local_date: date | None = Field(
+        default=None,
+        json_schema_extra={"default": None},
+    )
+    occurred_at: datetime | None = Field(
+        default=None,
+        json_schema_extra={"default": None},
+    )
+    note: str | None = Field(
+        default=None,
+        strict=True,
+        max_length=2000,
+        json_schema_extra={"default": None},
+    )
+    counterparty: str | None = Field(
+        default=None,
+        strict=True,
+        max_length=160,
+        json_schema_extra={"default": None},
+    )
+    confirm_ended_period: bool = Field(default=False, strict=True)
+
+    @field_validator("local_date", "occurred_at", mode="before")
+    @classmethod
+    def require_iso_string_or_null(cls, value):
+        if value is not None and not isinstance(value, str):
+            raise ValueError("Financial time must be an ISO string or null")
+        return value
 
 
 class AuthContextOut(BaseModel):
@@ -198,9 +302,11 @@ class AccountSummaryOut(BaseModel):
 class AccountPeriodCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    start_date: date
+    start_date: date | None = None
     end_date: date
-    funding_amount: DecimalAmount
+    rollover_policy: Literal[
+        "carry_next_day", "redistribute_remaining_days"
+    ] | None = None
 
 
 class AccountPeriodPatch(BaseModel):
@@ -208,24 +314,47 @@ class AccountPeriodPatch(BaseModel):
 
     start_date: date | None = None
     end_date: date | None = None
-    funding_amount: DecimalAmount | None = None
-    confirm_ended_period: bool = False
+    rollover_policy: Literal[
+        "carry_next_day", "redistribute_remaining_days"
+    ] | None = None
 
 
-class AccountPeriodOut(BaseModel):
+class AccountPeriodCommonOut(BaseModel):
     id: int
     account_id: int
     asset: AssetOut
     created_by_user_id: int
     start_date: date
     end_date: date
-    funding_amount: Decimal
-    available_today: Decimal
-    remaining: Decimal
-    planned: Decimal
-    status: Literal["upcoming", "current", "ended", "closed"]
+    snapshot_at: datetime
+    opening_balance: Decimal
+    rollover_policy: Literal["carry_next_day", "redistribute_remaining_days"]
     created_at: datetime
-    closed_at: datetime | None
+
+
+class AccountPeriodCurrentOut(AccountPeriodCommonOut):
+    status: Literal["current"]
+    closed_at: None = None
+    closing_balance: None = None
+    current_balance: Decimal
+    available_today: Decimal
+
+
+class AccountPeriodEndedOut(AccountPeriodCommonOut):
+    status: Literal["ended"]
+    closed_at: None = None
+    closing_balance: None = None
+
+
+class AccountPeriodClosedOut(AccountPeriodCommonOut):
+    status: Literal["closed"]
+    closed_at: datetime
+    closing_balance: Decimal
+
+
+AccountPeriodOut = (
+    AccountPeriodCurrentOut | AccountPeriodEndedOut | AccountPeriodClosedOut
+)
 
 
 class TransactionLegOut(BaseModel):
@@ -343,6 +472,19 @@ class TransactionPageOut(BaseModel):
     next_cursor: int | None
 
 
+class TransactionFeedTransactionOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["transaction"]
+    key: str = Field(pattern=r"^transaction:[1-9][0-9]*$")
+    financial_date: date
+    mobile_type: Literal["income", "expense", "transfer", "adjustment"]
+    transaction_type: Literal[
+        "income", "expense", "transfer", "exchange", "adjustment"
+    ]
+    transaction: TransactionOut
+
+
 SharedRole = Literal["editor", "contributor", "viewer"]
 
 
@@ -375,11 +517,29 @@ PlanKind = Literal[
     "reserve_transfer",
     "other_expense",
 ]
+MobilePlanKind = Literal[
+    "expectedIncome",
+    "requiredExpense",
+    "subscription",
+    "reserveTransfer",
+    "otherExpense",
+]
+PlanKindInput = Literal[
+    "income",
+    "expectedIncome",
+    "required_expense",
+    "requiredExpense",
+    "subscription",
+    "reserve_transfer",
+    "reserveTransfer",
+    "other_expense",
+    "otherExpense",
+]
 Recurrence = Literal["once", "weekly", "monthly", "yearly"]
 
 
 class PlanRuleCreate(BaseModel):
-    kind: PlanKind
+    kind: PlanKindInput
     name: str = Field(min_length=1, max_length=120)
     amount: PositiveAmount
     asset_code: str = Field(min_length=2, max_length=16)
@@ -388,7 +548,18 @@ class PlanRuleCreate(BaseModel):
     category_id: int | None = None
     default_from_account_id: int | None = None
     default_to_account_id: int | None = None
+    account_id: int | None = None
     is_required: bool = False
+
+    @field_validator("kind")
+    @classmethod
+    def normalize_mobile_plan_kind(cls, value: PlanKindInput) -> PlanKind:
+        return {
+            "expectedIncome": "income",
+            "requiredExpense": "required_expense",
+            "reserveTransfer": "reserve_transfer",
+            "otherExpense": "other_expense",
+        }.get(value, value)
 
     @field_validator("asset_code")
     @classmethod
@@ -397,7 +568,7 @@ class PlanRuleCreate(BaseModel):
 
 
 class PlanRulePatch(BaseModel):
-    kind: PlanKind | None = None
+    kind: PlanKindInput | None = None
     name: str | None = Field(default=None, min_length=1, max_length=120)
     amount: PositiveAmount | None = None
     asset_code: str | None = Field(default=None, min_length=2, max_length=16)
@@ -406,7 +577,22 @@ class PlanRulePatch(BaseModel):
     category_id: int | None = None
     default_from_account_id: int | None = None
     default_to_account_id: int | None = None
+    account_id: int | None = None
     is_required: bool | None = None
+
+    @field_validator("kind")
+    @classmethod
+    def normalize_mobile_plan_kind(
+        cls, value: PlanKindInput | None
+    ) -> PlanKind | None:
+        if value is None:
+            return None
+        return {
+            "expectedIncome": "income",
+            "requiredExpense": "required_expense",
+            "reserveTransfer": "reserve_transfer",
+            "otherExpense": "other_expense",
+        }.get(value, value)
 
     @field_validator("asset_code")
     @classmethod
@@ -419,6 +605,7 @@ class PlanRuleOut(BaseModel):
     workspace_id: int
     created_by_user_id: int
     kind: PlanKind
+    mobile_kind: MobilePlanKind
     name: str
     amount: Decimal
     asset: AssetOut
@@ -427,6 +614,8 @@ class PlanRuleOut(BaseModel):
     category_id: int | None
     default_from_account_id: int | None
     default_to_account_id: int | None
+    account_field: Literal["to_account", "from_account"]
+    account_id: int | None
     is_required: bool
     is_active: bool
     created_at: datetime
@@ -445,6 +634,38 @@ class PlanOccurrenceOut(BaseModel):
     matched_at: datetime | None
     created_at: datetime
     rule: PlanRuleOut
+
+
+class TransactionFeedPlannedOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["planned"]
+    key: str = Field(pattern=r"^planned:[1-9][0-9]*$")
+    financial_date: date
+    mobile_type: Literal["planned"]
+    mobile_status: Literal["planned", "required", "overdue"]
+    occurrence: PlanOccurrenceOut
+
+
+class TransactionFeedPlannedDetailOut(TransactionFeedPlannedOut):
+    available_actions: tuple[
+        Literal["edit_rule"],
+        Literal["skip"],
+        Literal["link_transaction"],
+    ]
+
+
+TransactionFeedItemOut = Annotated[
+    TransactionFeedTransactionOut | TransactionFeedPlannedOut,
+    Field(discriminator="kind"),
+]
+
+
+class TransactionFeedPageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TransactionFeedItemOut]
+    next_cursor: str | None
 
 
 class PlanLinkTransactionIn(BaseModel):

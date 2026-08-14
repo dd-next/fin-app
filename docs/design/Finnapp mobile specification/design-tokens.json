@@ -1,0 +1,153 @@
+{
+  "frame": {
+    "width": 390,
+    "height": 844,
+    "radius": 34,
+    "statusBar": 54,
+    "tabBar": 56,
+    "homeIndicator": 34,
+    "contentHeight": 700
+  },
+  "color": {
+    "bg": "#0B0D10",
+    "surface": "#151A21",
+    "surfaceBorder": "rgba(255,255,255,.08)",
+    "field": "#101419",
+    "fieldBorder": "rgba(255,255,255,.12)",
+    "neutral": "#232A33",
+    "dialog": "#1B2028",
+    "dialogBorder": "rgba(255,255,255,.1)",
+    "keyboard": "#1B1E24",
+    "key": "#3A3F48",
+    "keyAlt": "#2A2F37",
+    "hairline": "rgba(255,255,255,.07)",
+    "scrim": "rgba(0,0,0,.62)",
+    "grabber": "rgba(255,255,255,.22)",
+    "fg": "#E7EAEE",
+    "fgSecondary": "#C9D0D9",
+    "fgMuted": "#8A93A0",
+    "fgDim": "#5F6875",
+    "fgFaint": "#4A525E",
+    "fgTabIdle": "#6B7482",
+    "accent": "#FFA24B",
+    "onAccent": "#0B0D10",
+    "accentTint": "rgba(255,162,75,.14)",
+    "accentBorder": "rgba(255,162,75,.35)",
+    "accentFocus": "rgba(255,162,75,.55)",
+    "positive": "#6EE7A8",
+    "positiveTint": "rgba(110,231,168,.12)",
+    "negative": "#FF7B7B",
+    "negativeTint": "rgba(255,123,123,.12)",
+    "dangerBg": "rgba(255,123,123,.1)",
+    "dangerBorder": "rgba(255,123,123,.3)",
+    "destructive": "#7A2F35",
+    "onDestructive": "#FFD9D9",
+    "warning": "#E8B872",
+    "warningBg": "rgba(232,184,114,.07)",
+    "warningBorder": "rgba(232,184,114,.3)"
+  },
+  "text": {
+    "amount": {
+      "size": 28,
+      "weight": 600,
+      "tracking": "-.02em",
+      "tabular": true
+    },
+    "cardValue": {
+      "size": 22,
+      "weight": 600,
+      "lineHeight": 1.1,
+      "tracking": "-.01em",
+      "tabular": true
+    },
+    "sheetTitle": {
+      "size": 20,
+      "weight": 600
+    },
+    "screenTitle": {
+      "size": 17,
+      "weight": 600
+    },
+    "submit": {
+      "size": 16,
+      "weight": 700
+    },
+    "rowTitle": {
+      "size": 15,
+      "weight": 600
+    },
+    "fieldValue": {
+      "size": 15,
+      "weight": 500
+    },
+    "confirmBody": {
+      "size": 14,
+      "weight": 400,
+      "lineHeight": 1.5
+    },
+    "chip": {
+      "size": 13,
+      "weight": 600
+    },
+    "rowMeta": {
+      "size": 13,
+      "weight": 400
+    },
+    "hint": {
+      "size": 13,
+      "weight": 400,
+      "lineHeight": 1.5
+    },
+    "cardLabel": {
+      "size": 11,
+      "weight": 500
+    },
+    "kicker": {
+      "size": 11,
+      "weight": 700,
+      "family": "ui-monospace",
+      "tracking": ".12em",
+      "transform": "uppercase"
+    },
+    "groupHeader": {
+      "size": 11,
+      "weight": 600,
+      "tracking": ".1em",
+      "transform": "uppercase"
+    },
+    "tabLabel": {
+      "size": 10,
+      "weight": 500
+    }
+  },
+  "size": {
+    "header": 44,
+    "row": 64,
+    "rowGhost": 56,
+    "groupHeader": 24,
+    "control": 44,
+    "chip": 36,
+    "chipLane": 44,
+    "amountField": 60,
+    "submit": 50,
+    "sheetButton": 48,
+    "opsCard": 96,
+    "capitalStrip": 72,
+    "planStrip": 64,
+    "keyboard": 250,
+    "keyboardAccessory": 40,
+    "sheetGrabberLane": 18,
+    "leadingIcon": 28,
+    "sheetListIcon": 34
+  },
+  "radius": {
+    "xs": 6,
+    "sm": 8,
+    "md": 10,
+    "lg": 12,
+    "xl": 16,
+    "dialog": 18,
+    "sheet": 20,
+    "device": 34
+  }
+}

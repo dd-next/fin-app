@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:390px;height:844px;background:#0B0D10;border-radius:34px;overflow:hidden;display:flex;flex-direction:column;position:relative;color:#E7EAEE;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;box-shadow:0 24px 60px rgba(0,0,0,.5);flex:none">
+
+<div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 32px">
+  <span style="font:600 15px system-ui;font-variant-numeric:tabular-nums">9:41</span>
+  <div style="width:104px;height:30px;border-radius:16px;background:#000"></div>
+  <div style="display:flex;align-items:center;gap:6px"><span style="font:700 10px system-ui;letter-spacing:1px">▪▪▪</span><div style="width:22px;height:11px;border:1px solid rgba(255,255,255,.5);border-radius:3px;padding:1px"><div style="width:60%;height:100%;background:#E7EAEE;border-radius:1px"></div></div></div>
+</div>
+
+<div style="flex:1;min-height:0;display:flex;flex-direction:column">
+
+  <sc-if value="{{ isAccounts }}" hint-placeholder-val="{{ true }}">
+    <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="font:600 17px system-ui">Accounts</span>
+      <div onClick="{{ openProfile }}" style="width:44px;height:44px;display:flex;align-items:center;justify-content:flex-end;cursor:pointer"><div style="width:30px;height:30px;border-radius:15px;background:#232A33;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center"><div style="width:10px;height:10px;border-radius:5px;background:#FFA24B"></div></div></div>
+    </div>
+    <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:12px 16px 0">
+      <div style="height:72px;flex:none;background:#151A21;border:1px solid rgba(255,255,255,.08);border-radius:16px;display:flex">
+        <div style="flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:5px"><span style="font:500 11px system-ui;color:#8A93A0">Total capital</span><span style="font:600 20px system-ui;font-variant-numeric:tabular-nums">{{ totalCapital }}</span></div>
+        <div style="width:1px;background:rgba(255,255,255,.07);margin:12px 0"></div>
+        <div style="flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:5px"><span style="font:500 11px system-ui;color:#8A93A0">Available</span><span style="font:600 20px system-ui;color:#FFA24B;font-variant-numeric:tabular-nums">{{ availableTotal }}</span></div>
+      </div>
+
+      <sc-if value="{{ showRateWarning }}" hint-placeholder-val="{{ true }}">
+        <div onClick="{{ openRate }}" style="height:44px;flex:none;margin-top:12px;border:1px solid rgba(232,184,114,.3);background:rgba(232,184,114,.07);border-radius:10px;display:flex;align-items:center;gap:10px;padding:0 12px;cursor:pointer">
+          <span style="font:700 13px system-ui;color:#E8B872">!</span>
+          <span style="flex:1;min-width:0;font:500 13px system-ui;color:#E8B872;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">2 assets have no rate — set one</span>
+          <span style="font:400 13px system-ui;color:#E8B872">›</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ accountsEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 24px 60px;text-align:center">
+          <div style="width:52px;height:52px;border-radius:14px;background:#151A21;display:flex;align-items:center;justify-content:center;font:400 22px system-ui;color:#FFA24B">▤</div>
+          <span style="font:600 17px system-ui">Add your first account</span>
+          <span style="font:400 13px/1.5 system-ui;color:#8A93A0;text-wrap:pretty">Cash, cards, wallets, reserves, and crypto all live here.</span>
+          <div onClick="{{ openAddAccount }}" style="margin-top:6px;height:44px;padding:0 22px;border-radius:10px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;font:700 15px system-ui;cursor:pointer">Add account</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ accountsFilled }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;overflow:hidden;margin-top:12px">
+          <sc-for list="{{ accountGroups }}" as="g" hint-placeholder-count="2">
+            <div style="height:24px;display:flex;align-items:center;justify-content:space-between"><span style="font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">{{ g.title }}</span><span style="font:400 11px system-ui;color:#8A93A0">{{ g.count }}</span></div>
+            <sc-for list="{{ g.items }}" as="a" hint-placeholder-count="1">
+              <div onClick="{{ openAccount }}" style="height:64px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer">
+                <div style="width:28px;height:28px;flex:none;border-radius:8px;background:rgba(255,162,75,.14);color:#FFA24B;display:flex;align-items:center;justify-content:center;font:600 14px system-ui">{{ a.glyph }}</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 15px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</span><span style="font:400 13px system-ui;color:#8A93A0">{{ a.meta }}</span></div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font:600 15px system-ui;font-variant-numeric:tabular-nums">{{ a.amount }}</span><span style="font:400 11px system-ui;color:{{ a.subColor }}">{{ a.sub }}</span></div>
+                <span style="color:#4A525E;font:400 15px system-ui">›</span>
+              </div>
+            </sc-for>
+          </sc-for>
+          <div onClick="{{ openAddAccount }}" style="height:56px;display:flex;align-items:center;gap:12px;color:#8A93A0;cursor:pointer">
+            <div style="width:28px;height:28px;border-radius:8px;border:1px dashed rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font:400 15px system-ui">+</div>
+            <span style="font:500 15px system-ui">New account</span>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isTransactions }}" hint-placeholder-val="{{ false }}">
+    <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="font:600 17px system-ui">Transactions</span>
+      <div onClick="{{ openFilters }}" style="height:44px;display:flex;align-items:center;gap:6px;cursor:pointer"><span style="font:500 15px system-ui">Filters</span><div style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;justify-content:center;font:700 11px system-ui">2</div></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+      <div style="height:44px;flex:none;display:flex;align-items:center;gap:8px;padding:0 16px;overflow:hidden">
+        <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="5">
+          <div onClick="{{ c.onClick }}" style="height:36px;flex:none;display:flex;align-items:center;padding:0 14px;border-radius:6px;background:{{ c.bg }};border:1px solid {{ c.bd }};color:{{ c.fg }};font:600 13px system-ui;cursor:pointer">{{ c.label }}</div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ txEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 32px 60px;text-align:center">
+          <div style="width:52px;height:52px;border-radius:14px;background:#151A21;display:flex;align-items:center;justify-content:center;font:400 22px system-ui;color:#FFA24B">⇄</div>
+          <span style="font:600 17px system-ui">No transactions yet</span>
+          <span style="font:400 13px/1.5 system-ui;color:#8A93A0;text-wrap:pretty">Create financial events from Operations — they appear here.</span>
+          <div onClick="{{ goOperations }}" style="margin-top:6px;height:44px;padding:0 22px;border-radius:10px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;font:700 15px system-ui;cursor:pointer">Open Operations</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ txFilled }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;overflow:hidden;padding:0 16px">
+          <sc-for list="{{ txFeed }}" as="row" hint-placeholder-count="9">
+            <sc-if value="{{ row.isGroup }}" hint-placeholder-val="{{ false }}">
+              <div style="height:24px;display:flex;align-items:center;font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">{{ row.label }}</div>
+            </sc-if>
+            <sc-if value="{{ row.isTx }}" hint-placeholder-val="{{ true }}">
+              <div style="height:64px;display:flex;align-items:stretch;border-bottom:1px solid rgba(255,255,255,.07);overflow:hidden">
+                <div onClick="{{ openTx }}" style="flex:1;min-width:0;display:flex;align-items:center;gap:12px;margin-left:{{ row.shift }};cursor:pointer">
+                  <div style="width:28px;height:28px;flex:none;border-radius:8px;background:{{ row.tint }};color:{{ row.fg }};display:flex;align-items:center;justify-content:center;font:600 14px system-ui">{{ row.glyph }}</div>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                    <span style="font:600 15px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ row.title }}</span>
+                    <div style="display:flex;align-items:center;gap:6px">
+                      <span style="font:400 13px system-ui;color:#8A93A0">{{ row.meta }}</span>
+                      <sc-if value="{{ row.badge }}" hint-placeholder-val="{{ false }}"><span style="font:600 11px system-ui;color:{{ row.badgeFg }};border:1px solid {{ row.badgeBd }};border-radius:5px;padding:1px 6px">{{ row.badge }}</span></sc-if>
+                    </div>
+                  </div>
+                  <span style="font:600 15px system-ui;color:{{ row.fg }};font-variant-numeric:tabular-nums;white-space:nowrap">{{ row.amount }}</span>
+                </div>
+                <sc-if value="{{ row.swiped }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex:none;margin-left:12px">
+                    <div onClick="{{ openLink }}" style="width:64px;background:#232A33;display:flex;align-items:center;justify-content:center;font:600 13px system-ui;color:#E7EAEE;cursor:pointer">Plan</div>
+                    <div onClick="{{ openDelete }}" style="width:64px;background:#7A2F35;display:flex;align-items:center;justify-content:center;font:600 13px system-ui;color:#FFD9D9;cursor:pointer">Delete</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isOperations }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 16px 0">
+      <div style="flex:none;display:flex;align-items:stretch;gap:10px">
+        <div onClick="{{ openAccountList }}" style="flex:1;min-width:0;height:96px;box-sizing:border-box;background:#151A21;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:10px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;cursor:pointer">
+          <div style="height:26px;display:flex;align-items:center;gap:6px"><span style="font:600 15px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ accountTitle }}</span><span style="font:400 11px system-ui;color:#8A93A0">⌄</span></div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font:500 11px system-ui;color:#8A93A0">Balance</span>
+            <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 22px/1.1 system-ui;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap">{{ accountBalance }}</span><span style="font:500 11px system-ui;color:#8A93A0">{{ accountCurrency }}</span></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ periodActive }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ openPeriodDetails }}" style="flex:1;min-width:0;height:96px;box-sizing:border-box;background:#151A21;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:10px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;cursor:pointer">
+            <div style="height:26px;display:flex;align-items:center;justify-content:space-between;gap:6px">
+              <div style="display:flex;align-items:center;gap:6px;min-width:0"><div style="width:6px;height:6px;flex:none;border-radius:3px;background:#6EE7A8"></div><span style="font:500 13px system-ui;color:#C9D0D9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ periodLabel }}</span></div>
+              <span style="font:400 15px system-ui;color:#4A525E;flex:none">›</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span style="font:500 11px system-ui;color:#8A93A0">Available today</span>
+              <div style="display:flex;align-items:baseline;gap:4px"><span style="font:600 22px/1.1 system-ui;color:#FFA24B;font-variant-numeric:tabular-nums;letter-spacing:-.01em;white-space:nowrap">{{ availableValue }}</span><span style="font:500 11px system-ui;color:#8A93A0">{{ accountCurrency }}</span></div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ periodNone }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ openStartPeriod }}" style="flex:1;min-width:0;height:96px;box-sizing:border-box;background:transparent;border:1px dashed rgba(255,255,255,.16);border-radius:16px;padding:10px 14px 12px;display:flex;flex-direction:column;justify-content:space-between;gap:8px;cursor:pointer">
+            <div style="height:26px;display:flex;align-items:center;gap:6px"><div style="width:6px;height:6px;flex:none;border-radius:3px;background:#4A525E"></div><span style="font:500 13px system-ui;color:#8A93A0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">No period</span></div>
+            <div style="height:36px;flex:none;border-radius:10px;background:rgba(255,162,75,.14);color:#FFA24B;display:flex;align-items:center;justify-content:center;gap:6px;font:600 14px system-ui"><span style="font:400 16px system-ui">+</span>Start period</div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="height:44px;flex:none;margin-top:12px;background:#151A21;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:3px;display:flex;gap:2px">
+        <sc-for list="{{ segments }}" as="s" hint-placeholder-count="4">
+          <div onClick="{{ s.onClick }}" style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:9px;background:{{ s.bg }};color:{{ s.fg }};font:600 13px system-ui;cursor:pointer;white-space:nowrap">{{ s.label }}</div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ opIsScan }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 32px 80px;text-align:center">
+          <div style="width:52px;height:52px;border-radius:14px;background:#151A21;display:flex;align-items:center;justify-content:center;font:400 22px system-ui;color:#FFA24B">⚡</div>
+          <span style="font:600 17px system-ui">Coming soon</span>
+          <span style="font:400 13px/1.5 system-ui;color:#8A93A0">Scan is reserved for a later release. No OCR is performed.</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ opIsForm }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ opIsTransfer }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ openDestination }}" style="height:44px;flex:none;margin-top:10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#101419;cursor:pointer"><span style="font:500 15px system-ui;color:{{ destFg }}">{{ destValue }}</span><span style="font:400 11px system-ui;color:#8A93A0">⌄</span></div>
+        </sc-if>
+
+        <div onClick="{{ focusAmount }}" style="height:60px;flex:none;margin-top:10px;border:1px solid {{ amountBorder }};border-radius:12px;display:flex;align-items:center;padding:0 14px;gap:8px;background:#101419;cursor:pointer">
+          <span style="flex:1;font:600 28px system-ui;color:{{ amountColor }};font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap;overflow:hidden">{{ amountValue }}<span style="color:{{ caretAmount }};font-weight:300">|</span></span>
+          <span style="font:500 15px system-ui;color:#8A93A0;flex:none">{{ accountCurrency }}</span>
+        </div>
+        <sc-if value="{{ hasError }}" hint-placeholder-val="{{ false }}">
+          <div style="height:20px;flex:none;display:flex;align-items:center;font:500 12px system-ui;color:#FF7B7B">{{ errorText }}</div>
+        </sc-if>
+
+        <div style="height:44px;flex:none;margin-top:8px;display:flex;gap:8px">
+          <div onClick="{{ openCategory }}" style="flex:6;border:1px solid rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#101419;cursor:pointer"><span style="font:500 15px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ categoryValue }}</span><span style="font:400 11px system-ui;color:#8A93A0">⌄</span></div>
+          <div onClick="{{ openDate }}" style="flex:4;border:1px solid rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#101419;cursor:pointer"><span style="font:500 15px system-ui">{{ dateValue }}</span><span style="font:400 11px system-ui;color:#8A93A0">⌄</span></div>
+        </div>
+
+        <div onClick="{{ focusNote }}" style="height:44px;flex:none;margin-top:8px;border:1px solid {{ noteBorder }};border-radius:12px;display:flex;align-items:center;padding:0 14px;background:#101419;cursor:pointer"><span style="font:400 15px system-ui;color:{{ noteFg }}">{{ noteValue }}<span style="color:{{ caretNote }}">|</span></span></div>
+
+        <div onClick="{{ submitTap }}" style="height:50px;flex:none;margin-top:12px;border-radius:12px;background:{{ submitBg }};display:flex;align-items:center;justify-content:center;font:700 16px system-ui;color:{{ submitFg }};cursor:pointer">{{ submitLabel }}</div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlan }}" hint-placeholder-val="{{ false }}">
+    <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="font:600 17px system-ui">Plan</span>
+      <div onClick="{{ openRule }}" style="width:44px;height:44px;display:flex;align-items:center;justify-content:flex-end;cursor:pointer"><div style="width:32px;height:32px;border-radius:10px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;justify-content:center;font:600 19px system-ui">+</div></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:12px 16px 0">
+      <div style="height:64px;flex:none;background:#151A21;border:1px solid rgba(255,255,255,.08);border-radius:16px;display:flex">
+        <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font:500 11px system-ui;color:#8A93A0">Open items</span><span style="font:600 20px system-ui;font-variant-numeric:tabular-nums">{{ planOpen }}</span></div>
+        <div style="width:1px;background:rgba(255,255,255,.07);margin:12px 0"></div>
+        <div style="flex:1;padding:12px 14px;display:flex;flex-direction:column;gap:4px"><span style="font:500 11px system-ui;color:#8A93A0">Completed</span><span style="font:600 20px system-ui;font-variant-numeric:tabular-nums">{{ planDone }}</span></div>
+      </div>
+
+      <sc-if value="{{ planEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 28px 70px;text-align:center">
+          <div style="width:52px;height:52px;border-radius:14px;background:#151A21;display:flex;align-items:center;justify-content:center;font:400 20px system-ui;color:#FFA24B">◇</div>
+          <span style="font:600 17px system-ui">Plan what comes next</span>
+          <span style="font:400 13px/1.5 system-ui;color:#8A93A0;text-wrap:pretty">Expected income, required expenses, subscriptions. Plan never changes real balances.</span>
+          <div onClick="{{ openRule }}" style="margin-top:6px;height:44px;padding:0 22px;border-radius:10px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;font:700 15px system-ui;cursor:pointer">Add rule</div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ planFilled }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;overflow:hidden;margin-top:12px">
+          <div style="height:24px;display:flex;align-items:center;justify-content:space-between"><span style="font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">UPCOMING</span><span style="font:400 11px system-ui;color:#8A93A0">next 30 days</span></div>
+          <sc-for list="{{ planItems }}" as="p" hint-placeholder-count="3">
+            <div onClick="{{ openPlanItem }}" style="height:64px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer">
+              <div style="width:28px;height:28px;flex:none;border-radius:8px;background:{{ p.tint }};color:{{ p.fg }};display:flex;align-items:center;justify-content:center;font:600 14px system-ui">{{ p.glyph }}</div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:600 15px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span>
+                <div style="display:flex;align-items:center;gap:6px"><span style="font:400 13px system-ui;color:#8A93A0">{{ p.meta }}</span><span style="font:600 11px system-ui;color:{{ p.badgeFg }};border:1px solid {{ p.badgeBd }};border-radius:5px;padding:1px 6px">{{ p.badge }}</span></div>
+              </div>
+              <span style="font:600 15px system-ui;color:{{ p.fg }};font-variant-numeric:tabular-nums;white-space:nowrap">{{ p.amount }}</span>
+            </div>
+          </sc-for>
+          <div style="height:24px;margin-top:8px;display:flex;align-items:center;justify-content:space-between"><span style="font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">RULES</span><span style="font:400 11px system-ui;color:#8A93A0">1 active</span></div>
+          <sc-for list="{{ planRules }}" as="r" hint-placeholder-count="2">
+            <div onClick="{{ openEditRule }}" style="height:64px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer">
+              <div style="width:28px;height:28px;flex:none;border-radius:8px;background:{{ r.tint }};color:{{ r.fg }};display:flex;align-items:center;justify-content:center;font:600 14px system-ui">{{ r.glyph }}</div>
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="font:600 15px system-ui">{{ r.name }}</span><span style="font:400 13px system-ui;color:#8A93A0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.meta }}</span></div>
+              <span style="color:#4A525E;font:400 15px system-ui">›</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAnalytics }}" hint-placeholder-val="{{ false }}">
+    <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="font:600 17px system-ui">Analytics</span>
+      <div onClick="{{ openProfile }}" style="width:44px;height:44px;display:flex;align-items:center;justify-content:flex-end;cursor:pointer"><div style="width:30px;height:30px;border-radius:15px;background:#232A33;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center"><div style="width:10px;height:10px;border-radius:5px;background:#FFA24B"></div></div></div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 32px 60px;text-align:center">
+      <div style="width:52px;height:52px;border-radius:14px;background:#151A21;display:flex;align-items:center;justify-content:center;font:400 22px system-ui;color:#FFA24B">⚡</div>
+      <span style="font:600 17px system-ui">Coming soon</span>
+      <span style="font:400 13px/1.5 system-ui;color:#8A93A0;text-wrap:pretty">Income, spending, and trends arrive once the core ledger is stable.</span>
+    </div>
+  </sc-if>
+
+</div>
+
+<div style="height:56px;flex:none;display:flex;align-items:center;border-top:1px solid rgba(255,255,255,.07);padding:0 4px;background:#0B0D10">
+  <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+    <div onClick="{{ t.onClick }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:{{ t.color }};cursor:pointer"><span style="font:400 17px/1 system-ui">{{ t.icon }}</span><span style="font:500 10px system-ui">{{ t.label }}</span></div>
+  </sc-for>
+</div>
+<div style="height:34px;flex:none;display:flex;align-items:center;justify-content:center;background:#0B0D10"><div style="width:134px;height:5px;border-radius:3px;background:rgba(255,255,255,.35)"></div></div>
+
+<sc-if value="{{ kbOpen }}" hint-placeholder-val="{{ false }}">
+  <div style="position:absolute;left:0;right:0;bottom:0;height:250px;background:#1B1E24;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;padding:0 6px 34px">
+    <div style="height:40px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 6px;border-bottom:1px solid rgba(255,255,255,.07)">
+      <span style="font:500 12px system-ui;color:#6B7482">{{ kbHint }}</span>
+      <div onClick="{{ closeKb }}" style="height:32px;padding:0 14px;border-radius:8px;background:#2A2F37;display:flex;align-items:center;font:600 14px system-ui;color:#FFA24B;cursor:pointer">Done</div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding:7px 0 0">
+      <sc-for list="{{ keypad }}" as="krow" hint-placeholder-count="4">
+        <div style="flex:1;display:flex;gap:6px">
+          <sc-for list="{{ krow.keys }}" as="k" hint-placeholder-count="3">
+            <div onClick="{{ k.onClick }}" style="flex:{{ k.flex }};background:{{ k.bg }};border-radius:6px;display:flex;align-items:center;justify-content:center;font:400 {{ k.size }} system-ui;color:#fff;cursor:pointer">{{ k.label }}</div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(0,0,0,.62);cursor:pointer"></div>
+
+  <sc-if value="{{ isAccountList }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:0;right:0;bottom:0;background:#151A21;border-top:1px solid rgba(255,255,255,.1);border-top-left-radius:20px;border-top-right-radius:20px;display:flex;flex-direction:column">
+      <div style="height:18px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22)"></div></div>
+      <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px">
+        <div style="display:flex;flex-direction:column;gap:1px"><span style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:#FFA24B">ACCOUNT</span><span style="font:600 20px system-ui">Switch account</span></div>
+        <div onClick="{{ closeSheet }}" style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:flex-end;cursor:pointer"><div style="width:30px;height:30px;border-radius:10px;background:#232A33;display:flex;align-items:center;justify-content:center;font:400 15px system-ui;color:#8A93A0">✕</div></div>
+      </div>
+      <div style="flex:none;padding:6px 16px 0;display:flex;flex-direction:column">
+        <sc-for list="{{ accountList }}" as="a" hint-placeholder-count="4">
+          <div onClick="{{ a.onClick }}" style="height:64px;display:flex;align-items:center;gap:12px;border-top:1px solid {{ a.line }};cursor:pointer">
+            <div style="width:34px;height:34px;flex:none;border-radius:11px;background:{{ a.tint }};color:{{ a.glyphFg }};display:flex;align-items:center;justify-content:center;font:600 13px ui-monospace,Menlo,monospace">{{ a.cur }}</div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+              <span style="font:600 15px system-ui;color:{{ a.nameFg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.name }}</span>
+              <span style="font:400 12px system-ui;color:#8A93A0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.meta }}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex:none">
+              <span style="font:600 15px system-ui;font-variant-numeric:tabular-nums;white-space:nowrap;color:{{ a.balFg }}">{{ a.balance }}</span>
+              <span style="width:18px;text-align:right;font:700 14px system-ui;color:#FFA24B">{{ a.check }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:none;padding:16px;display:flex;align-items:center;gap:12px">
+        <div onClick="{{ openAddAccount }}" style="flex:1;height:50px;border-radius:12px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;gap:8px;font:600 15px system-ui;color:#C9D0D9;cursor:pointer"><span style="font:400 17px system-ui;color:#FFA24B">+</span>Add account</div>
+      </div>
+      <div style="height:34px;flex:none"></div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:16px;right:16px;bottom:34px;background:#1B2028;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px 18px 16px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <span style="font:600 17px system-ui">{{ confirmTitle }}</span>
+        <span style="font:400 14px/1.5 system-ui;color:#8A93A0;text-wrap:pretty">{{ confirmBody }}</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <sc-if value="{{ confirmHasCancel }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ closeSheet }}" style="flex:1;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font:600 15px system-ui;cursor:pointer">Cancel</div>
+        </sc-if>
+        <div onClick="{{ confirmTap }}" style="flex:1;height:48px;border-radius:10px;background:{{ confirmBg }};color:{{ confirmFg }};display:flex;align-items:center;justify-content:center;font:700 15px system-ui;cursor:pointer">{{ confirmCta }}</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isSheet }}" hint-placeholder-val="{{ true }}">
+  <div style="position:absolute;left:0;right:0;bottom:0;max-height:88%;background:#151A21;border-top:1px solid rgba(255,255,255,.1);border-top-left-radius:20px;border-top-right-radius:20px;display:flex;flex-direction:column">
+    <div style="height:18px;flex:none;display:flex;align-items:center;justify-content:center"><div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.22)"></div></div>
+    <div style="height:44px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 16px">
+      <div style="display:flex;flex-direction:column;gap:1px;min-width:0">
+        <span style="font:700 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:#FFA24B">{{ sheetKicker }}</span>
+        <span style="font:600 20px system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sheetTitle }}</span>
+      </div>
+      <div onClick="{{ closeSheet }}" style="width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:flex-end;cursor:pointer"><div style="width:30px;height:30px;border-radius:10px;background:#232A33;display:flex;align-items:center;justify-content:center;font:400 15px system-ui;color:#8A93A0">✕</div></div>
+    </div>
+
+    <div style="flex:1;min-height:0;overflow:hidden;padding:8px 16px 0;display:flex;flex-direction:column;gap:8px">
+
+      <sc-if value="{{ sheetFields }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ sheetFields }}" as="f" hint-placeholder-count="4">
+          <div onClick="{{ f.onClick }}" style="height:44px;flex:none;border:1px solid {{ f.bd }};border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;background:#101419;cursor:pointer">
+            <span style="font:500 13px system-ui;color:#8A93A0">{{ f.label }}</span>
+            <div style="display:flex;align-items:center;gap:8px"><span style="font:500 15px system-ui;color:{{ f.fg }}">{{ f.value }}<span style="color:{{ f.caret }}">|</span></span><span style="font:400 11px system-ui;color:#8A93A0">{{ f.chev }}</span></div>
+          </div>
+        </sc-for>
+      </sc-if>
+
+      <sc-if value="{{ sheetToggle }}" hint-placeholder-val="{{ false }}">
+        <div style="height:44px;flex:none;display:flex;align-items:center;gap:12px">
+          <div style="width:24px;height:24px;border-radius:6px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;justify-content:center;font:700 14px system-ui">✓</div>
+          <span style="font:500 15px system-ui">{{ sheetToggle }}</span>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ sheetHint }}" hint-placeholder-val="{{ false }}">
+        <span style="font:400 13px/1.5 system-ui;color:#5F6875;text-wrap:pretty">{{ sheetHint }}</span>
+      </sc-if>
+
+      <sc-if value="{{ sheetActions }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;flex:none">
+          <sc-for list="{{ sheetActions }}" as="a" hint-placeholder-count="3">
+            <div onClick="{{ a.onClick }}" style="height:44px;padding:0 16px;border-radius:10px;background:{{ a.bg }};border:1px solid {{ a.bd }};color:{{ a.fg }};display:flex;align-items:center;font:600 15px system-ui;cursor:pointer">{{ a.label }}</div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ sheetListTitle }}" hint-placeholder-val="{{ false }}">
+        <div style="height:24px;flex:none;display:flex;align-items:center;font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">{{ sheetListTitle }}</div>
+      </sc-if>
+
+      <sc-if value="{{ sheetRows }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;min-height:0;overflow:hidden">
+          <sc-for list="{{ sheetRows }}" as="r" hint-placeholder-count="5">
+            <div onClick="{{ r.onClick }}" style="height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,255,255,.07);cursor:{{ r.cursor }}">
+              <div style="min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font:400 15px system-ui;color:{{ r.kColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.k }}</span><sc-if value="{{ r.sub }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px system-ui;color:#8A93A0">{{ r.sub }}</span></sc-if></div>
+              <span style="font:500 15px system-ui;color:{{ r.vColor }};font-variant-numeric:tabular-nums;white-space:nowrap">{{ r.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ sheetListTitle2 }}" hint-placeholder-val="{{ false }}">
+        <div style="height:24px;flex:none;margin-top:8px;display:flex;align-items:center;font:600 11px system-ui;letter-spacing:.1em;color:#8A93A0">{{ sheetListTitle2 }}</div>
+      </sc-if>
+
+      <sc-if value="{{ sheetRows2 }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:none;min-height:0;overflow:hidden">
+          <sc-for list="{{ sheetRows2 }}" as="r" hint-placeholder-count="2">
+            <div style="height:48px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid rgba(255,255,255,.07)">
+              <div style="min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font:400 15px system-ui;color:{{ r.kColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.k }}</span><sc-if value="{{ r.sub }}" hint-placeholder-val="{{ false }}"><span style="font:400 12px system-ui;color:#8A93A0">{{ r.sub }}</span></sc-if></div>
+              <span style="font:500 15px system-ui;color:{{ r.vColor }};font-variant-numeric:tabular-nums;white-space:nowrap">{{ r.v }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <sc-if value="{{ sheetPrimary }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:none;padding:16px;display:flex;align-items:center;gap:12px">
+        <sc-if value="{{ sheetSecondary }}" hint-placeholder-val="{{ true }}">
+          <div onClick="{{ sheetSecondaryTap }}" style="height:48px;padding:0 18px;border-radius:10px;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;font:600 15px system-ui;color:#C9D0D9;cursor:pointer">{{ sheetSecondary }}</div>
+        </sc-if>
+        <div onClick="{{ sheetPrimaryTap }}" style="flex:1;height:48px;border-radius:10px;background:#FFA24B;color:#0B0D10;display:flex;align-items:center;justify-content:center;font:700 16px system-ui;cursor:pointer">{{ sheetPrimary }}</div>
+      </div>
+    </sc-if>
+    <div style="height:34px;flex:none"></div>
+  </div>
+  </sc-if>
+</sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;accounts&quot;,&quot;transactions&quot;,&quot;operations&quot;,&quot;plan&quot;,&quot;analytics&quot;],&quot;default&quot;:&quot;accounts&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frame&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;spend&quot;,&quot;add&quot;,&quot;transfer&quot;,&quot;scan&quot;],&quot;default&quot;:&quot;add&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frame&quot;},&quot;period&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;active&quot;,&quot;none&quot;],&quot;default&quot;:&quot;active&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frame&quot;},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;empty&quot;,&quot;many&quot;,&quot;kb&quot;,&quot;swipe&quot;,&quot;error&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frame&quot;},&quot;sheet&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;&quot;,&quot;filters&quot;,&quot;pick&quot;,&quot;tx&quot;,&quot;editTx&quot;,&quot;account&quot;,&quot;addAccount&quot;,&quot;editAccount&quot;,&quot;reconcile&quot;,&quot;share&quot;,&quot;accountList&quot;,&quot;period&quot;,&quot;startPeriod&quot;,&quot;periodDetails&quot;,&quot;history&quot;,&quot;categories&quot;,&quot;addCategory&quot;,&quot;editCategory&quot;,&quot;profile&quot;,&quot;rule&quot;,&quot;editRule&quot;,&quot;planItem&quot;,&quot;link&quot;,&quot;rate&quot;,&quot;saved&quot;,&quot;confirmClose&quot;,&quot;confirmDelete&quot;,&quot;confirmArchive&quot;,&quot;confirmLogout&quot;,&quot;confirmDeleteCategory&quot;,&quot;confirmDeleteRule&quot;],&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Frame&quot;},&quot;interactive&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Frame&quot;}}">
+class Component extends DCLogic {
+  state = {
+    tab: this.props.screen || "accounts",
+    sheet: this.props.sheet || "",
+    mode: this.props.mode || "add",
+    per: this.props.period || "active",
+    focus: "", amt: null, note: "", chip: 0,
+    cat: null, date: null, dest: null,
+    fieldFocus: "", pickKind: "", back: ""
+  };
+
+  set(patch) { if (this.props.interactive === false) return; this.setState(patch); }
+
+  renderVals() {
+    const p = this.props, s = this.state;
+    const variant = p.variant || "";
+    const live = p.interactive !== false;
+    const tab = s.tab, sheet = s.sheet, mode = s.mode;
+
+    const O = "#FFA24B", MUT = "#8A93A0", DIM = "#5F6875", GRN = "#6EE7A8", RED = "#FF7B7B";
+    const empty = variant === "empty";
+
+    const tabs = [
+      { key: "accounts", label: "Accounts", icon: "▤" },
+      { key: "transactions", label: "Transactions", icon: "⇄" },
+      { key: "operations", label: "Operations", icon: "◎" },
+      { key: "plan", label: "Plan", icon: "◇" },
+      { key: "analytics", label: "Analytics", icon: "ϟ" }
+    ].map(t => ({
+      ...t,
+      color: t.key === tab ? O : "#6B7482",
+      onClick: () => this.set({ tab: t.key, sheet: "" })
+    }));
+
+    const chipLabels = ["All", "Income", "Expense", "Transfer", "Planned"];
+    const chipSel = s.chip || 0;
+    const typeChips = chipLabels.map((label, i) => ({
+      label, bg: i === chipSel ? O : "transparent", bd: i === chipSel ? O : "rgba(255,255,255,.12)",
+      fg: i === chipSel ? "#0B0D10" : "#9AA3B0", onClick: () => this.set({ chip: i })
+    }));
+
+    const accountGroups = empty ? [] : (variant === "many" ? [
+      { title: "CASH", count: "2 accounts", items: [
+        { glyph: "₫", name: "Cash", meta: "cash · spending", amount: "5,980,000 VND", sub: "Not valued", subColor: MUT },
+        { glyph: "₫", name: "Pocket", meta: "cash · spending", amount: "420,000 VND", sub: "Not valued", subColor: MUT }
+      ]},
+      { title: "BANK", count: "2 accounts", items: [
+        { glyph: "▤", name: "Techcombank", meta: "bank · spending", amount: "7,420,000 VND", sub: "Not valued", subColor: MUT },
+        { glyph: "$", name: "Wise", meta: "bank · reserve", amount: "1,240.00 USD", sub: "protected", subColor: MUT }
+      ]},
+      { title: "CRYPTO", count: "1 account", items: [
+        { glyph: "₿", name: "non card", meta: "crypto · reserve", amount: "1,400.000000 USDT", sub: "Not valued", subColor: MUT }
+      ]}
+    ] : [
+      { title: "CASH", count: "1 account", items: [
+        { glyph: "₫", name: "Cash", meta: "cash · spending", amount: "5,980,000 VND", sub: "Not valued", subColor: MUT }
+      ]},
+      { title: "CRYPTO", count: "1 account", items: [
+        { glyph: "₿", name: "non card", meta: "crypto · reserve", amount: "1,400.000000 USDT", sub: "Not valued", subColor: MUT }
+      ]}
+    ]);
+
+    const tx = (title, meta, amount, dir, badge, swiped) => ({
+      isTx: true, isGroup: false, title, meta, amount,
+      glyph: dir === "in" ? "↑" : dir === "out" ? "↓" : "±",
+      fg: dir === "in" ? GRN : dir === "out" ? RED : "#9AA3B0",
+      tint: dir === "in" ? "rgba(110,231,168,.12)" : dir === "out" ? "rgba(255,123,123,.12)" : "rgba(255,255,255,.07)",
+      badge: badge || false,
+      badgeFg: badge === "Deleted" ? RED : O,
+      badgeBd: badge === "Deleted" ? "rgba(255,123,123,.35)" : "rgba(255,162,75,.35)",
+      swiped: !!swiped, shift: swiped ? "-112px" : "0px"
+    });
+    const grp = label => ({ isGroup: true, isTx: false, label });
+    const sw = variant === "swipe";
+    const txFeed = [
+      grp("AUG 7"),
+      tx("Salary", "You", "+1,350", "in", "Deleted"),
+      tx("Grab", "You", "−85,000", "out", false, sw),
+      grp("AUG 6"),
+      tx("cola", "You", "−20,000", "out"),
+      tx("Groceries", "You", "−2,000,000", "out"),
+      tx("Subscription", "You", "−149,000", "out", "Planned"),
+      tx("Rent", "You", "−1,000,000", "out"),
+      tx("Opening balance", "You", "+9,000,000", "flat")
+    ];
+    const kindOf = r => r.badge === "Planned" ? "Planned" : (r.glyph === "\u2191" ? "Income" : r.glyph === "\u2193" ? "Expense" : "Transfer");
+    const want = chipLabels[chipSel];
+    const kept = want === "All" ? txFeed : txFeed.filter(r => r.isGroup || kindOf(r) === want);
+    const visibleFeed = kept.filter((r, i) => !r.isGroup || (kept[i + 1] && !kept[i + 1].isGroup));
+
+    const modeMeta = {
+      spend: { label: "Save spending", cat: "Groceries" },
+      add: { label: "Add funds", cat: "Salary" },
+      transfer: { label: "Save transfer", cat: "Uncategorized" },
+      scan: { label: "", cat: "" }
+    };
+    const segments = [
+      { key: "spend", label: "Spend" },
+      { key: "add", label: "Add funds" },
+      { key: "transfer", label: "Transfer" },
+      { key: "scan", label: "Scan" }
+    ].map(x => ({
+      label: x.label,
+      bg: x.key === mode ? "#232A33" : "transparent",
+      fg: x.key === mode ? "#E7EAEE" : MUT,
+      onClick: () => this.set({ mode: x.key, focus: "" })
+    }));
+
+    const opsAccounts = [
+      { sym: "₫", cur: "VND", name: "Cash", meta: "VND · cash · spending", balance: "5,980,000", avail: "685,882", days: "15d", opening: "6,000,000", amount: "1,200,000", kbAmount: "1,20" },
+      { sym: "₫", cur: "VND", name: "Bank card", meta: "VND · card · spending", balance: "12,340,000", avail: "1,028,333", days: "12d", opening: "12,500,000", amount: "1,200,000", kbAmount: "1,20" },
+      { sym: "$", cur: "USD", name: "Savings", meta: "USD · bank · savings", balance: "1,250.00", avail: "62.50", days: "20d", opening: "1,400.00", amount: "120.00", kbAmount: "12" },
+      { sym: "$", cur: "USD", name: "Travel wallet", meta: "USD · cash · spending", balance: "84.20", avail: "9.35", days: "9d", opening: "150.00", amount: "24.00", kbAmount: "2,4" }
+    ];
+    const opsSel = Math.min(s.opsSel || 0, opsAccounts.length - 1);
+    const acc = opsAccounts[opsSel];
+
+    const hasError = variant === "error";
+    const kbOpen = variant === "kb" || !!s.focus;
+
+    const CATS = ["Groceries", "Grab", "Salary", "Subscription", "Rent", "Uncategorized"];
+    const DATES = ["Aug 8, 2026 \u00b7 today", "Aug 7, 2026 \u00b7 yesterday", "Aug 6, 2026", "Aug 5, 2026", "Aug 1, 2026"];
+    const OPTS = {
+      Account: ["Cash \u00b7 VND", "Bank card \u00b7 VND", "Savings \u00b7 USD", "Travel wallet \u00b7 USD"],
+      Category: CATS,
+      Destination: ["Bank card \u00b7 VND", "Savings \u00b7 USD", "Travel wallet \u00b7 USD"],
+      Type: ["Any", "Income", "Expense", "Transfer"],
+      Kind: ["Expected income", "Required expense", "Expense", "Income"],
+      Storage: ["Cash", "Bank account", "Card", "Crypto wallet"],
+      Purpose: ["Spending", "Reserve", "Savings"],
+      Asset: ["VND \u00b7 Vietnamese dong", "USD \u00b7 US dollar", "USDT \u00b7 Tether"],
+      Role: ["Viewer", "Editor", "Owner"],
+      Repeats: ["Never", "Weekly", "Monthly", "Yearly"],
+      Source: ["Manual value", "Auto \u00b7 daily rate"],
+      Period: ["Any", "Current period", "Last 30 days", "This month"],
+      Pair: ["VND \u2192 USD", "USDT \u2192 USD"],
+      "Plan item": ["Income \u00b7 Sep 6 \u00b7 1,350.00 USD", "Rent \u00b7 Sep 1 \u00b7 450.00 USD"],
+      Transaction: ["Salary \u00b7 Aug 7 \u00b7 +1,350", "Grab \u00b7 Aug 7 \u00b7 \u221285,000"],
+      "From account": ["Cash \u00b7 VND", "Bank card \u00b7 VND", "Savings \u00b7 USD"]
+    };
+    const isDate = l => ["Start date", "End date", "First due", "From", "To", "Financial date", "Date"].indexOf(l) >= 0;
+    const optionsFor = l => isDate(l) ? DATES : (OPTS[l] || []);
+
+    const catValue = s.cat || (modeMeta[mode] || modeMeta.add).cat;
+    const dateValue = s.date || "Aug 8";
+    const destValue = s.dest || "Choose destination";
+
+    const typed = s.amt;
+    const openPick = (kind, from) => () => this.set({ pickKind: kind, back: from || "", sheet: "pick", fieldFocus: "" });
+    const pickKind = s.pickKind || "Category";
+    const pickCurrent = pickKind === "Category" ? catValue : pickKind === "Destination" ? (s.dest || "") : "";
+    const applyPick = o => {
+      const patch = { sheet: s.back || "", back: "" };
+      if (pickKind === "Category") patch.cat = o;
+      else if (pickKind === "Destination") patch.dest = o;
+      else if (isDate(pickKind) || pickKind === "Date") patch.date = o.split(",")[0];
+      this.set(patch);
+    };
+
+    const KEY = (label, onClick, flex, dark) => ({
+      label, onClick, flex: flex || 1,
+      bg: dark ? "#2A2F37" : "#3A3F48",
+      size: label.length > 1 ? "15px" : "22px"
+    });
+    const typeAmt = k => () => {
+      const base = typed != null ? typed : "";
+      this.set({ amt: k === "\u232b" ? base.slice(0, -1) : base + k });
+    };
+    const typeNote = k => () => {
+      const base = s.note || "";
+      this.set({ note: k === "\u232b" ? base.slice(0, -1) : base + k });
+    };
+    const numRow = ks => ({ keys: ks.map(k => KEY(k, typeAmt(k), 1, k === "\u232b")) });
+    const abcRow = ks => ({ keys: ks.map(k => KEY(k, typeNote(k), 1, k === "\u232b")) });
+    const keypad = s.focus === "note" ? [
+      abcRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]),
+      abcRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"]),
+      abcRow(["z", "x", "c", "v", "b", "n", "m", "\u232b"]),
+      { keys: [KEY("space", typeNote(" "), 6)] }
+    ] : [
+      numRow(["1", "2", "3"]), numRow(["4", "5", "6"]),
+      numRow(["7", "8", "9"]), numRow([",", "0", "\u232b"])
+    ];
+
+    const planEmpty = empty;
+    const planItems = [
+      { glyph: "↑", name: "Expected income", meta: "Sep 6 · monthly", amount: "+1,350.00 USD", fg: GRN, tint: "rgba(110,231,168,.12)", badge: "planned", badgeFg: O, badgeBd: "rgba(255,162,75,.35)" },
+      { glyph: "↓", name: "Monthly rent", meta: "Sep 1 · monthly", amount: "−450.00 USD", fg: RED, tint: "rgba(255,123,123,.12)", badge: "required", badgeFg: O, badgeBd: "rgba(255,162,75,.35)" },
+      { glyph: "↓", name: "Subscription", meta: "Aug 22 · monthly", amount: "−9.99 USD", fg: RED, tint: "rgba(255,123,123,.12)", badge: "overdue", badgeFg: RED, badgeBd: "rgba(255,123,123,.35)" }
+    ];
+    const planRules = [
+      { glyph: "↑", name: "Salary", meta: "Expected income · 1,350.00 USD · monthly", fg: GRN, tint: "rgba(110,231,168,.12)" },
+      { glyph: "↓", name: "Monthly rent", meta: "Required expense · 450.00 USD · monthly", fg: RED, tint: "rgba(255,123,123,.12)" }
+    ];
+
+    const F = (label, value, fg, chev) => ({
+      label, value, fg: fg || "#E7EAEE", chev: chev === false ? "" : "\u2304",
+      bd: s.fieldFocus === label ? "rgba(255,162,75,.55)" : "rgba(255,255,255,.12)",
+      caret: s.fieldFocus === label ? O : "transparent",
+      onClick: chev === false ? () => this.set({ fieldFocus: label }) : openPick(label, sheet)
+    });
+    const R = (k, v, kColor, vColor, sub, dest) => ({
+      k, v, kColor: kColor || MUT, vColor: vColor || "#E7EAEE", sub: sub || false,
+      cursor: dest ? "pointer" : "default",
+      onClick: dest ? () => this.set({ sheet: dest, fieldFocus: "" }) : undefined
+    });
+    const A = (label, kind, dest) => ({
+      label,
+      bg: kind === "primary" ? O : kind === "danger" ? "rgba(255,123,123,.1)" : "#232A33",
+      bd: kind === "danger" ? "rgba(255,123,123,.3)" : "transparent",
+      fg: kind === "primary" ? "#0B0D10" : kind === "danger" ? RED : "#E7EAEE",
+      onClick: () => this.set({ sheet: dest || "", fieldFocus: "" })
+    });
+
+    const sheets = {
+      filters: { kicker: "LEDGER", title: "Filters", secondary: "Clear", primary: "Apply",
+        fields: [F("Account", "Cash · VND"), F("Period", "Any", MUT), F("Type", "Expense"), F("Category", "Any", MUT), F("From", "Any", MUT), F("To", "Any", MUT)] },
+      tx: { kicker: "LEDGER ENTRY", title: "cola", primary: "Edit", secondary: "Delete",
+        rows: [R("Status", "Posted"), R("Type", "Expense"), R("Amount", "−20,000 VND", MUT, RED), R("Financial date", "Aug 6, 2026"), R("Category", "Groceries"), R("Created by", "You")],
+        listTitle2: "VISIBLE MOVEMENTS",
+        rows2: [R("Cash", "−20,000 VND", "#E7EAEE", RED)] },
+      account: { kicker: "ACCOUNT", title: "Cash", primary: "Edit details", secondary: "Share",
+        fields: [F("Balance", "5,980,000 VND", "#E7EAEE", false), F("Type", "cash · spending · Owner", "#E7EAEE", false)],
+        actions: [A("Reconcile", null, "reconcile"), A("Full history", null, "history"), A("Archive", "danger", "confirmArchive")],
+        listTitle: "RECENT HISTORY",
+        rows: [R("Salary", "+1,350 VND", "#E7EAEE", GRN, "Aug 7, 2026", "tx"), R("cola", "−20,000 VND", "#E7EAEE", RED, "Aug 6, 2026", "tx"), R("Groceries", "−2,000,000 VND", "#E7EAEE", RED, "Aug 6, 2026", "tx"), R("Opening balance", "+9,000,000 VND", "#E7EAEE", GRN, "Aug 6, 2026", "tx")] },
+      addAccount: { kicker: "ACCOUNT", title: "Add account", primary: "Add account", secondary: "Cancel",
+        fields: [F("Name", "Main card", "#E7EAEE", false), F("Storage", "Bank account"), F("Purpose", "Spending"), F("Asset", "USD · US dollar"), F("Opening balance", "0", "#E7EAEE", false)],
+        toggle: "Include in Available" },
+      editAccount: { kicker: "ACCOUNT", title: "Edit account", primary: "Save changes", secondary: "Cancel",
+        fields: [F("Name", "Cash", "#E7EAEE", false), F("Storage", "Cash"), F("Purpose", "Spending"), F("Institution", "Optional", MUT, false)],
+        toggle: "Include in Available" },
+      period: { kicker: "SPENDING PERIOD", title: "Edit period", primary: "Save period", secondary: "Cancel",
+        fields: [F("Start date", "Aug 6, 2026"), F("End date", "Aug 22, 2026")],
+        hint: "The daily allowance is recalculated from the account balance at the moment the period started." },
+      startPeriod: { kicker: "SPENDING PERIOD", title: "Start spending period", primary: "Start period", secondary: "Cancel",
+        fields: [F("Account", acc.name + " · " + acc.cur), F("Current balance", acc.balance + " " + acc.cur, "#E7EAEE", false), F("Start date", "Aug 8, 2026 · today"), F("End date", "Choose a date", MUT)],
+        hint: "Your current account balance will be used to calculate the daily allowance." },
+      periodDetails: { kicker: "SPENDING PERIOD", title: "Active period", primary: "Close period", secondary: "View history",
+        rows: [R("Status", "Active", MUT, "#6EE7A8"), R("Start date", "Aug 6, 2026"), R("End date", "Aug 22, 2026 · " + acc.days + " left"), R("Opening balance", acc.opening + " " + acc.cur), R("Current balance", acc.balance + " " + acc.cur), R("Available today", acc.avail + " " + acc.cur, MUT, O)] },
+      history: { kicker: "SPENDING PERIOD", title: "Period history", primary: "Close current", secondary: "Edit",
+        listTitle: "CASH · VND",
+        rows: [R("Aug 6 – Aug 22, 2026", "5,980,000", "#E7EAEE", "#E7EAEE", "active · opened at 6,000,000", "periodDetails"), R("Jul 20 – Aug 5, 2026", "0", MUT, MUT, "closed · opened at 4,000,000"), R("Jul 1 – Jul 19, 2026", "120,000", MUT, MUT, "closed · funding 3,500,000")] },
+      reconcile: { kicker: "BALANCE CORRECTION", title: "Reconcile account", primary: "Save correction", secondary: "Cancel",
+        fields: [F("Actual balance", "5,980,000", "#E7EAEE", false), F("Note", "Counted cash", "#E7EAEE", false)],
+        hint: "A correction entry is written to history. Existing transactions are untouched." },
+      share: { kicker: "ACCESS", title: "Share Cash", primary: "Create invite link", secondary: "",
+        fields: [F("Role", "Editor")],
+        listTitle: "PEOPLE",
+        rows: [R("john", "Owner", "#E7EAEE", MUT, "@john"), R("mira", "Editor", "#E7EAEE", MUT, "@mira")] },
+      categories: { kicker: "SETTINGS", title: "Categories", primary: "Add category", secondary: "",
+        listTitle: "ALL CATEGORIES · TAP TO EDIT",
+        rows: [R("Grab", "Expense", "#E7EAEE", MUT, false, "editCategory"), R("Groceries", "Expense", "#E7EAEE", MUT, false, "editCategory"), R("Rent", "Expense", "#E7EAEE", MUT, false, "editCategory"), R("Salary", "Income", "#E7EAEE", MUT, false, "editCategory"), R("Subscription", "Expense", "#E7EAEE", MUT, false, "editCategory")] },
+      addCategory: { kicker: "SETTINGS", title: "Add category", primary: "Add category", secondary: "Cancel",
+        fields: [F("Name", "New category", "#E7EAEE", false), F("Kind", "Expense")],
+        hint: "A category only groups transactions. Renaming it later keeps every past entry attached." },
+      editCategory: { kicker: "SETTINGS", title: "Edit category", primary: "Save changes", secondary: "Cancel",
+        fields: [F("Name", "Groceries", "#E7EAEE", false), F("Kind", "Expense")],
+        actions: [A("Merge into another", null, "pick"), A("Delete category", "danger", "confirmDeleteCategory")],
+        listTitle: "USED IN",
+        rows: [R("12 transactions", "\u22122,020,000 VND", MUT, RED), R("Last used", "Aug 6, 2026")] },
+      editTx: { kicker: "LEDGER ENTRY", title: "Edit transaction", primary: "Save changes", secondary: "Cancel",
+        fields: [F("Type", "Expense"), F("Amount", "20,000", "#E7EAEE", false), F("Account", "Cash \u00b7 VND"), F("Category", "Groceries"), F("Financial date", "Aug 6, 2026"), F("Note", "cola", "#E7EAEE", false)],
+        hint: "Editing rewrites the movement. Balances and the active period are recalculated on save." },
+      planItem: { kicker: "PLAN", title: "Monthly rent", primary: "Link transaction", secondary: "Edit rule",
+        rows: [R("Status", "Required", MUT, O), R("Due", "Sep 1, 2026"), R("Amount", "\u2212450.00 USD", MUT, RED), R("From account", "Savings \u00b7 USD"), R("Repeats", "Monthly"), R("Matched transaction", "None yet", MUT, MUT)],
+        hint: "Plan items never change real balances until a transaction is linked." },
+      editRule: { kicker: "PLAN RULE", title: "Edit rule", primary: "Save changes", secondary: "Cancel",
+        fields: [F("Kind", "Required expense"), F("Name", "Monthly rent", "#E7EAEE", false), F("Amount", "450.00", "#E7EAEE", false), F("Asset", "USD \u00b7 US dollar"), F("Repeats", "Monthly"), F("First due", "Sep 1, 2026"), F("From account", "Savings \u00b7 USD")],
+        actions: [A("Delete rule", "danger", "confirmDeleteRule")],
+        toggle: "Mark as required spending" },
+      profile: { kicker: "ACCOUNT", title: "john", primary: "", secondary: "",
+        listTitle: "@JOHN",
+        rows: [R("Manage categories", "›", "#E7EAEE", DIM, false, "categories"), R("Exchange rates", "›", "#E7EAEE", DIM, false, "rate"), R("Workspace", "john's Finances", "#E7EAEE", MUT), R("Log out", "", RED, RED, false, "confirmLogout")] },
+      rule: { kicker: "PLAN RULE", title: "Add rule", primary: "Save rule", secondary: "Cancel",
+        fields: [F("Kind", "Required expense"), F("Name", "Monthly rent", "#E7EAEE", false), F("Amount", "450.00", "#E7EAEE", false), F("Asset", "USD · US dollar"), F("Repeats", "Monthly"), F("First due", "Aug 8, 2026"), F("From account", "Choose source", MUT)],
+        toggle: "Mark as required spending" },
+      link: { kicker: "PLAN VS ACTUAL", title: "Link transaction", primary: "Link transaction", secondary: "Cancel",
+        fields: [F("Plan item", "Income · Sep 6 · 1,350.00 USD"), F("Transaction", "Choose transaction", MUT)],
+        hint: "Only eligible posted transactions are shown." },
+      rate: { kicker: "EXCHANGE", title: "Set a rate", primary: "Save rate", secondary: "Cancel",
+        fields: [F("Pair", "VND → USD"), F("Source", "Manual value"), F("Rate", "0.000038", "#E7EAEE", false)],
+        hint: "Rates apply to Total capital and Available. Without a rate an asset shows as Not valued." },
+      pick: { kicker: "CHOOSE", title: pickKind, primary: "", secondary: "",
+        rows: optionsFor(pickKind).map(o => ({
+          k: o, v: pickCurrent === o ? "\u2713" : "", kColor: "#E7EAEE", vColor: O, sub: false,
+          cursor: "pointer", onClick: () => applyPick(o)
+        })) }
+    };
+
+    const savedBody = {
+      spend: "The expense was written to " + acc.name + " \u00b7 " + acc.cur + ". Available today was recalculated.",
+      add: "The funds were added to " + acc.name + " \u00b7 " + acc.cur + ". Balance and Available today were recalculated.",
+      transfer: "The transfer was recorded. Both accounts were updated \u2014 total capital is unchanged."
+    };
+
+    const confirms = {
+      saved: { title: "Saved", body: savedBody[mode] || savedBody.spend, cta: "Done", bg: O, fg: "#0B0D10", cancel: false },
+      confirmArchive: { title: "Archive this account?", body: "It disappears from the list and stops counting toward Total capital. History is kept and it can be restored later.", cta: "Archive", bg: "#7A2F35", fg: "#FFD9D9" },
+      confirmDeleteCategory: { title: "Delete Groceries?", body: "12 transactions keep their history and move to Uncategorized. Nothing is removed from balances.", cta: "Delete", bg: "#7A2F35", fg: "#FFD9D9" },
+      confirmDeleteRule: { title: "Delete this rule?", body: "Upcoming items generated by it disappear from Plan. Already linked transactions stay untouched.", cta: "Delete", bg: "#7A2F35", fg: "#FFD9D9" },
+      confirmLogout: { title: "Log out of john?", body: "Local data stays on this device. You will need the workspace invite to sign back in.", cta: "Log out", bg: "#7A2F35", fg: "#FFD9D9" },
+      confirmClose: { title: "Close this period?", body: "The current balance is saved in period history and the period becomes read-only. You can start a new period right away.", cta: "Close period", bg: O, fg: "#0B0D10" },
+      confirmDelete: { title: "Delete this expense?", body: "It stays in history as Deleted but no longer affects balances or periods.", cta: "Delete", bg: "#7A2F35", fg: "#FFD9D9" }
+    };
+
+    const cur = sheets[sheet] || null;
+    const conf = confirms[sheet] || null;
+
+    const nav = {
+      periodDetails: { p: "confirmClose", x: "history" },
+      history: { p: "confirmClose", x: "period" },
+      tx: { p: "editTx", x: "confirmDelete" },
+      categories: { p: "addCategory", x: "" },
+      editCategory: { p: "", x: "" },
+      planItem: { p: "link", x: "editRule" },
+      account: { p: "editAccount", x: "share" },
+      startPeriod: { p: "__start", x: "" }
+    };
+    const goSheet = k => () => {
+      if (k === "__start") return this.set({ sheet: "", per: "active", fieldFocus: "" });
+      this.set({ sheet: k || "", fieldFocus: "" });
+    };
+    const confirmTap = () => {
+      if (sheet === "confirmClose") return this.set({ sheet: "", per: "none" });
+      if (sheet === "saved") return this.set({ sheet: "", amt: null, note: "", focus: "", dest: null });
+      this.set({ sheet: "" });
+    };
+
+    return {
+      tabs,
+      isAccounts: tab === "accounts", isTransactions: tab === "transactions",
+      isOperations: tab === "operations", isPlan: tab === "plan", isAnalytics: tab === "analytics",
+
+      totalCapital: empty ? "0.00 USD" : "0.00 USD",
+      availableTotal: empty ? "0.00 USD" : "0.00 USD",
+      showRateWarning: !empty,
+      accountsEmpty: empty, accountsFilled: !empty,
+      accountGroups,
+
+      typeChips,
+      txEmpty: empty, txFilled: !empty, txFeed: visibleFeed,
+
+      segments,
+      periodActive: s.per === "active",
+      periodNone: s.per === "none",
+      hasHistory: true,
+      accountTitle: acc.name + " · " + acc.cur,
+      accountBalance: acc.balance,
+      accountCurrency: acc.cur,
+      periodLabel: "Period · " + acc.days,
+      availableValue: acc.avail,
+      accountList: opsAccounts.map((a, i) => ({
+        cur: a.sym, name: a.name, meta: a.meta, balance: a.balance,
+        check: i === opsSel ? "✓" : "",
+        line: i === 0 ? "transparent" : "rgba(255,255,255,.07)",
+        tint: i === opsSel ? "rgba(255,162,75,.14)" : "#232A33",
+        glyphFg: i === opsSel ? O : MUT,
+        nameFg: i === opsSel ? "#E7EAEE" : "#C9D0D9",
+        balFg: i === opsSel ? "#E7EAEE" : "#C9D0D9",
+        onClick: () => this.set({ opsSel: i, sheet: "" })
+      })),
+      isAccountList: sheet === "accountList",
+      openAccountList: () => this.set({ sheet: "accountList" }),
+      opIsScan: mode === "scan", opIsForm: mode !== "scan", opIsTransfer: mode === "transfer",
+      amountTop: mode === "transfer" ? "12px" : "16px",
+      amountBorder: hasError ? "rgba(255,123,123,.6)" : "rgba(255,255,255,.12)",
+      amountColor: hasError ? RED : "#E7EAEE",
+      amountValue: hasError ? "9,000,000" : (typed != null ? (typed || "0") : (variant === "kb" ? acc.kbAmount : acc.amount)),
+      caretAmount: s.focus === "amount" ? O : "transparent",
+      caretNote: s.focus === "note" ? O : "transparent",
+      noteValue: s.note || (s.focus === "note" ? "" : "Note (optional)"),
+      noteFg: s.note ? "#E7EAEE" : "#8A93A0",
+      noteBorder: s.focus === "note" ? "rgba(255,162,75,.55)" : "rgba(255,255,255,.12)",
+      hasError,
+      errorText: "Amount exceeds Available today (" + acc.avail + " " + acc.cur + ")",
+      categoryValue: catValue,
+      dateValue, destValue, destFg: s.dest ? "#E7EAEE" : MUT,
+      focusAmount: () => this.set({ focus: "amount", amt: "" }),
+      focusNote: () => this.set({ focus: "note" }),
+      closeKb: () => this.set({ focus: "" }),
+      kbHint: s.focus === "note" ? "Note" : "Amount",
+      openCategory: openPick("Category", ""),
+      openDate: openPick("Date", ""),
+      openDestination: openPick("Destination", ""),
+      submitTap: () => { if (hasError) return; this.set({ sheet: "saved", focus: "" }); },
+      submitLabel: (modeMeta[mode] || modeMeta.add).label,
+      submitBg: hasError ? "#3A2A2C" : O,
+      submitFg: hasError ? "#8A6B6E" : "#0B0D10",
+
+      planOpen: empty ? "0" : "12", planDone: empty ? "0" : "1",
+      planEmpty, planFilled: !empty, planItems, planRules,
+
+      kbOpen, keypad,
+
+      sheetOpen: !!sheet,
+      isSheet: !!cur, isConfirm: !!conf,
+      sheetKicker: cur ? cur.kicker : "", sheetTitle: cur ? cur.title : "",
+      sheetFields: cur && cur.fields ? cur.fields : false,
+      sheetToggle: cur && cur.toggle ? cur.toggle : false,
+      sheetHint: cur && cur.hint ? cur.hint : false,
+      sheetActions: cur && cur.actions ? cur.actions : false,
+      sheetListTitle: cur && cur.listTitle ? cur.listTitle : false,
+      sheetRows: cur && cur.rows ? cur.rows : false,
+      sheetListTitle2: cur && cur.listTitle2 ? cur.listTitle2 : false,
+      sheetRows2: cur && cur.rows2 ? cur.rows2 : false,
+      sheetPrimary: cur && cur.primary ? cur.primary : false,
+      sheetSecondary: cur && cur.secondary ? cur.secondary : false,
+      confirmTitle: conf ? conf.title : "", confirmBody: conf ? conf.body : "",
+      confirmCta: conf ? conf.cta : "", confirmBg: conf ? conf.bg : O, confirmFg: conf ? conf.fg : "#0B0D10",
+      confirmHasCancel: conf ? conf.cancel !== false : true,
+      confirmTap,
+      sheetPrimaryTap: goSheet((nav[sheet] || {}).p),
+      sheetSecondaryTap: goSheet((nav[sheet] || {}).x),
+      openDelete: () => this.set({ sheet: "confirmDelete" }),
+
+      closeSheet: () => this.set({ sheet: "" }),
+      openProfile: () => this.set({ sheet: "profile" }),
+      openFilters: () => this.set({ sheet: "filters" }),
+      openTx: () => this.set({ sheet: "tx" }),
+      openAccount: () => this.set({ sheet: "account" }),
+      openAddAccount: () => this.set({ sheet: "addAccount" }),
+      openPeriod: () => this.set({ sheet: "period" }),
+      openStartPeriod: () => this.set({ sheet: "startPeriod" }),
+      openPeriodDetails: () => this.set({ sheet: "periodDetails" }),
+      openHistory: () => this.set({ sheet: "history" }),
+      openRule: () => this.set({ sheet: "rule" }),
+      openEditRule: () => this.set({ sheet: "editRule" }),
+      openPlanItem: () => this.set({ sheet: "planItem" }),
+      openCategories: () => this.set({ sheet: "categories" }),
+      openLink: () => this.set({ sheet: "link" }),
+      openRate: () => this.set({ sheet: "rate" }),
+      goOperations: () => this.set({ tab: "operations", sheet: "" }),
+      live
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from tests.conftest import register
 from tests.test_ledger_v2 import create_account
-from tests.test_periods_v2 import create_period, local_today
+from tests.test_periods_v2 import create_period, local_today, stored_snapshot
 from tests.test_sharing_v2 import accept, invitation, login
 
 
@@ -58,8 +58,8 @@ async def test_transfer_undo_consumes_every_root_leg_and_replays_periods(client)
     await register(client)
     source = await create_account(client, "Undo source USD", "USD", "100")
     target = await create_account(client, "Undo target USD", "USD", "0")
-    source_period = await create_period(client, source["id"], "100")
-    target_period = await create_period(client, target["id"], "0")
+    source_period = await create_period(client, source["id"])
+    target_period = await create_period(client, target["id"])
     assert (
         await client.post(
             "/api/v1/operations/spend",
@@ -95,10 +95,10 @@ async def test_transfer_undo_consumes_every_root_leg_and_replays_periods(client)
     assert await balance(client, target["id"]) == Decimal("2")
     assert (
         await client.get(f"/api/v1/account-periods/{source_period['id']}")
-    ).json()["remaining"] == "99"
+    ).json()["current_balance"] == "99.00"
     assert (
         await client.get(f"/api/v1/account-periods/{target_period['id']}")
-    ).json()["remaining"] == "2"
+    ).json()["current_balance"] == "2.00"
 
 
 async def test_undo_rejects_a_stale_candidate_confirmed_in_another_tab(client):
@@ -315,7 +315,7 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     period = await create_period(
         client,
         account["id"],
-        "100",
+
         ended_date - timedelta(days=1),
         ended_date + timedelta(days=1),
     )
@@ -350,7 +350,7 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     assert await candidate(client, account["id"]) is None
 
     closed_account = await create_account(client, "Undo closed USD", "USD", "50")
-    closed_period = await create_period(client, closed_account["id"], "50")
+    closed_period = await create_period(client, closed_account["id"])
     closed_operation = await client.post(
         "/api/v1/operations/spend",
         json={"account_id": closed_account["id"], "amount": "3"},
@@ -359,16 +359,14 @@ async def test_undo_period_guards_do_not_consume_rejected_candidate(client):
     assert (
         await client.post(f"/api/v1/account-periods/{closed_period['id']}/close")
     ).status_code == 200
-    closed_rejected = await client.post(
+    closed_snapshot = await stored_snapshot(client, closed_period["id"])
+    closed_undo = await client.post(
         f"/api/v1/operations/accounts/{closed_account['id']}/undo",
-        json={
-            "transaction_id": closed_operation.json()["id"],
-            "confirm_ended_period": True,
-        },
+        json={"transaction_id": closed_operation.json()["id"]},
     )
-    assert closed_rejected.status_code == 409
-    assert closed_rejected.json()["detail"] == "Closed account period is read-only"
-    assert (await candidate(client, closed_account["id"]))["id"] == closed_operation.json()["id"]
+    assert closed_undo.status_code == 200, closed_undo.text
+    assert await candidate(client, closed_account["id"]) is None
     assert (
-        await client.get(f"/api/v1/account-periods/{period['id']}")
-    ).status_code == 200
+        await client.get(f"/api/v1/transactions/{closed_operation.json()['id']}")
+    ).json()["status"] == "deleted"
+    assert await stored_snapshot(client, closed_period["id"]) == closed_snapshot

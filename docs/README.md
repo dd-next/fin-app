@@ -1,35 +1,66 @@
-# FinApp v2 — active documentation
+# FinApp — active documentation
 
-This directory is the single source of truth for the next FinApp v2 release.
-Active and historical specifications are kept together under `docs/specs/`;
-the active release files below override every historical document.
+This directory is the single source of truth for FinApp. Active and historical
+specifications sit together under [`specs/`](specs/); the active files below
+override every historical document.
 
-Read documents in this order before changing application code:
+## Read in this order
 
-1. [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md) — product and technical
-   requirements.
-2. [`BUILD_PLAN-v2.md`](BUILD_PLAN-v2.md) — mandatory phase order and gates.
-3. [`REVIEW_PROTOCOL-v2.md`](REVIEW_PROTOCOL-v2.md) — required independent
-   reviewer-subagent process for every logical implementation block.
-4. [`PROGRESS.md`](PROGRESS.md) — current checkpoint and evidence log.
-5. [`specs/MANUAL_TEST_CASES-v2.md`](specs/MANUAL_TEST_CASES-v2.md) — release
-   acceptance scenarios.
+Every session, before touching code — this is the whole default context:
 
-## Status
+1. [`../AGENTS.md`](../AGENTS.md) — the working agreement and the session
+   protocol. `../CLAUDE.md` is a symlink to it.
+2. [`PROGRESS.md`](PROGRESS.md) — what is true right now.
+3. The one task file in [`tasks/`](tasks/) you are working on.
 
-The codebase currently contains an earlier Tracker/commitment implementation.
-That implementation is a starting point, not proof that this release is done.
-The target release is the one described in this directory: **Operations**,
-account-specific periods, workspace-scoped manual valuation rates, the revised
-Plan flow, and Docker delivery.
+Read further only when the task needs it:
+
+- [`BACKLOG.md`](BACKLOG.md) — ordered upcoming work. Read when choosing what
+  to do next, which is the owner's call, not an agent's.
+- [`specs/FinnApp-v2.md`](specs/FinnApp-v2.md) — product and technical
+  requirements, active release authority.
+- [`specs/ACCOUNT_PERIODS-v2.1.md`](specs/ACCOUNT_PERIODS-v2.1.md) — accepted
+  detailed period fixtures; its Phase 14 result is merged into the primary
+  specification above.
+- [`design/MOBILE-BACKEND-GAP-AUDIT.md`](design/MOBILE-BACKEND-GAP-AUDIT.md) —
+  required backend changes for the frozen mobile design; Phase 14 planning
+  authority alongside the period specification.
+- [`DECISIONS.md`](DECISIONS.md) — why things are the way they are, one ADR per
+  decision in [`decisions/`](decisions/).
+- [`REVIEW_PROTOCOL-v2.md`](REVIEW_PROTOCOL-v2.md) — the mandatory independent
+  reviewer process for every logical block.
+- [`BUILD_PLAN-v2.md`](BUILD_PLAN-v2.md) — phase order and gates.
+- [`design/DESIGN-NOTES.md`](design/DESIGN-NOTES.md) — design truth in words,
+  and where the material that is not in git lives.
+- [`specs/MANUAL_TEST_CASES-v2.md`](specs/MANUAL_TEST_CASES-v2.md) — release
+  acceptance scenarios.
+- [`history/`](history/) — closed evidence. Archive, never appended to.
+
+## Layout
+
+```text
+docs/
+  README.md      you are here
+  PROGRESS.md    current state, replaced as reality changes
+  BACKLOG.md     ordered upcoming work, owner-controlled
+  DECISIONS.md   index of durable decisions
+  tasks/         one file per unit of work; TEMPLATE.md is the shape
+    archive/     closed tasks
+  decisions/     ADR-NNNN-*.md
+  design/        design truth an agent can act on
+  history/       closed phase evidence
+  specs/         active and historical specifications
+```
 
 ## Authority rules
 
 - If code, an old document, or a prior progress entry conflicts with these
   documents, this directory wins.
+- Within this directory: `specs/FinnApp-v2.md` is the consolidated authority
+  for Phase 15. Detailed accepted specs and ADRs may explain it but cannot
+  silently override it; a new conflict requires an explicit accepted decision.
 - Do not infer an unlisted requirement from the old Tracker or
   `BudgetCommitment` design.
 - Amend this documentation first when a genuinely new product decision is
-  needed; record the reason in `PROGRESS.md`.
-- The UI is English-only even though implementation documentation may be
-  Russian.
+  needed, and record the reason as an ADR in `decisions/`.
+- The UI is English-only even though implementation discussion may be Russian.

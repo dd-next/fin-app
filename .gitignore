@@ -13,3 +13,9 @@ __pycache__/
 secrets/
 *service-account*.json
 credentials.json
+OPS-RUNBOOK.md
+docs/design/Finnapp mobile specification/uploads/
+docs/design/Finnapp mobile specification/.thumbnail
+docs/design/Finnapp mobile specification/*.dc.html
+!docs/design/Finnapp mobile specification/Finapp Screen.dc.html
+docs/design/Finnapp mobile specification/*standalone.html

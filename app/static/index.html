@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101217">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0D10">
   <title>FinApp v2</title>
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=phase15-t029-1">
 </head>
 <body>
   <main class="shell">
@@ -41,57 +41,68 @@
             <strong id="profile-name">Profile</strong>
             <span id="profile-username" class="muted"></span>
             <button id="manage-categories" class="button-secondary">Manage categories</button>
+            <button id="manage-rates" class="button-secondary">Exchange rates</button>
             <button id="logout" class="button-secondary">Log out</button>
           </div>
         </details>
       </header>
 
       <nav class="primary-nav" aria-label="Primary">
-        <button data-view="accounts" class="active"><span aria-hidden="true">◫</span>Accounts</button>
-        <button data-view="transactions"><span aria-hidden="true">⇄</span>Transactions</button>
-        <button data-view="operations"><span aria-hidden="true">◎</span>Operations</button>
-        <button data-view="plan"><span aria-hidden="true">◇</span>Plan</button>
-        <button data-view="analytics"><span aria-hidden="true">⌁</span>Analytics</button>
+        <button type="button" data-view="accounts" class="active" aria-current="page" aria-controls="view-accounts"><span class="nav-icon" aria-hidden="true">▤</span><span class="nav-label">Accounts</span></button>
+        <button type="button" data-view="transactions" aria-controls="view-transactions"><span class="nav-icon" aria-hidden="true">⇄</span><span class="nav-label">Transactions</span></button>
+        <button type="button" data-view="operations" aria-controls="view-operations"><span class="nav-icon" aria-hidden="true">◎</span><span class="nav-label">Operations</span></button>
+        <button type="button" data-view="plan" aria-controls="view-plan"><span class="nav-icon" aria-hidden="true">◇</span><span class="nav-label">Plan</span></button>
+        <button type="button" data-view="analytics" aria-controls="view-analytics"><span class="nav-icon" aria-hidden="true">ϟ</span><span class="nav-label">Analytics</span></button>
       </nav>
 
       <div id="page-loading" class="page-loading hidden" role="status">Updating…</div>
 
       <section id="view-accounts" class="app-view" aria-labelledby="accounts-title">
-        <div class="view-heading">
-          <div><p class="eyebrow">Overview</p><h2 id="accounts-title">Accounts</h2></div>
-          <button id="add-account">＋ Add account</button>
+        <div class="view-heading mobile-screen-header">
+          <div><p class="eyebrow">Overview</p><h2 id="accounts-title" class="mobile-screen-title">Accounts</h2></div>
+          <button id="add-account" class="mobile-interactive" aria-label="Add account">＋ Add account</button>
+          <button id="mobile-profile-trigger" class="mobile-avatar-trigger mobile-interactive" type="button" aria-label="Open profile"><span aria-hidden="true">●</span></button>
         </div>
-        <div class="summary-grid">
-          <article class="metric-card capital-card">
-            <span>Total capital</span>
-            <strong id="net-worth">—</strong>
+        <div class="summary-grid mobile-metric-strip mobile-surface accounts-metrics">
+          <article class="metric-card capital-card mobile-metric">
+            <span class="mobile-metric-label">Total capital</span>
+            <strong id="net-worth" class="mobile-metric-value">—</strong>
             <small id="net-worth-code">Across visible accounts</small>
           </article>
-          <article class="metric-card">
-            <span>Available</span>
-            <strong id="available-total">—</strong>
+          <article class="metric-card mobile-metric is-accent">
+            <span class="mobile-metric-label">Available</span>
+            <strong id="available-total" class="mobile-metric-value">—</strong>
             <small>Excludes protected accounts</small>
           </article>
         </div>
-        <div id="unvalued-warning" class="notice warning hidden"></div>
+        <button id="unvalued-warning" class="notice warning mobile-rate-warning hidden" type="button" aria-label="Set a missing exchange rate"></button>
         <div id="account-groups" class="account-groups"></div>
+        <button id="accounts-add-row" class="mobile-ghost-row mobile-interactive hidden" type="button"><span class="mobile-leading-icon" aria-hidden="true">＋</span><span class="mobile-ghost-label">New account</span></button>
         <div id="accounts-empty" class="empty-state hidden">
-          <div class="empty-icon">◫</div><h3>Add your first account</h3>
-          <p>Cash, bank cards, wallets, reserves, and crypto can all live here.</p>
-          <button id="empty-add-account">Add account</button>
+          <div class="empty-icon">▤</div><h3>Add your first account</h3>
+          <p>Cash, cards, wallets, reserves, and crypto all live here.</p>
+          <button id="empty-add-account" class="mobile-empty-primary mobile-interactive" type="button">Add account</button>
         </div>
       </section>
 
       <section id="view-transactions" class="app-view hidden" aria-labelledby="transactions-title">
-        <div class="view-heading">
+        <div class="view-heading mobile-screen-header">
           <div><p class="eyebrow">Ledger</p><h2 id="transactions-title">Transactions</h2></div>
+          <button id="transaction-filter-trigger" class="mobile-transaction-filter mobile-interactive" type="button" aria-haspopup="dialog" aria-controls="mobile-sheet">Filters <span id="transaction-filter-count" class="mobile-filter-count hidden" aria-label="0 active filters">0</span></button>
+        </div>
+        <div id="transaction-chips" class="mobile-chip-lane" role="group" aria-label="Transaction type">
+          <button class="mobile-chip active" type="button" data-feed-filter="all" aria-pressed="true">All</button>
+          <button class="mobile-chip" type="button" data-feed-filter="income" aria-pressed="false">Income</button>
+          <button class="mobile-chip" type="button" data-feed-filter="expense" aria-pressed="false">Expense</button>
+          <button class="mobile-chip" type="button" data-feed-filter="transfer" aria-pressed="false">Transfer</button>
+          <button class="mobile-chip" type="button" data-feed-filter="planned" aria-pressed="false">Planned</button>
         </div>
         <form id="transaction-filters" class="filter-bar panel-subtle">
-          <label>Account<select id="filter-account"><option value="">All accounts</option></select></label>
-          <label>Period<select id="filter-period"><option value="">All periods</option></select></label>
-          <label>Type<select id="filter-type"><option value="">All types</option><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
-          <label>Category<select id="filter-category"><option value="">All categories</option></select></label>
-          <label>Status<select id="filter-status"><option value="">All statuses</option><option value="posted">Posted</option><option value="unassigned">Unassigned</option><option value="deleted">Deleted</option></select></label>
+          <label>Account<button id="filter-account" class="picker-control" type="button" aria-haspopup="dialog">All accounts</button></label>
+          <label>Period<button id="filter-period" class="picker-control" type="button" aria-haspopup="dialog">All periods</button></label>
+          <label>Type<button id="filter-type" class="picker-control" type="button" aria-haspopup="dialog">All types</button></label>
+          <label>Category<button id="filter-category" class="picker-control" type="button" aria-haspopup="dialog">All categories</button></label>
+          <label>Status<button id="filter-status" class="picker-control" type="button" aria-haspopup="dialog">All statuses</button></label>
           <label>From<input id="filter-from" type="date"></label>
           <label>To<input id="filter-to" type="date"></label>
           <button type="submit" class="button-secondary">Apply</button>
@@ -100,64 +111,73 @@
         <div id="transaction-list" class="transaction-list"></div>
         <div id="transactions-empty" class="empty-state hidden">
           <div class="empty-icon">⇄</div><h3>No transactions yet</h3>
-          <p>Create financial events from Operations. They will appear here.</p>
-          <button id="empty-open-operations">Open Operations</button>
+          <p>Create financial events from Operations — they appear here.</p>
+          <button id="empty-open-operations" class="mobile-empty-primary mobile-interactive">Open Operations</button>
         </div>
         <button id="load-more" class="button-secondary load-more hidden">Load more</button>
       </section>
 
       <section id="view-operations" class="app-view hidden" aria-labelledby="operations-title">
         <div class="view-heading"><div><p class="eyebrow">Financial actions</p><h2 id="operations-title">Operations</h2></div></div>
-        <div class="operations-toolbar panel-subtle">
-          <label>Account<select id="operations-account" aria-label="Operations account"></select></label>
-          <button id="operations-undo" type="button" class="button-secondary hidden" disabled>↶ Undo</button>
+        <div class="operations-card-row">
+        <div id="operations-account-card" class="operations-toolbar panel-subtle mobile-ops-card is-active" role="group" aria-labelledby="operations-account-card-title">
+          <label><span id="operations-account-card-title" class="mobile-ops-topline mobile-ops-title">Account</span><button id="operations-account" class="mobile-field picker-control" type="button" aria-label="Operations account" aria-haspopup="dialog">Choose account</button><button id="operations-account-overlay-trigger" class="operations-account-overlay-trigger mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog" aria-controls="mobile-sheet"><span id="operations-account-overlay-label">Choose account</span><span aria-hidden="true">⌄</span></button></label>
+          <div class="operations-account-balance"><span class="mobile-ops-label">Balance</span><span id="operations-account-balance" class="mobile-money mobile-ops-value">—</span></div>
+          <button id="operations-undo" type="button" class="button-secondary mobile-button-inline mobile-interactive hidden" disabled>↶ Undo</button>
         </div>
-        <section id="operations-period" class="operations-period panel-subtle" aria-labelledby="operations-period-title" aria-busy="false">
+        <section id="operations-period" class="operations-period panel-subtle mobile-ops-card is-absent" role="group" aria-labelledby="operations-period-card-title" aria-busy="false">
+          <div class="operations-period-mobile">
+            <div class="mobile-ops-topline"><span class="mobile-ops-dot" aria-hidden="true"></span><span id="operations-period-card-title" class="mobile-ops-period-text">No period</span></div>
+            <div><span class="mobile-ops-label">Available today</span><span id="operations-period-mobile-value" class="mobile-money mobile-ops-value">N/A</span></div>
+            <button id="operations-add-period-mobile" type="button" class="mobile-start-period mobile-interactive"><span class="mobile-start-period-visual">＋ Start period</span></button>
+            <div id="operations-period-mobile-state" class="mobile-ops-period-state hidden" role="status"><span id="operations-period-mobile-state-copy"></span><button id="operations-period-retry-mobile" type="button" class="mobile-button-inline mobile-interactive hidden">Retry</button></div>
+          </div>
+          <button id="operations-period-active-mobile" type="button" class="mobile-period-card-trigger mobile-interactive hidden" aria-label="Open active period"></button>
           <div class="group-heading">
             <div><p class="eyebrow">Account period</p><h3 id="operations-period-title">Current period</h3></div>
             <div class="period-actions">
-              <button id="operations-add-period" type="button">Add period</button>
-              <button id="operations-edit-period" type="button" class="button-secondary hidden">Edit</button>
-              <button id="operations-close-period" type="button" class="button-secondary hidden">Close</button>
-              <button id="operations-period-history" type="button" class="button-secondary hidden">History</button>
-              <button id="operations-period-retry" type="button" class="button-secondary hidden">Retry</button>
+              <button id="operations-add-period" type="button" class="mobile-start-period mobile-interactive">Add period</button>
+              <button id="operations-edit-period" type="button" class="button-secondary mobile-interactive hidden">Edit</button>
+              <button id="operations-close-period" type="button" class="button-secondary mobile-interactive hidden">Close</button>
+              <button id="operations-period-history" type="button" class="button-secondary mobile-interactive hidden">History</button>
+              <button id="operations-period-retry" type="button" class="button-secondary mobile-interactive hidden">Retry</button>
             </div>
           </div>
           <div class="operations-period-cards summary-grid">
             <article class="metric-card"><span>Available today</span><strong id="operations-period-available">N/A</strong></article>
-            <article class="metric-card"><span>Remaining</span><strong id="operations-period-remaining">N/A</strong></article>
-            <article class="metric-card"><span>Planned</span><strong id="operations-period-planned">N/A</strong></article>
+            <article class="metric-card"><span>Current balance</span><strong id="operations-period-current-balance">N/A</strong></article>
           </div>
           <p id="operations-period-status" class="muted" role="status">Select an account to see its period.</p>
         </section>
-        <div id="operations-selector" class="operations-selector" role="tablist" aria-label="Operation type">
-          <button id="operation-tab-spend" type="button" role="tab" data-operation-action="spend" aria-controls="operation-panel-spend" aria-selected="true" class="active">Spend</button>
-          <button id="operation-tab-add-funds" type="button" role="tab" data-operation-action="add-funds" aria-controls="operation-panel-add-funds" aria-selected="false" tabindex="-1">Add funds</button>
-          <button id="operation-tab-transfer" type="button" role="tab" data-operation-action="transfer" aria-controls="operation-panel-transfer" aria-selected="false" tabindex="-1">Transfer</button>
-          <button id="operation-tab-scan" type="button" role="tab" data-operation-action="scan" aria-controls="operation-panel-scan" aria-selected="false" tabindex="-1">Scan</button>
+        </div>
+        <div id="operations-selector" class="operations-selector mobile-segmented" role="tablist" aria-label="Operation type">
+          <button id="operation-tab-spend" type="button" role="tab" data-operation-action="spend" aria-controls="operation-panel-spend" aria-selected="true" class="active mobile-interactive">Spend</button>
+          <button id="operation-tab-add-funds" type="button" role="tab" data-operation-action="add-funds" aria-controls="operation-panel-add-funds" aria-selected="false" tabindex="-1" class="mobile-interactive">Add funds</button>
+          <button id="operation-tab-transfer" type="button" role="tab" data-operation-action="transfer" aria-controls="operation-panel-transfer" aria-selected="false" tabindex="-1" class="mobile-interactive">Transfer</button>
+          <button id="operation-tab-scan" type="button" role="tab" data-operation-action="scan" aria-controls="operation-panel-scan" aria-selected="false" tabindex="-1" class="mobile-interactive">Scan</button>
         </div>
         <div class="operations-workspace panel">
           <section id="operation-panel-spend" role="tabpanel" aria-labelledby="operation-tab-spend">
             <p class="eyebrow">Spend</p><h3>Record spending</h3>
             <form id="operations-spend-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>Amount<input id="operations-spend-amount" inputmode="decimal" required></label>
-                <label>Category<select id="operations-spend-category"><option value="">Uncategorized</option></select></label>
-                <label>Financial date<input id="operations-spend-date" type="date" required></label>
-                <label>Note<input id="operations-spend-note" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-spend-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-spend-currency" class="mobile-amount-suffix"></span></span></label>
+                <label class="mobile-ops-choice-label"><span>Category</span><button id="operations-spend-category" class="mobile-field picker-control" type="button" aria-haspopup="dialog">Uncategorized</button><button id="operations-spend-category-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Uncategorized</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-spend-date" class="mobile-field" type="date" required><button id="operations-spend-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-spend-note" class="mobile-field" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
-              <p id="operations-spend-error" class="form-error" role="alert"></p>
-              <div class="form-actions"><button id="operations-spend-submit" type="submit">Save spending</button></div>
+              <p id="operations-spend-error" class="form-error mobile-field-error" role="alert"></p>
+              <div class="form-actions"><button id="operations-spend-submit" class="mobile-button-primary" type="submit">Save spending</button></div>
             </form>
           </section>
           <section id="operation-panel-add-funds" role="tabpanel" aria-labelledby="operation-tab-add-funds" class="hidden">
             <p class="eyebrow">Add funds</p><h3>Record incoming funds</h3>
             <form id="operations-add-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>Amount<input id="operations-add-amount" inputmode="decimal" required></label>
-                <label>Category<select id="operations-add-category"><option value="">Uncategorized</option></select></label>
-                <label>Financial date<input id="operations-add-date" type="date" required></label>
-                <label>Note<input id="operations-add-note" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-add-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-add-currency" class="mobile-amount-suffix"></span></span></label>
+                <label class="mobile-ops-choice-label"><span>Category</span><button id="operations-add-category" class="picker-control" type="button" aria-haspopup="dialog">Uncategorized</button><button id="operations-add-category-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Uncategorized</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-add-date" type="date" required><button id="operations-add-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-add-note" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
               <p id="operations-add-error" class="form-error" role="alert"></p>
               <div class="form-actions"><button id="operations-add-submit" type="submit">Add funds</button></div>
@@ -167,18 +187,18 @@
             <p class="eyebrow">Transfer</p><h3>Move money</h3>
             <form id="operations-transfer-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label>To account<select id="operations-transfer-to" required></select></label>
-                <label>Financial date<input id="operations-transfer-date" type="date" required></label>
-                <label id="operations-transfer-amount-field">Amount<input id="operations-transfer-amount" inputmode="decimal" required></label>
+                <label class="mobile-ops-destination-label">To account<button id="operations-transfer-to" class="picker-control" type="button" aria-haspopup="dialog">Choose destination</button><button id="operations-transfer-to-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Choose destination</button></label>
+                <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-transfer-date" type="date" required><button id="operations-transfer-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
+                <label id="operations-transfer-amount-field" class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-transfer-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-transfer-currency" class="mobile-amount-suffix"></span></span></label>
                 <label id="operations-exchange-from-field" class="hidden">From amount<input id="operations-exchange-from" inputmode="decimal"></label>
                 <label id="operations-exchange-to-field" class="hidden">To amount<input id="operations-exchange-to" inputmode="decimal"></label>
-                <label>Note<input id="operations-transfer-note" maxlength="2000" placeholder="Optional"></label>
+                <label class="mobile-ops-note-label"><span>Note</span><input id="operations-transfer-note" maxlength="2000" placeholder="Note (optional)"></label>
               </div>
               <p id="operations-transfer-mode" class="muted"></p>
               <div id="operations-fee" class="panel-subtle hidden">
                 <label class="check-row"><input id="operations-has-fee" type="checkbox"><span>Add fee</span></label>
                 <div id="operations-fee-fields" class="form-grid two-columns hidden">
-                  <label>Fee account<select id="operations-fee-account"></select></label>
+                  <label>Fee account<button id="operations-fee-account" class="picker-control" type="button" aria-haspopup="dialog">No fee account</button></label>
                   <label>Fee amount<input id="operations-fee-amount" inputmode="decimal"></label>
                 </div>
               </div>
@@ -191,22 +211,46 @@
       </section>
 
       <section id="view-plan" class="app-view hidden" aria-labelledby="plan-title">
-        <div class="view-heading"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title">Plan</h2></div><button id="add-plan-rule">＋ Add rule</button></div>
-        <div class="plan-summary summary-grid">
-          <article class="metric-card"><span>Open items</span><strong id="plan-open-count">0</strong><small>Planned and overdue</small></article>
-          <article class="metric-card"><span>Completed</span><strong id="plan-completed-count">0</strong><small>Linked to real transactions</small></article>
+        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Upcoming</p><h2 id="plan-title" class="mobile-screen-title">Plan</h2></div><button id="add-plan-rule" class="mobile-plan-add mobile-interactive" aria-label="Add plan rule"><span class="mobile-plan-add-icon" aria-hidden="true">+</span><span class="mobile-plan-add-label">Add rule</span></button></div>
+        <div class="plan-summary summary-grid mobile-metric-strip mobile-surface">
+          <article class="metric-card mobile-metric"><span class="mobile-metric-label">Open items</span><strong id="plan-open-count" class="mobile-metric-value">0</strong><small>Planned and overdue</small></article>
+          <article class="metric-card mobile-metric"><span class="mobile-metric-label">Completed</span><strong id="plan-completed-count" class="mobile-metric-value">0</strong><small>Linked to real transactions</small></article>
         </div>
         <div class="group-heading"><h3>Rules</h3><span id="plan-rule-count">0 active</span></div>
         <div id="plan-rule-cards" class="plan-rule-cards"></div>
-        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Add expected income, required expenses, subscriptions, and reserve transfers. Plan never changes real balances; link a posted transaction when it happens.</p><button id="empty-add-plan-rule">Add rule</button></div>
+        <div id="plan-empty" class="empty-state hidden"><div class="empty-icon">◇</div><h3>Plan what comes next</h3><p>Expected income, required expenses, subscriptions. Plan never changes real balances.</p><button id="empty-add-plan-rule" class="mobile-empty-primary mobile-interactive" type="button">Add rule</button></div>
       </section>
 
       <section id="view-analytics" class="app-view hidden" aria-labelledby="analytics-title">
-        <div class="view-heading"><div><p class="eyebrow">Insights</p><h2 id="analytics-title">Analytics</h2></div></div>
-        <div class="placeholder panel"><span>⌁</span><h3>Coming soon</h3><p>Income, spending, and trends will be designed after the core financial data is established.</p></div>
+        <div class="view-heading mobile-screen-header"><div><p class="eyebrow">Insights</p><h2 id="analytics-title" class="mobile-screen-title">Analytics</h2></div><button id="analytics-profile-trigger" class="mobile-avatar-trigger mobile-interactive" type="button" aria-label="Open profile"><span aria-hidden="true">●</span></button></div>
+        <div class="placeholder panel analytics-placeholder"><span>⚡</span><h3>Coming soon</h3><p>Income, spending, and trends arrive once the core ledger is stable.</p></div>
       </section>
     </section>
   </main>
+
+  <button id="mobile-overlay-verify-trigger" class="overlay-verify-trigger" type="button" aria-label="Run overlay verification"></button>
+  <div id="mobile-overlay-root" class="mobile-overlay-root" popover="manual" hidden>
+    <button id="mobile-overlay-scrim" class="mobile-overlay-scrim" type="button" aria-label="Close overlay"></button>
+    <section id="mobile-sheet" class="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-sheet-title" tabindex="-1" hidden>
+      <div class="mobile-sheet-grabber" aria-hidden="true"><span></span></div>
+      <header class="mobile-sheet-header">
+        <div><p id="mobile-sheet-kicker" class="mobile-sheet-kicker"></p><h2 id="mobile-sheet-title" class="mobile-sheet-title"></h2></div>
+        <button id="mobile-sheet-close" class="mobile-sheet-close mobile-interactive" type="button" aria-label="Close"><span aria-hidden="true">✕</span></button>
+      </header>
+      <div id="mobile-sheet-body" class="mobile-sheet-body"></div>
+      <footer id="mobile-sheet-footer" class="mobile-sheet-footer"></footer>
+      <div class="mobile-sheet-safe-band" aria-hidden="true"></div>
+    </section>
+    <section id="mobile-confirm" class="mobile-confirm" role="alertdialog" aria-modal="true" aria-labelledby="mobile-confirm-title" aria-describedby="mobile-confirm-body" tabindex="-1" hidden>
+      <h2 id="mobile-confirm-title"></h2>
+      <p id="mobile-confirm-body"></p>
+      <p id="mobile-confirm-error" class="mobile-confirm-error hidden" role="alert"></p>
+      <div class="mobile-confirm-actions">
+        <button id="mobile-confirm-cancel" class="mobile-button-secondary" type="button">Cancel</button>
+        <button id="mobile-confirm-action" class="mobile-button-sheet-primary" type="button">Done</button>
+      </div>
+    </section>
+  </div>
 
   <dialog id="account-dialog" aria-labelledby="account-dialog-title">
     <form id="account-form" class="dialog-form">
@@ -214,9 +258,9 @@
       <input id="account-id" type="hidden">
       <div class="form-grid two-columns">
         <label class="span-two">Name<input id="account-name" required maxlength="100" placeholder="Main card"></label>
-        <label>Storage<select id="account-storage" required><option value="bank">Bank account</option><option value="card">Card</option><option value="cash">Cash</option><option value="e_wallet">E-wallet</option><option value="crypto_wallet">Crypto wallet</option><option value="exchange">Exchange</option><option value="virtual">Virtual</option></select></label>
-        <label>Purpose<select id="account-purpose" required><option value="spending">Spending</option><option value="reserve">Reserve</option><option value="savings">Savings</option><option value="investment">Investment</option></select></label>
-        <label id="account-asset-field">Asset<select id="account-asset" required></select></label>
+        <label>Storage<button id="account-storage" class="picker-control" type="button" aria-haspopup="dialog">Bank account</button></label>
+        <label>Purpose<button id="account-purpose" class="picker-control" type="button" aria-haspopup="dialog">Spending</button></label>
+        <label id="account-asset-field">Asset<button id="account-asset" class="picker-control" type="button" aria-haspopup="dialog">Choose asset</button></label>
         <label>Institution<input id="account-institution" maxlength="100" placeholder="Optional"></label>
         <label id="opening-balance-field">Opening balance<input id="account-opening" inputmode="decimal" value="0" required></label>
         <label class="check-row span-two"><input id="account-available" type="checkbox" checked><span>Include this account in Available</span></label>
@@ -253,9 +297,7 @@
       <div class="form-grid two-columns">
         <label>Start date<input id="period-start" type="date" required></label>
         <label>End date<input id="period-end" type="date" required></label>
-        <label class="span-two">Funding amount<input id="period-funding" inputmode="decimal" required></label>
       </div>
-      <p class="muted">Funding is a snapshot. Existing activity is not replayed into it.</p>
       <p id="period-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="period-dialog">Cancel</button><button id="period-save" type="submit">Save period</button></div>
     </form>
@@ -274,7 +316,7 @@
     <div class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Access</p><h2 id="sharing-title">Share account</h2></div><button type="button" class="icon-button" data-close="sharing-dialog" aria-label="Close">×</button></div>
       <form id="invitation-form" class="invite-row">
-        <label>Role<select id="invitation-role"><option value="editor">Editor</option><option value="contributor">Contributor</option><option value="viewer">Viewer</option></select></label>
+        <label>Role<button id="invitation-role" class="picker-control" type="button" aria-haspopup="dialog">Editor</button></label>
         <button type="submit">Create invite link</button>
       </form>
       <div id="invite-result" class="copy-box hidden"><input id="invite-url" readonly><button id="copy-invite" type="button" class="button-secondary">Copy</button></div>
@@ -296,24 +338,24 @@
     <form id="transaction-form" class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Ledger entry</p><h2 id="transaction-dialog-title">Edit transaction</h2></div><button type="button" class="icon-button" data-close="transaction-dialog" aria-label="Close">×</button></div>
       <input id="transaction-id" type="hidden">
-      <label>Type<select id="transaction-type"><option value="expense">Expense</option><option value="income">Income</option><option value="transfer">Transfer</option><option value="exchange">Exchange</option><option value="adjustment">Adjustment</option></select></label>
+      <label>Type<button id="transaction-type" class="picker-control" type="button" aria-haspopup="dialog">Expense</button></label>
       <div id="single-fields" class="form-grid two-columns">
-        <label id="single-account-field">Account<select id="transaction-account"></select></label>
-        <label id="single-asset-field">Asset<select id="transaction-asset"></select></label>
+        <label id="single-account-field">Account<button id="transaction-account" class="picker-control" type="button" aria-haspopup="dialog">Choose account</button></label>
+        <label id="single-asset-field">Asset<button id="transaction-asset" class="picker-control" type="button" aria-haspopup="dialog">Choose asset</button></label>
         <label id="single-amount-field">Amount<input id="transaction-amount" inputmode="decimal"></label>
       </div>
       <div id="multi-fields" class="form-grid two-columns hidden">
-        <label>From account<select id="transaction-from-account"></select></label>
-        <label>To account<select id="transaction-to-account"></select></label>
+        <label>From account<button id="transaction-from-account" class="picker-control" type="button" aria-haspopup="dialog">Choose source</button></label>
+        <label>To account<button id="transaction-to-account" class="picker-control" type="button" aria-haspopup="dialog">Choose target</button></label>
         <label id="from-amount-field">From amount<input id="transaction-from-amount" inputmode="decimal"></label>
         <label id="to-amount-field">To amount<input id="transaction-to-amount" inputmode="decimal"></label>
       </div>
       <div id="fee-fields" class="panel-subtle hidden">
         <label class="check-row"><input id="transaction-has-fee" type="checkbox"><span>Add exchange fee</span></label>
-        <div id="fee-details" class="form-grid two-columns hidden"><label>Fee account<select id="transaction-fee-account"></select></label><label>Fee amount<input id="transaction-fee-amount" inputmode="decimal"></label></div>
+        <div id="fee-details" class="form-grid two-columns hidden"><label>Fee account<button id="transaction-fee-account" class="picker-control" type="button" aria-haspopup="dialog">Choose fee account</button></label><label>Fee amount<input id="transaction-fee-amount" inputmode="decimal"></label></div>
       </div>
       <div class="form-grid two-columns">
-        <label id="category-field">Category<select id="transaction-category"><option value="">Uncategorized</option></select></label>
+        <label id="category-field">Category<button id="transaction-category" class="picker-control" type="button" aria-haspopup="dialog">Uncategorized</button></label>
         <label>Financial date<input id="transaction-date" type="date"></label>
         <label>Counterparty<input id="transaction-counterparty" maxlength="160" placeholder="Optional"></label>
         <label>Note<input id="transaction-note" maxlength="2000" placeholder="Optional"></label>
@@ -328,7 +370,7 @@
       <div class="dialog-heading"><div><p class="eyebrow">Settings</p><h2 id="categories-title">Categories</h2></div><button type="button" class="icon-button" data-close="categories-dialog" aria-label="Close">×</button></div>
       <form id="category-form" class="category-form">
         <label>Name<input id="category-name" required maxlength="100" placeholder="Groceries"></label>
-        <label>Kind<select id="category-kind"><option value="expense">Expense</option><option value="income">Income</option><option value="both">Both</option></select></label>
+        <label>Kind<button id="category-kind" class="picker-control" type="button" aria-haspopup="dialog">Expense</button></label>
         <button type="submit">Add category</button>
       </form>
       <p id="category-error" class="form-error" role="alert"></p>
@@ -336,20 +378,32 @@
     </div>
   </dialog>
 
+  <dialog id="rate-dialog" aria-labelledby="rate-dialog-title">
+    <form id="rate-form" class="dialog-form">
+      <div class="dialog-heading"><div><p class="eyebrow">Exchange</p><h2 id="rate-dialog-title">Set a rate</h2></div><button type="button" class="icon-button" data-close="rate-dialog" aria-label="Close">×</button></div>
+      <label>Pair<button id="rate-asset" class="picker-control" type="button" aria-haspopup="dialog">Choose pair</button></label>
+      <label>Source<button id="rate-source" class="picker-control" type="button" aria-haspopup="dialog">Manual value</button></label>
+      <label>Rate<input id="rate-value" inputmode="decimal" required></label>
+      <p class="muted">Rates apply to Total capital and Available. Without a rate an asset shows as Not valued.</p>
+      <p id="rate-error" class="form-error" role="alert"></p>
+      <div class="form-actions"><button id="delete-rate" type="button" class="button-danger hidden">Delete rate</button><button type="button" class="button-secondary" data-close="rate-dialog">Cancel</button><button type="submit">Save rate</button></div>
+    </form>
+  </dialog>
+
   <dialog id="plan-rule-dialog" class="wide-dialog" aria-labelledby="plan-rule-title">
     <form id="plan-rule-form" class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Plan rule</p><h2 id="plan-rule-title">Add rule</h2></div><button type="button" class="icon-button" data-close="plan-rule-dialog" aria-label="Close">×</button></div>
       <input id="plan-rule-id" type="hidden">
       <div class="form-grid two-columns">
-        <label>Kind<select id="plan-rule-kind"><option value="income">Expected income</option><option value="required_expense">Required expense</option><option value="subscription">Subscription</option><option value="reserve_transfer">Reserve transfer</option><option value="other_expense">Other expense</option></select></label>
+        <label>Kind<button id="plan-rule-kind" class="picker-control" type="button" aria-haspopup="dialog">Expected income</button></label>
         <label>Name<input id="plan-rule-name" required maxlength="120" placeholder="Monthly rent"></label>
         <label>Amount<input id="plan-rule-amount" inputmode="decimal" required></label>
-        <label>Asset<select id="plan-rule-asset" required></select></label>
-        <label>Repeats<select id="plan-rule-recurrence"><option value="once">Once</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select></label>
+        <label>Asset<button id="plan-rule-asset" class="picker-control" type="button" aria-haspopup="dialog">Choose asset</button></label>
+        <label>Repeats<button id="plan-rule-recurrence" class="picker-control" type="button" aria-haspopup="dialog">Once</button></label>
         <label>First due date<input id="plan-rule-date" type="date" required></label>
-        <label id="plan-rule-category-field">Category<select id="plan-rule-category"><option value="">Uncategorized</option></select></label>
-        <label id="plan-rule-from-field">From account<select id="plan-rule-from-account"><option value="">Choose source</option></select></label>
-        <label id="plan-rule-to-field">To account<select id="plan-rule-to-account"><option value="">Choose target</option></select></label>
+        <label id="plan-rule-category-field">Category<button id="plan-rule-category" class="picker-control" type="button" aria-haspopup="dialog">Uncategorized</button></label>
+        <label id="plan-rule-from-field">From account<button id="plan-rule-from-account" class="picker-control" type="button" aria-haspopup="dialog">Choose source</button></label>
+        <label id="plan-rule-to-field">To account<button id="plan-rule-to-account" class="picker-control" type="button" aria-haspopup="dialog">Choose target</button></label>
         <label class="check-row span-two"><input id="plan-rule-required" type="checkbox"><span>Mark as required spending</span></label>
       </div>
       <p id="plan-rule-error" class="form-error" role="alert"></p>
@@ -361,7 +415,7 @@
     <div class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Rule details</p><h2 id="plan-rule-detail-title">Rule</h2></div><button type="button" class="icon-button" data-close="plan-rule-detail-dialog" aria-label="Close">×</button></div>
       <p id="plan-rule-detail-summary" class="muted"></p>
-      <div class="plan-toolbar"><label>Show<select id="plan-detail-filter"><option value="all">All occurrences</option><option value="open">Open</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select></label></div>
+      <div class="plan-toolbar"><label>Show<button id="plan-detail-filter" class="picker-control" type="button" aria-haspopup="dialog">All occurrences</button></label></div>
       <div id="plan-rule-detail-list" class="plan-list" aria-live="polite"></div>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-rule-detail-dialog">Close</button></div>
     </div>
@@ -370,8 +424,8 @@
   <dialog id="plan-link-dialog" aria-labelledby="plan-link-title">
     <form id="plan-link-form" class="dialog-form">
       <div class="dialog-heading"><div><p class="eyebrow">Plan vs actual</p><h2 id="plan-link-title">Link transaction</h2></div><button type="button" class="icon-button" data-close="plan-link-dialog" aria-label="Close">×</button></div>
-      <label>Plan item<select id="plan-link-occurrence" required></select></label>
-      <label>Existing transaction<select id="plan-link-transaction" required></select></label>
+      <label>Plan item<button id="plan-link-occurrence" class="picker-control" type="button" aria-haspopup="dialog">Choose plan item</button></label>
+      <label>Existing transaction<button id="plan-link-transaction" class="picker-control" type="button" aria-haspopup="dialog">Choose transaction</button></label>
       <p class="muted">Only eligible posted transactions are shown.</p>
       <p id="plan-link-error" class="form-error" role="alert"></p>
       <div class="form-actions"><button type="button" class="button-secondary" data-close="plan-link-dialog">Cancel</button><button type="submit">Link transaction</button></div>
@@ -379,6 +433,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=phase15-t029-1" defer></script>
 </body>
 </html>
