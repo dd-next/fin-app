@@ -24,15 +24,15 @@ def test_mobile_operations_exact_modes_geometry_and_scan_copy():
     assert '#view-operations { margin: -2px -16px 0; padding: 8px 16px 0; }' in css
     assert "height: 96px" in css[css.index(".mobile-ops-card {"):css.index(".mobile-ops-card.is-active")]
     assert '#view-operations .operations-selector { margin: 12px 0 0; border: 0; }' in css
-    assert ".mobile-ops-destination-label { grid-column: 1 / -1; order: 1; height: 44px; margin-top: 10px; }" in css
-    assert "#operations-transfer-amount-field { order: 2; margin-top: -8px; }" in css
+    assert "#operations-transfer-amount-field { order: 1; }" in css
+    assert ".mobile-ops-destination-label { order: 2; grid-column: auto; height: 44px; }" in css
+    assert "#operation-panel-transfer .mobile-ops-choice-label { order: 3; }" in css
+    assert '<label class="mobile-ops-destination-label"><span>To account</span>' in html
     account_trigger = css[css.index("#operations-account-overlay-trigger"):css.index("#operations-account-card .operations-account-balance")]
     assert "height: 44px" in account_trigger
     assert "min-height: 44px" in account_trigger
     assert "right: 48px" in account_trigger
-    undo_rule = css[css.index("#operations-account-card #operations-undo"):css.index("#view-operations .operations-selector")]
-    assert "right: 4px" in undo_rule
-    assert "width: 44px" in undo_rule
+    assert "#operations-account-card #operations-undo { display: none; }" in css
 
 
 def test_mobile_operations_preferences_and_stale_account_fallback_are_per_user():
@@ -121,6 +121,7 @@ def test_mobile_operation_choose_controls_and_validation_are_non_native():
 def test_mobile_undo_is_compact_branded_and_refreshes_server_candidate():
     javascript = source("app.js")
     css = source("style.css")
+    html = source("index.html")
 
     undo = javascript[javascript.index("async function performOperationsUndo"):javascript.index("async function updateOperationsCategories")]
     assert 'title: "Undo this operation?"' in undo
@@ -130,8 +131,15 @@ def test_mobile_undo_is_compact_branded_and_refreshes_server_candidate():
     assert "state.operationsUndoCandidate = null" in undo
     assert "await refreshAll()" in undo
     mobile_undo = javascript[javascript.index("function renderOperationsUndo"):javascript.index("async function loadOperationsUndoCandidate")]
-    assert '? "↶"' in mobile_undo
-    assert '#operations-account-card #operations-undo { position: absolute; top: 4px; right: 4px; width: 44px' in css
+    assert '$("operations-undo-mobile")' in mobile_undo
+    assert 'mobileButton.classList.toggle("hidden", !candidate)' in mobile_undo
+    assert 'id="operations-undo-mobile" type="button" class="mobile-ops-undo' in html
+    undo_rule = css[css.index(".mobile-ops-card .mobile-ops-undo {"):css.index(".mobile-ops-undo::after")]
+    for declaration in ("width: 26px", "height: 26px", "min-height: 26px", "border-radius: 8px"):
+        assert declaration in undo_rule
+    # ::after restores the 44px tap target the 26px spec box would lose.
+    assert ".mobile-ops-undo::after { content: \"\"; position: absolute; top: -9px" in css
+    assert "event.stopPropagation();" in javascript[javascript.index('$("operations-undo-mobile").addEventListener'):]
 
 
 def test_mobile_role_boundaries_keep_quote_owner_private():

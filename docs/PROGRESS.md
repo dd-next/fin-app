@@ -20,10 +20,10 @@ the one task file you are working on. Nothing else by default.
 | Branch | `finapp-v2-develop` |
 | Release v2 | shipped — Phases 8–14 complete |
 | Schema head | accepted integration `0004_transfer_quotes` |
-| Last full suite | **341 passed** (2026-08-12, Phase 14 close gate) |
+| Last full suite | **425 passed** (2026-08-14, T-030A round-2 gate) |
 | Active work | T-030A core iPhone 15 mobile acceptance on `task/T-030A-mobile-acceptance` |
-| Next | Repository-owner iPhone 15 Safari acceptance for reviewed T-030A checkpoint |
-| Blocker | Actual-device Safari evidence is required to accept T-030A |
+| Next | Independent review of the round-2 fixes, then owner iPhone 15 Safari acceptance |
+| Blocker | Owner must rule on the replaced design specification (see T-030A) |
 
 ## Phase 15 handoff — mobile redesign
 
@@ -62,10 +62,25 @@ reporting Safari regressions; Plan, Analytics, and desktop verification are
 explicitly deferred. The reviewed implementation now fixes the reported core
 tab-bar, mixed Planned feed, sheet geometry and focus-zoom regressions. Its
 focused 72-test, JavaScript and diff gates pass, and disposable 393×852 plus
-390×844 browser evidence passes with a clean console. The independent bounded
-implementation review has no remaining P0–P3 finding. T-030A is in `review` on
-its exact task branch; actual iPhone 15 Safari evidence is still required for
-owner acceptance. Phase 15 remains incomplete and unaccepted.
+390×844 browser evidence passes with a clean console.
+
+On 2026-08-14 the owner returned sixteen further iPhone Safari findings and
+replaced the mobile design specification in the working tree, reopening T-030A
+to `in-progress`. All sixteen are fixed: overlays now cover the tab bar with no
+per-surface exception, sheet secondaries lost the inherited accent fill, the
+swipe lane travels its real action width, Undo moved into the period card as
+the specified 26×26 `↺`, the segmented pill and Transfer layout match the
+spec, every editable control is at least 16px so Safari cannot focus-zoom, and
+the avatar carries its 10px accent dot. Full pytest is **425 passed**, the
+72-test target, `node --check` and `git diff --check` pass, and the 393×852
+matrix plus 390×844 smoke verify each finding from the live DOM. The replaced
+specification also reverts settled Phase 14 decisions that no finding depends
+on — over-limit submit blocking, the rollover checkbox, the allowance formula,
+Plan `Skip`, and the disabled `Coming soon` options — so those areas were left
+at their accepted behaviour and need an owner ruling. T-030A is `in-progress`
+on its exact task branch; independent review of the round-2 fixes and actual
+iPhone 15 Safari evidence are both still outstanding. Phase 15 remains
+incomplete and unaccepted.
 
 `finapp-v2-develop` has been pushed to `origin` on owner instruction, so the
 remote integration branch now matches local accepted state. `finapp-v2` was not

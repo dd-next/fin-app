@@ -76,7 +76,7 @@ def test_discriminated_feed_details_preserve_redaction_and_plan_sheet_flow():
     planned_end = javascript.index("async function archivePlanRule", planned_start)
     planned_flow = javascript[planned_start:planned_end]
     assert 'kicker: "PLAN"' in planned_flow
-    assert 'coverTabBar: false' in planned_flow
+    assert 'coverTabBar' not in planned_flow
     assert "switchView(" not in planned_flow
 
 
@@ -90,7 +90,8 @@ def test_swipe_actions_are_keyboard_buttons_and_match_geometry():
     assert 'remove.textContent = "Delete"' in javascript
     assert 'event.target.closest(".mobile-swipe-actions")' in javascript
     assert ".mobile-swipe-actions button { width: 64px; min-width: 64px; height: 64px; min-height: 64px" in css
-    assert "transform: translateX(-112px)" in css
+    assert "transform: translateX(var(--mobile-swipe-offset, -128px))" in css
+    assert 'row.style.setProperty("--mobile-swipe-offset", `-${actions.childElementCount * 64}px`)' in javascript
 
 
 def test_mobile_delete_is_branded_soft_void_without_native_confirmation():

@@ -491,7 +491,6 @@ function renderMobileOverlay() {
   const sheet = $("mobile-sheet");
   const confirmation = $("mobile-confirm");
   document.body.classList.toggle("overlay-active", active);
-  root.classList.toggle("core-overlay", Boolean(active && entry.coverTabBar));
   if (active) {
     root.hidden = false;
     if (!root.matches(":popover-open")) root.showPopover();
@@ -577,7 +576,6 @@ function openMobileSheet(config, opener = document.activeElement) {
     onPrimary: config.onPrimary,
     onClose: config.onClose,
     context: config.context || parentContext,
-    coverTabBar: config.coverTabBar ?? parent?.coverTabBar ?? ["accounts", "transactions", "operations"].includes(state.activeView),
     returnFocusSelector: config.returnFocusSelector || "",
     opener,
     openerId: opener?.id || "",
@@ -654,10 +652,10 @@ function openMobileChoose({ title, options, onSelect, onClose, returnFocusSelect
   }, opener);
 }
 
-function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0, coverTabBar }, opener = document.activeElement) {
+function openMobileConfirmation({ title, body, actionLabel = "Done", variant = "accent", onAction, onCancel, closeParentsOnSuccess = 0 }, opener = document.activeElement) {
   if (!mobileOverlayState.stack.length) mobileOverlayState.rootOpener = opener;
   const parent = mobileOverlayState.stack.at(-1) || null;
-  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: parent?.context || null, coverTabBar: coverTabBar ?? parent?.coverTabBar ?? ["accounts", "transactions", "operations"].includes(state.activeView) };
+  const entry = { kind: "confirmation", title, body, variant, actionTaken: false, resolved: false, onCancel, opener, openerId: opener?.id || "", closeParentsOnSuccess, context: parent?.context || null };
   mobileOverlayState.stack.push(entry);
   $("mobile-confirm-title").textContent = title;
   $("mobile-confirm-body").textContent = body;
@@ -1022,18 +1020,16 @@ function renderOperationsAccountBalance() {
 
 function renderOperationsUndo() {
   const candidate = state.operationsUndoCandidate;
+  const label = candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo";
   const button = $("operations-undo");
   button.classList.toggle("hidden", !candidate);
   button.disabled = state.operationsUndoLoading || !candidate;
-  button.textContent = isMobileViewport()
-    ? "↶"
-    : candidate
-      ? `↶ Undo ${candidate.type.replaceAll("_", " ")}`
-      : "↶ Undo";
-  button.setAttribute(
-    "aria-label",
-    candidate ? `Undo latest ${candidate.type} operation` : "No operation to undo",
-  );
+  button.textContent = candidate ? `↶ Undo ${candidate.type.replaceAll("_", " ")}` : "↶ Undo";
+  button.setAttribute("aria-label", label);
+  const mobileButton = $("operations-undo-mobile");
+  mobileButton.classList.toggle("hidden", !candidate);
+  mobileButton.disabled = state.operationsUndoLoading || !candidate;
+  mobileButton.setAttribute("aria-label", label);
 }
 
 async function loadOperationsUndoCandidate() {
@@ -1096,7 +1092,7 @@ async function performOperationsUndo(account, transaction) {
   }
 }
 
-async function undoLatestOperation() {
+async function undoLatestOperation(opener = $("operations-undo")) {
   const account = selectedOperationsAccount();
   const transaction = state.operationsUndoCandidate;
   if (!account || !transaction) return;
@@ -1106,7 +1102,7 @@ async function undoLatestOperation() {
     actionLabel: "Undo",
     variant: "destructive",
     onAction: () => performOperationsUndo(account, transaction),
-  }, $("operations-undo"));
+  }, opener);
 }
 
 async function updateOperationsCategories(account) {
@@ -2499,7 +2495,6 @@ function openMobileProfile(opener = document.activeElement) {
     kicker: "ACCOUNT",
     title: state.context.user.username,
     buildBody: mobileProfileBody,
-    coverTabBar: false,
   }, opener);
 }
 
@@ -2553,7 +2548,6 @@ async function openMobileCategories(opener = document.activeElement) {
   openMobileSheet({
     kicker: "SETTINGS",
     title: "Categories",
-    coverTabBar: false,
     buildBody: mobileCategoriesBody,
     primaryLabel: "Add category",
     onPrimary: () => openMobileCategoryForm(null, document.activeElement),
@@ -2720,7 +2714,7 @@ function buildMobileRateBody(draft) {
         await refreshAll();
         await loadManualRates();
         closeAllMobileOverlays();
-        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was deleted.`, variant: "saved", coverTabBar: false }, draft.opener);
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was deleted.`, variant: "saved" }, draft.opener);
       },
     }, remove));
     body.append(remove);
@@ -2743,7 +2737,6 @@ async function openMobileRateSettings(opener = document.activeElement, preferred
   openMobileSheet({
     kicker: "EXCHANGE",
     title: "Set a rate",
-    coverTabBar: false,
     secondaryLabel: "Cancel",
     primaryLabel: "Save rate",
     buildBody: () => buildMobileRateBody(draft),
@@ -2762,7 +2755,7 @@ async function openMobileRateSettings(opener = document.activeElement, preferred
         await refreshAll();
         await loadManualRates();
         closeAllMobileOverlays();
-        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was saved.`, variant: "saved", coverTabBar: false }, opener);
+        openMobileConfirmation({ title: "Saved", body: `${ratePairLabel(draft.assetCode)} rate was saved.`, variant: "saved" }, opener);
       } catch (error) {
         draft.error = error.message;
         renderMobileOverlay();
@@ -3835,7 +3828,6 @@ function openMobilePlanItem(
     kicker: "PLAN",
     title: occurrence.rule.name,
     buildBody: () => buildMobilePlanItemBody(occurrence, actions),
-    coverTabBar: false,
   }, opener);
 }
 
@@ -4113,6 +4105,9 @@ function mobileFeedRow(item) {
     remove.addEventListener("click", () => openMobileDeleteTransaction(transaction, remove));
     actions.append(remove);
   }
+  // The lane reveals one 64px action per button, so the body must travel the
+  // full width of the actions it actually has.
+  row.style.setProperty("--mobile-swipe-offset", `-${actions.childElementCount * 64}px`);
   const body = document.createElement("button");
   body.type = "button";
   body.className = "mobile-transaction-body mobile-interactive";
@@ -4401,7 +4396,6 @@ async function openMobilePlanLink(transaction = null, opener = document.activeEl
     kicker: "PLAN VS ACTUAL",
     title: "Link transaction",
     buildBody: bodyBuilder,
-    coverTabBar: false,
     secondaryLabel: "Cancel",
     primaryLabel: "Link transaction",
     primaryDisabled: () => !draft.occurrenceId || !draft.transactionId,
@@ -4418,7 +4412,7 @@ async function openMobilePlanLink(transaction = null, opener = document.activeEl
         });
         closeAllMobileOverlays();
         await refreshAll();
-        openMobileConfirmation({ title: "Saved", body: "The transaction was linked to the Plan item.", variant: "saved", coverTabBar: false }, opener);
+        openMobileConfirmation({ title: "Saved", body: "The transaction was linked to the Plan item.", variant: "saved" }, opener);
       } catch (error) {
         draft.error = error.message;
         renderMobileOverlay();
@@ -5215,7 +5209,12 @@ $("operations-close-period").addEventListener("click", () => closeOperationsPeri
 $("operations-period-history").addEventListener("click", openPeriodHistory);
 $("operations-period-retry").addEventListener("click", loadOperationsPeriods);
 $("period-form").addEventListener("submit", saveOperationsPeriod);
-$("operations-undo").addEventListener("click", undoLatestOperation);
+$("operations-undo").addEventListener("click", () => undoLatestOperation($("operations-undo")));
+$("operations-undo-mobile").addEventListener("click", (event) => {
+  // Never let the period card's full-card trigger open period details instead.
+  event.stopPropagation();
+  void undoLatestOperation($("operations-undo-mobile"));
+});
 
 $("toggle-auth").addEventListener("click", () => {
   state.registerMode = !state.registerMode;

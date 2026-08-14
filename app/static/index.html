@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0B0D10">
   <title>FinApp v2</title>
-  <link rel="stylesheet" href="/style.css?v=phase15-t030a-1">
+  <link rel="stylesheet" href="/style.css?v=phase15-t030a-2">
 </head>
 <body>
   <main class="shell">
@@ -127,7 +127,7 @@
         </div>
         <section id="operations-period" class="operations-period panel-subtle mobile-ops-card is-absent" role="group" aria-labelledby="operations-period-card-title" aria-busy="false">
           <div class="operations-period-mobile">
-            <div class="mobile-ops-topline"><span class="mobile-ops-dot" aria-hidden="true"></span><span id="operations-period-card-title" class="mobile-ops-period-text">No period</span></div>
+            <div class="mobile-ops-topline"><span class="mobile-ops-dot" aria-hidden="true"></span><span id="operations-period-card-title" class="mobile-ops-period-text">No period</span><button id="operations-undo-mobile" type="button" class="mobile-ops-undo mobile-interactive hidden" disabled>↺</button><span class="mobile-ops-chevron" aria-hidden="true">›</span></div>
             <div><span class="mobile-ops-label">Available today</span><span id="operations-period-mobile-value" class="mobile-money mobile-ops-value">N/A</span></div>
             <button id="operations-add-period-mobile" type="button" class="mobile-start-period mobile-interactive"><span class="mobile-start-period-visual">＋ Start period</span></button>
             <div id="operations-period-mobile-state" class="mobile-ops-period-state hidden" role="status"><span id="operations-period-mobile-state-copy"></span><button id="operations-period-retry-mobile" type="button" class="mobile-button-inline mobile-interactive hidden">Retry</button></div>
@@ -187,7 +187,7 @@
             <p class="eyebrow">Transfer</p><h3>Move money</h3>
             <form id="operations-transfer-form" class="operations-form" aria-busy="false">
               <div class="form-grid two-columns">
-                <label class="mobile-ops-destination-label">To account<button id="operations-transfer-to" class="picker-control" type="button" aria-haspopup="dialog">Choose destination</button><button id="operations-transfer-to-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Choose destination</button></label>
+                <label class="mobile-ops-destination-label"><span>To account</span><button id="operations-transfer-to" class="picker-control" type="button" aria-haspopup="dialog">Choose destination</button><button id="operations-transfer-to-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Choose destination</button></label>
                 <label class="mobile-ops-choice-label"><span>Financial date</span><input id="operations-transfer-date" type="date" required><button id="operations-transfer-date-mobile" class="mobile-ops-choice mobile-field-sheet mobile-interactive" type="button" aria-haspopup="dialog">Date</button></label>
                 <label id="operations-transfer-amount-field" class="mobile-ops-amount-label"><span>Amount</span><span class="mobile-ops-amount-control"><input id="operations-transfer-amount" class="mobile-field mobile-amount-field" inputmode="decimal" required><span id="operations-transfer-currency" class="mobile-amount-suffix"></span></span></label>
                 <label id="operations-exchange-from-field" class="hidden">From amount<input id="operations-exchange-from" inputmode="decimal"></label>
@@ -433,6 +433,6 @@
   </dialog>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=phase15-t030a-1" defer></script>
+  <script src="/app.js?v=phase15-t030a-2" defer></script>
 </body>
 </html>

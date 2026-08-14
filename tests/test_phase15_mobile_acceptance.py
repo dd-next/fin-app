@@ -141,28 +141,25 @@ const transaction = (key, financial_date) => ({{ kind: "transaction", key, finan
     subprocess.run(["node", "-e", script], check=True, capture_output=True, text=True)
 
 
-def test_core_overlays_cover_tabs_but_profile_and_plan_keep_prior_geometry():
+def test_every_overlay_covers_the_tab_bar_without_exceptions():
     javascript = source("app.js")
     css = source("style.css")
 
-    render = function_source(javascript, "renderMobileOverlay", "openMobileSheet")
-    assert 'root.classList.toggle("core-overlay", Boolean(active && entry.coverTabBar))' in render
-    assert '.mobile-overlay-root.core-overlay { bottom: 0; }' in css
+    # Owner finding 1/2: a sheet or confirmation always covers the whole frame,
+    # so the per-surface opt-out and its CSS variant are gone for good.
+    assert "coverTabBar" not in javascript
+    assert "core-overlay" not in javascript
+    assert "core-overlay" not in css
     assert '.mobile-option-list, .mobile-option { width: 100%; }' in css
-    profile = function_source(javascript, "openMobileProfile", "openLogoutConfirmation")
-    categories = function_source(javascript, "openMobileCategories", "buildMobileCategoryForm")
-    rates = javascript[javascript.index("async function openMobileRateSettings"):javascript.index("async function openRateSettings")]
-    plan = function_source(javascript, "openMobilePlanItem", "archivePlanRule")
-    assert 'coverTabBar: false' in profile
-    assert 'coverTabBar: false' in categories
-    assert rates.count('coverTabBar: false') >= 2
-    assert 'coverTabBar: false' in plan
-    link_start = javascript.index("async function openMobilePlanLink")
-    link_end = javascript.index("function mobileTransactionEditBody", link_start)
-    assert 'coverTabBar: false' in javascript[link_start:link_end]
+    assert "top: 0; right: 0; bottom: 0; left: 0;" in css
+    for opener in (
+        "openMobileProfile", "openMobileCategories", "openMobileRateSettings",
+        "openMobilePlanItem", "openMobilePlanLink",
+    ):
+        assert opener in javascript
 
 
-def test_core_editable_controls_prevent_safari_auto_zoom_without_disabling_zoom():
+def test_every_editable_control_prevents_safari_auto_zoom_without_disabling_zoom():
     html = source("index.html")
     css = source("style.css")
 
@@ -170,13 +167,19 @@ def test_core_editable_controls_prevent_safari_auto_zoom_without_disabling_zoom(
     assert viewport in html
     assert "maximum-scale" not in html
     assert "user-scalable=no" not in html
-    assert '.mobile-overlay-root.core-overlay textarea { font-size: 16px; }' in css
-    for view in ("accounts", "transactions", "operations"):
-        assert f'#view-{view} input:not([type="checkbox"])' in css
+    # Owner finding 14: the guard covers every field on every mobile surface,
+    # not only the three core views, and stays low-specificity so the 28px
+    # amount field keeps its larger size.
+    assert "input, textarea, select { font-size: 16px; }" in css
+    assert '#view-accounts input:not([type="checkbox"])' not in css
+    assert css.index("input, textarea, select { font-size: 16px; }") > css.index("@media (max-width: 640px)")
+    assert ".mobile-amount-field { display: flex;" in css
+    amount = css.split(".mobile-amount-field { display: flex;", 1)[1].split("}", 1)[0]
+    assert "font-size: 28px" in amount
 
 
 def test_mobile_assets_are_cache_busted_for_real_device_recheck():
     html = source("index.html")
 
-    assert '/style.css?v=phase15-t030a-1' in html
-    assert '/app.js?v=phase15-t030a-1' in html
+    assert '/style.css?v=phase15-t030a-2' in html
+    assert '/app.js?v=phase15-t030a-2' in html

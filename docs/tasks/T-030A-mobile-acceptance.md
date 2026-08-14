@@ -1,7 +1,7 @@
 ---
 id: T-030A
 title: Pass the core iPhone 15 mobile acceptance matrix
-status: review
+status: in-progress
 size: M
 spec: design/Finnapp mobile specification/spec/01-foundations.md through spec/06-content.md; spec/08-acceptance.md scoped to Accounts, Transactions, and Operations
 blocked-by: [T-029]
@@ -197,6 +197,122 @@ expanded/collapsed Safari toolbar; and tab-bar bounds at the top, middle and end
 of the long Transactions feed. Until that evidence exists, the unchecked full
 matrix and real-Safari acceptance items above are intentionally not claimed.
 
+## Round 2 — owner iPhone Safari findings, 2026-08-14
+
+Reported by the repository owner from actual iPhone Safari with annotated
+screenshots, together with a replaced design specification (see the conflict
+note below). Numbering follows the owner's list; screenshot names are the
+owner's originals in reporting order.
+
+| # | Screen / surface | Expected | Observed | Authority |
+|---|---|---|---|---|
+| 1 | Accounts → Profile sheet | The sheet and scrim cover the whole frame | Bottom tab bar stays visible below the sheet | `spec/02` bottom sheet `bottom:0`, scrim "covers the whole frame" |
+| 2 | Categories → Edit category sheet | Secondary `Cancel` outlined, no fill; tab bar covered | `Cancel` is accent-filled; tab bar visible | `spec/02` Buttons; `spec/02` bottom sheet |
+| 3 | Transactions → swiped row | Both swipe actions fully revealed | `Plan` action is clipped and reads narrower than `Delete` | `spec/05` swipe |
+| 4 | Operations → account card | Undo sits in the **period** card top line, 26×26 `↺`, left of `›` | Undo sits in the account card, top-right | `spec/02` period card; `spec/05` Undo |
+| 5 | Active period sheet | Secondary `View history` outlined | Accent-filled | `spec/02` Buttons |
+| 6 | Period history sheet | Secondary `Edit` outlined | Accent-filled | `spec/02` Buttons |
+| 7 | Transaction details sheet | Secondary `Delete` outlined | Accent-filled | `spec/02` Buttons |
+| 8 | Active period sheet | Secondary `View history` outlined | Accent-filled (duplicate of 5) | `spec/02` Buttons |
+| 9 | Operations → segmented control | 44px control, four equal 38px segments, single-line labels | Segments overflow the control and `Add funds` wraps, so the active pill sits crooked | `spec/03` §3.3 segmented control 44px |
+| 10 | Operations → segmented control | Active segment pill aligned inside the track | Same defect isolated on the active `Add funds` segment | `spec/03` §3.3 |
+| 11 | Operations → Transfer | `Choose destination` occupies the Category slot beside Date; no extra row and no category field | Destination is a full-width row above Amount | updated `spec/03` §3.3 |
+| 12 | Operations → account card | Duplicate of 4 | Duplicate of 4 | `spec/05` Undo |
+| 13 | Edit period sheet | Secondary `Cancel` outlined | Accent-filled | `spec/02` Buttons |
+| 14 | Any field, iPhone Safari | Focus never rescales the page, on any field | Safari auto-zooms on focus; only core-overlay textareas were previously raised to 16px | `spec/03` "never resizes or scrolls the screen" |
+| 15 | Account details sheet | Secondary `Share` outlined | Accent-filled | `spec/02` Buttons |
+| 16 | Accounts / Analytics header | Avatar tile carries a 10px accent dot | Empty tile, no dot | `spec/02` screen header |
+
+Findings 2, 5, 6, 7, 8, 13 and 15 share one root cause: the base `button` rule
+fills with the accent colour and `.mobile-button-secondary` never declares a
+`background`, so every sheet secondary inherits the primary fill.
+
+### Design specification replacement — conflict note
+
+The owner replaced `docs/design/Finnapp mobile specification/` in the working
+tree and kept the previously accepted copy as
+`docs/design/Finnapp mobile specification old version/`. That backup folder is
+byte-identical to `HEAD` for all eight `spec/*.md` files, so the working tree
+holds the new authority.
+
+The replacement carries the two corrections the owner reported (findings 4/12
+period-card `↺`, and finding 11 Destination in the Category slot). It also
+reverts settled Phase 14 decisions that no reported finding depends on:
+
+- `spec/05` and `spec/08` reintroduce a hard block on amounts above
+  `Available today`. The accepted backend contract makes Available today
+  informational and keeps such an expense valid.
+- `spec/04` drops the `Redistribute remaining days` checkbox that T-005/T-006
+  implemented and the owner accepted.
+- `spec/07` reopens the allowance formula as an `OPEN — confirm before
+  implementing` question that Phase 14 already closed.
+- `spec/04`/`06` drop the Plan `Skip` action, the dynamic `To account` /
+  `From account` label, and the disabled `Owner` / `Auto · Coming soon`
+  options that ADR-0010 requires.
+- `AGENTS.md` demotes `Finapp Screen.dc.html` from final visual source back to
+  `Finapp Mobile Redesign.dc.html`, contradicting `design/DESIGN-NOTES.md`.
+
+None of the sixteen findings depends on any of those five points, so all
+sixteen are fixed under this task and the reverted areas are left untouched at
+their accepted behaviour. The owner has to decide whether the reverts are
+intended before anything acts on them.
+
+### Round 2 fixes
+
+| # | Fix | Where |
+|---|---|---|
+| 1, 2 | The `coverTabBar` opt-out and its `core-overlay` CSS variant are removed; the overlay root is `bottom: 0` for every sheet and confirmation, and the tab-bar `z-index` lifts and safe-band/confirm offsets that compensated for it are deleted | `app.js`, `style.css` |
+| 2, 5–8, 13, 15 | `.mobile-button-secondary` declares `background: transparent`, so it stops inheriting the base `button` accent fill | `style.css` |
+| 3 | Each row publishes `--mobile-swipe-offset` from its actual action count, and the swiped body translates by that instead of a fixed `-112px` | `app.js`, `style.css` |
+| 4, 12 | New `#operations-undo-mobile` in the period card top line: 26×26, `#1B2129`, 8px radius, `z-index: 2` above the card trigger, `::after` restoring a 44px target, `stopPropagation`, hidden with no candidate. `#operations-undo` is hidden on mobile and keeps the desktop control | `index.html`, `app.js`, `style.css` |
+| 9, 10 | Segments get an explicit 38px height and `white-space: nowrap`, so the base 44px `min-height` and the wrapped `Add funds` label no longer skew the active pill; `::after` keeps the 44px target | `style.css` |
+| 11 | Transfer reorders to Amount → Destination + Date → Note, with Destination in the Category slot and its label visually hidden like its siblings | `index.html`, `style.css` |
+| 14 | A single low-specificity `input, textarea, select { font-size: 16px }` inside the mobile block replaces the three view-scoped rules; the 28px amount field keeps its size | `style.css` |
+| 16 | The avatar tile paints a measured 10px accent dot through `::before`, immune to the `color: transparent` on `.view-heading > button` | `style.css` |
+
+Asset cache-bust moved `phase15-t030a-1` → `phase15-t030a-2` so the owner's
+device reloads both files.
+
+## Round 2 verification evidence — 2026-08-14
+
+Disposable scratch database, fresh Alembic upgrade to `0004_transfer_quotes`,
+seeded through the public API. Repository `finapp.db` was never opened.
+
+```text
+targeted frontend target (10 files)        72 passed
+full pytest                                425 passed in 44.71s
+node --check app/static/app.js             passed
+git diff --check (app, tests, task docs)   passed
+scratch /health                            200 {"status":"ok"}
+scratch SPA /                              200 text/html
+```
+
+Browser matrix at `393×852`, plus a `390×844` compatibility smoke, measured
+from the live DOM:
+
+| Finding | Observed |
+|---|---|
+| 1, 2 | Profile and Edit category sheets span y 486–852 and 393 wide; tab bar 796–852 fully covered; `navCovered` true in Account details, Transaction details, Active period, Period history and Edit period as well |
+| 2, 5–8, 13, 15 | Every footer secondary computes `rgba(0,0,0,0)` fill, `rgba(255,255,255,.12)` border, `rgb(201,208,217)` label, 48px/10px — verified on `Cancel`, `View history`, `Edit`, `Delete`, `Share`, `Save period`'s `Cancel`; primaries stay `rgb(255,162,75)` |
+| 3 | Swiped body right edge 377 → 249; `Plan` 249–313 and `Delete` 313–377 both fully revealed at 64px each |
+| 4, 12 | Undo 26×26 at x 321–347 inside the period card (202–377), left of the chevron (354–362), `#1B2129`, 8px radius, `z-index 2`; `elementFromPoint` at its centre returns the undo itself; tapping it opens **Undo this operation?** with the spec body and a `#7A2F35` destructive action, and does not open period details; desktop `#operations-undo` computes `display: none` |
+| 9, 10 | Four segments at exactly 87×38, x 19/108/198/287, inside the 44px track at y 124–168; single-line labels |
+| 11 | Amount 361 wide full row, then Destination 212 and Date 141 on one row, then Note; submit ends at y 394 (frame y 440); the `To account` label is 1px visually hidden |
+| 14 | All 48 editable controls compute ≥16px on every surface, including the Edit category `Name` field that reproduced the zoom; viewport meta keeps no `maximum-scale`/`user-scalable=no`, so pinch zoom stays available |
+| 16 | Avatar `::before` computes exactly 10×10 `rgb(255,162,75)` |
+
+`390×844` smoke: both cards 96px, segments 87×38, undo 26×26, no horizontal
+overflow, no editable control below 16px, avatar dot 10×10.
+
+Console and network are clean in the authenticated session — every request
+200; the single 401 is the pre-login `auth/me` bootstrap probe.
+
+Two limitations stand. The in-app browser is not WebKit, so real iPhone 15
+Safari evidence is still required for owner acceptance. Its pane also freezes
+CSS transitions while it is not the front tab, so the swipe measurement was
+taken with the 160ms transition disabled; the settled transform and both
+action boxes were then read directly.
+
 ## Session log
 
 - 2026-08-12 Codex GPT-5: task split from former L-sized T-030; not claimed.
@@ -216,3 +332,18 @@ matrix and real-Safari acceptance items above are intentionally not claimed.
   disposable 393×852 and 390×844 browser checks pass for the reported bugs,
   geometry, focus scale and console. T-030A is in review with no P0–P3 code
   finding; actual iPhone 15 Safari/device evidence remains for owner acceptance.
+- 2026-08-14 repository owner: returned sixteen new iPhone Safari findings with
+  annotated screenshots and replaced the mobile design specification in the
+  working tree, keeping the accepted copy as `Finnapp mobile specification old
+  version/`. The owner instructed this session to record the findings and fix
+  them, which reopens the task from `review` to `in-progress`. The findings and
+  the specification-replacement conflict note are recorded under **Round 2**.
+- 2026-08-14 Claude Opus 5: fixed all sixteen findings. Full pytest (425), the
+  72-test targeted target, `node --check` and `git diff --check` pass, and the
+  393×852 matrix plus 390×844 smoke verify every finding from the live DOM. The
+  five stale frozen-contract assertions were rewritten to the new behaviour, and
+  two assertions in `test_mobile_profile_access_ui_v21.py` that had been failing
+  since `0621f97` were repaired. Left open for the owner: the design-spec
+  replacement conflict above, and whether `openCategories` routing desktop into
+  the mobile sheet is intended (a T-030B question). Independent implementation
+  review and real iPhone 15 Safari evidence are still outstanding.

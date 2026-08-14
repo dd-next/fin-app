@@ -103,7 +103,10 @@ def test_mobile_access_list_discards_stale_account_responses():
     javascript = source("app.js")
 
     assert "context: config.context || parentContext" in javascript
-    assert "context: mobileOverlayState.stack.at(-1)?.context || null" in javascript
+    # The confirmation reads the same top-of-stack context through the local
+    # `parent` binding that `openMobileConfirmation` already computes.
+    assert "const parent = mobileOverlayState.stack.at(-1) || null;" in javascript
+    assert "context: parent?.context || null" in javascript
     assert "function isActiveSharingContext(context)" in javascript
     assert "mobileOverlayState.stack.at(-1)?.context === context" in javascript
     access_start = javascript.index("async function loadMobileAccess")
@@ -151,6 +154,8 @@ def test_desktop_profile_rate_category_share_and_logout_surfaces_remain():
         "sharing-dialog",
     ):
         assert f'id="{element_id}"' in html
-    assert 'if (isMobileViewport()) return openMobileCategories(opener);' in javascript
+    # Categories has a single sheet implementation on both widths; the desktop
+    # entry point routes into it rather than keeping a second dialog UI.
+    assert 'return openMobileCategories(opener);' in javascript
     assert 'if (isMobileViewport()) return openMobileRateSettings(opener, preferredAsset);' in javascript
     assert re.search(r"async function openSharing\([^)]*\)\s*\{[^}]*if \(isMobileViewport\(\)\)", javascript)

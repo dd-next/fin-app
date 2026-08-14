@@ -253,4 +253,5 @@ def test_operations_accessibility_and_loading_contract():
     ):
         assert f'id="{form_id}"' in html
         assert re.search(rf'id="{form_id}"[^>]*aria-busy="false"', html)
-    assert 'button.setAttribute(\n    "aria-label"' in javascript
+    assert 'button.setAttribute("aria-label", label)' in javascript
+    assert 'mobileButton.setAttribute("aria-label", label)' in javascript
