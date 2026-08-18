@@ -6,6 +6,12 @@ backend with a vanilla-JS single-page app, storing money and exchange rates as
 action-first Operations with persistent Undo, account-specific budget periods,
 ledger history with soft delete, and a future-events Plan with Link/Skip.
 
+The single-page app on mobile:
+
+| Accounts | Transactions | Operations |
+|---|---|---|
+| <img src="docs/images/accounts.webp" width="240" alt="Accounts screen: total capital and available totals above accounts grouped into cash, bank, and crypto"> | <img src="docs/images/transactions.webp" width="240" alt="Transactions screen: type filters above a date-grouped feed of income and expenses"> | <img src="docs/images/operations.webp" width="240" alt="Operations screen: account balance and period cards above the spend form"> |
+
 The authoritative product and technical specification and the release process
 live under [`docs/`](docs/README.md):
 
